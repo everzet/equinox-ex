@@ -8,14 +8,7 @@ defmodule MessageDb.WriterTest do
     @stream "testStream-42"
 
     test_in_isolation "successfully writing single message", %{conn: conn} do
-      message =
-        Writer.Message.new(
-          id: MessageDb.UUID.generate(),
-          type: "SomeMessageType",
-          data: %{"test" => "value2"},
-          metadata: %{"meta" => "value"}
-        )
-
+      message = Writer.Message.new(type: "SomeMessageType")
       assert {:ok, 0} = Writer.write_messages(conn, @stream, [message], -1)
     end
 
