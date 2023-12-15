@@ -57,7 +57,7 @@ defmodule MessageDb.Reader do
   end
 
   @spec stream_stream_messages(Postgrex.conn(), stream_name(), position(), batch_size()) ::
-          Enumerable.t()
+          Enumerable.t(Message.t())
   def stream_stream_messages(conn, stream, start_position, batch_size) do
     {start_position, batch_size}
     |> Stream.unfold(fn {position, batch_size} ->
