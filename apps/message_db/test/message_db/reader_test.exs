@@ -4,6 +4,27 @@ defmodule MessageDb.ReaderTest do
 
   doctest Reader
 
+  describe "get_category_messages/5" do
+    @category "testStream"
+    @messages Stream.repeatedly(fn -> Writer.Message.new(type: "SomeMessageType") end)
+              |> Enum.take(10)
+
+    test_in_isolation "retrieving messages across multiple streams", %{conn: conn} do
+      assert {:ok, 0} =
+               Writer.write_messages(conn, @category <> "-4", [Writer.Message.new(type: "T")], -1)
+
+      assert {:ok, 0} =
+               Writer.write_messages(conn, @category <> "-2", [Writer.Message.new(type: "T")], -1)
+
+      assert {:ok, messages} = Reader.get_category_messages(conn, @category, 0, 2)
+      assert length(messages) == 2
+    end
+
+    test_in_isolation "getting empty list if no messages in a category", %{conn: conn} do
+      assert {:ok, []} = Reader.get_category_messages(conn, @category, 0, 4)
+    end
+  end
+
   describe "get_last_stream_message/2" do
     @stream "testStream-42"
 

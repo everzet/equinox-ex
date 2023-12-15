@@ -1,7 +1,9 @@
 defmodule MessageDb.Reader do
+  @type category_name :: String.t()
   @type stream_name :: String.t()
   @type position :: non_neg_integer()
   @type batch_size :: pos_integer()
+  @type consumer_group :: {member :: non_neg_integer(), size :: pos_integer()}
 
   defmodule Message do
     @keys [:id, :type, :stream_name, :position, :global_position, :data, :metadata, :time]
@@ -23,6 +25,26 @@ defmodule MessageDb.Reader do
 
     def from_db(row) when is_map(row) do
       struct!(__MODULE__, Enum.map(@key_col_map, fn {key, col} -> {key, row[col]} end))
+    end
+  end
+
+  @spec get_category_messages(
+          Postgrex.conn(),
+          category_name(),
+          position(),
+          batch_size(),
+          consumer_group() | {nil, nil}
+        ) :: {:ok, list(Message.t())} | {:error, Postgrex.Error.t()}
+  def get_category_messages(conn, category, position, batch_size, {member, size} \\ {nil, nil}) do
+    with {:ok, res} <-
+           Postgrex.query(
+             conn,
+             "SELECT
+              id, type, stream_name, position, global_position, data::jsonb, metadata::jsonb, time
+              FROM get_category_messages($1, $2, $3, null, $4, $5)",
+             [category, position, batch_size, member, size]
+           ) do
+      {:ok, res |> messages_from_result() |> Enum.to_list()}
     end
   end
 
