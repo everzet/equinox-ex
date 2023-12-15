@@ -2,6 +2,7 @@ defmodule MessageDb.Reader do
   @type category_name :: String.t()
   @type stream_name :: String.t()
   @type position :: non_neg_integer()
+  @type global_position :: non_neg_integer()
   @type batch_size :: pos_integer()
   @type consumer_group :: {member :: non_neg_integer(), size :: pos_integer()}
 
@@ -15,9 +16,9 @@ defmodule MessageDb.Reader do
     @type t :: %__MODULE__{
             id: String.t(),
             type: String.t(),
-            stream_name: String.t(),
-            position: non_neg_integer(),
-            global_position: non_neg_integer(),
+            stream_name: Reader.stream_name(),
+            position: Reader.position(),
+            global_position: Reader.global_position(),
             data: map() | nil,
             metadata: map() | nil,
             time: NaiveDateTime.t()
@@ -31,7 +32,7 @@ defmodule MessageDb.Reader do
   @spec get_category_messages(
           Postgrex.conn(),
           category_name(),
-          position(),
+          global_position(),
           batch_size(),
           consumer_group() | {nil, nil}
         ) :: {:ok, list(Message.t())} | {:error, Postgrex.Error.t()}
