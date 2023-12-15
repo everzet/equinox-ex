@@ -4,12 +4,16 @@ defmodule MessageDb.Reader do
   @type batch_size :: pos_integer()
 
   defmodule Message do
-    @enforce_keys [:id, :type, :position, :global_position, :data, :metadata, :time]
-    defstruct [:id, :type, :position, :global_position, :data, :metadata, :time]
+    @keys [:id, :type, :stream_name, :position, :global_position, :data, :metadata, :time]
+    @key_col_map Enum.map(@keys, &{&1, Atom.to_string(&1)})
+
+    @enforce_keys @keys
+    defstruct @keys
 
     @type t :: %__MODULE__{
             id: String.t(),
             type: String.t(),
+            stream_name: String.t(),
             position: non_neg_integer(),
             global_position: non_neg_integer(),
             data: map() | nil,
@@ -17,20 +21,9 @@ defmodule MessageDb.Reader do
             time: NaiveDateTime.t()
           }
 
-    def from_message_db(row) do
-      struct!(__MODULE__,
-        id: row["id"],
-        type: row["type"],
-        position: row["position"],
-        global_position: row["global_position"],
-        data: maybe_decode_jsonb(row["data"]),
-        metadata: maybe_decode_jsonb(row["metadata"]),
-        time: row["time"]
-      )
+    def from_db(row) when is_map(row) do
+      struct!(__MODULE__, Enum.map(@key_col_map, fn {key, col} -> {key, row[col]} end))
     end
-
-    defp maybe_decode_jsonb(col) when is_bitstring(col), do: Jason.decode!(col)
-    defp maybe_decode_jsonb(col), do: col
   end
 
   @spec get_last_stream_message(Postgrex.conn(), stream_name()) ::
@@ -39,15 +32,12 @@ defmodule MessageDb.Reader do
     with {:ok, res} <-
            Postgrex.query(
              conn,
-             "SELECT * FROM get_last_stream_message($1)",
+             "SELECT
+              id, type, stream_name, position, global_position, data::jsonb, metadata::jsonb, time
+              FROM get_last_stream_message($1)",
              [stream]
            ) do
-      message =
-        res
-        |> messages_from_result()
-        |> List.last(nil)
-
-      {:ok, message}
+      {:ok, res |> messages_from_result() |> Enum.at(0)}
     end
   end
 
@@ -57,11 +47,12 @@ defmodule MessageDb.Reader do
     with {:ok, res} <-
            Postgrex.query(
              conn,
-             "SELECT * FROM get_stream_messages($1, $2, $3)",
+             "SELECT
+              id, type, stream_name, position, global_position, data::jsonb, metadata::jsonb, time
+              FROM get_stream_messages($1, $2, $3)",
              [stream, position, batch_size]
            ) do
-      messages = messages_from_result(res)
-      {:ok, messages}
+      {:ok, res |> messages_from_result() |> Enum.to_list()}
     end
   end
 
@@ -82,8 +73,7 @@ defmodule MessageDb.Reader do
   defp messages_from_result(%Postgrex.Result{columns: cols, rows: rows}) do
     rows
     |> Stream.map(&Enum.zip(cols, &1))
-    |> Stream.map(&Enum.into(&1, %{}))
-    |> Stream.map(&Message.from_message_db/1)
-    |> Enum.to_list()
+    |> Stream.map(&Map.new/1)
+    |> Stream.map(&Message.from_db/1)
   end
 end
