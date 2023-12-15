@@ -7,11 +7,8 @@ defmodule MessageDb.Reader do
   @type consumer_group :: {member :: non_neg_integer(), size :: pos_integer()}
 
   defmodule Message do
-    @keys [:id, :type, :stream_name, :position, :global_position, :data, :metadata, :time]
-    @key_col_map Enum.map(@keys, &{&1, Atom.to_string(&1)})
-
-    @enforce_keys @keys
-    defstruct @keys
+    @enforce_keys [:id, :type, :stream_name, :position, :global_position, :data, :metadata, :time]
+    defstruct [:id, :type, :stream_name, :position, :global_position, :data, :metadata, :time]
 
     @type t :: %__MODULE__{
             id: String.t(),
@@ -24,8 +21,8 @@ defmodule MessageDb.Reader do
             time: NaiveDateTime.t()
           }
 
-    def from_db(row) when is_map(row) do
-      struct!(__MODULE__, Enum.map(@key_col_map, fn {key, col} -> {key, row[col]} end))
+    def new(values) when is_list(values) do
+      struct!(__MODULE__, values)
     end
   end
 
@@ -37,45 +34,60 @@ defmodule MessageDb.Reader do
           consumer_group() | {nil, nil}
         ) :: {:ok, list(Message.t())} | {:error, Exception.t()}
   def get_category_messages(conn, category, position, batch_size, {member, size} \\ {nil, nil}) do
-    with {:ok, res} <-
-           Postgrex.query(
-             conn,
-             "SELECT
-              id, type, stream_name, position, global_position, data::jsonb, metadata::jsonb, time
-              FROM get_category_messages($1, $2, $3, null, $4, $5)",
-             [category, position, batch_size, member, size]
-           ) do
-      {:ok, res |> messages_from_result() |> Enum.to_list()}
+    conn
+    |> Postgrex.query(
+      "SELECT id, type, stream_name, position, global_position, data::jsonb, metadata::jsonb, time
+       FROM get_category_messages($1, $2, $3, null, $4, $5)",
+      [category, position, batch_size, member, size],
+      decode_mapper: fn row ->
+        ~w(id type stream_name position global_position data metadata time)a
+        |> Enum.zip(row)
+        |> Message.new()
+      end
+    )
+    |> case do
+      {:ok, res} -> {:ok, Enum.to_list(res.rows)}
+      anything_else -> anything_else
     end
   end
 
   @spec get_last_stream_message(Postgrex.conn(), stream_name()) ::
           {:ok, Message.t() | nil} | {:error, Exception.t()}
   def get_last_stream_message(conn, stream) do
-    with {:ok, res} <-
-           Postgrex.query(
-             conn,
-             "SELECT
-              id, type, stream_name, position, global_position, data::jsonb, metadata::jsonb, time
-              FROM get_last_stream_message($1)",
-             [stream]
-           ) do
-      {:ok, res |> messages_from_result() |> Enum.at(0)}
+    conn
+    |> Postgrex.query(
+      "SELECT id, type, stream_name, position, global_position, data::jsonb, metadata::jsonb, time
+       FROM get_last_stream_message($1)",
+      [stream],
+      decode_mapper: fn row ->
+        ~w(id type stream_name position global_position data metadata time)a
+        |> Enum.zip(row)
+        |> Message.new()
+      end
+    )
+    |> case do
+      {:ok, res} -> {:ok, Enum.at(res.rows, 0)}
+      anything_else -> anything_else
     end
   end
 
   @spec get_stream_messages(Postgrex.conn(), stream_name(), position(), batch_size()) ::
           {:ok, list(Message.t())} | {:error, Exception.t()}
   def get_stream_messages(conn, stream, position, batch_size) do
-    with {:ok, res} <-
-           Postgrex.query(
-             conn,
-             "SELECT
-              id, type, stream_name, position, global_position, data::jsonb, metadata::jsonb, time
-              FROM get_stream_messages($1, $2, $3)",
-             [stream, position, batch_size]
-           ) do
-      {:ok, res |> messages_from_result() |> Enum.to_list()}
+    conn
+    |> Postgrex.query(
+      "SELECT id, type, stream_name, position, global_position, data::jsonb, metadata::jsonb, time
+       FROM get_stream_messages($1, $2, $3)",
+      [stream, position, batch_size],
+      decode_mapper: fn row ->
+        ~w(id type stream_name position global_position data metadata time)a
+        |> Enum.zip(row)
+        |> Message.new()
+      end
+    )
+    |> case do
+      {:ok, res} -> {:ok, Enum.to_list(res.rows)}
+      anything_else -> anything_else
     end
   end
 
@@ -91,12 +103,5 @@ defmodule MessageDb.Reader do
       end
     end)
     |> Stream.flat_map(& &1)
-  end
-
-  defp messages_from_result(%Postgrex.Result{columns: cols, rows: rows}) do
-    rows
-    |> Stream.map(&Enum.zip(cols, &1))
-    |> Stream.map(&Map.new/1)
-    |> Stream.map(&Message.from_db/1)
   end
 end
