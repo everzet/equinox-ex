@@ -68,17 +68,15 @@ defmodule MessageDb.Reader do
   @spec stream_stream_messages(Postgrex.conn(), stream_name(), position(), batch_size()) ::
           Enumerable.t()
   def stream_stream_messages(conn, stream, start_position, batch_size) do
-    Stream.resource(
-      fn -> {start_position, batch_size} end,
-      fn {position, batch_size} ->
-        case get_stream_messages(conn, stream, position, batch_size) do
-          {:ok, []} -> {:halt, {position, batch_size}}
-          {:ok, messages} -> {messages, {position + length(messages), batch_size}}
-          {:error, error} -> raise error
-        end
-      end,
-      fn _ -> nil end
-    )
+    {start_position, batch_size}
+    |> Stream.unfold(fn {position, batch_size} ->
+      case get_stream_messages(conn, stream, position, batch_size) do
+        {:ok, []} -> nil
+        {:ok, messages} -> {messages, {position + length(messages), batch_size}}
+        {:error, error} -> raise error
+      end
+    end)
+    |> Stream.flat_map(& &1)
   end
 
   defp messages_from_result(%Postgrex.Result{columns: cols, rows: rows}) do
