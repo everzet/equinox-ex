@@ -48,8 +48,7 @@ defmodule MessageDb.Writer do
           |> Stream.with_index()
           |> Stream.map(fn {m, i} -> [m.id, stream, m.type, m.data, m.metadata, version + i] end)
           |> Stream.map(&Postgrex.execute!(conn, query, &1))
-          |> Enum.to_list()
-          |> List.last()
+          |> Enum.at(-1)
 
         written_position
       end)
