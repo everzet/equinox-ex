@@ -35,7 +35,7 @@ defmodule MessageDb.Reader do
           global_position(),
           batch_size(),
           consumer_group() | {nil, nil}
-        ) :: {:ok, list(Message.t())} | {:error, Postgrex.Error.t()}
+        ) :: {:ok, list(Message.t())} | {:error, Exception.t()}
   def get_category_messages(conn, category, position, batch_size, {member, size} \\ {nil, nil}) do
     with {:ok, res} <-
            Postgrex.query(
@@ -50,7 +50,7 @@ defmodule MessageDb.Reader do
   end
 
   @spec get_last_stream_message(Postgrex.conn(), stream_name()) ::
-          {:ok, Message.t() | nil} | {:error, Postgrex.Error.t()}
+          {:ok, Message.t() | nil} | {:error, Exception.t()}
   def get_last_stream_message(conn, stream) do
     with {:ok, res} <-
            Postgrex.query(
@@ -65,7 +65,7 @@ defmodule MessageDb.Reader do
   end
 
   @spec get_stream_messages(Postgrex.conn(), stream_name(), position(), batch_size()) ::
-          {:ok, list(Message.t())} | {:error, Postgrex.Error.t()}
+          {:ok, list(Message.t())} | {:error, Exception.t()}
   def get_stream_messages(conn, stream, position, batch_size) do
     with {:ok, res} <-
            Postgrex.query(
