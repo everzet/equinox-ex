@@ -46,7 +46,7 @@ defmodule MessageDb.Reader do
       end
     )
     |> case do
-      {:ok, res} -> {:ok, Enum.to_list(res.rows)}
+      {:ok, result} -> {:ok, List.wrap(result.rows)}
       anything_else -> anything_else
     end
   end
@@ -66,7 +66,7 @@ defmodule MessageDb.Reader do
       end
     )
     |> case do
-      {:ok, res} -> {:ok, Enum.at(res.rows, 0)}
+      {:ok, result} -> {:ok, result.rows |> List.wrap() |> List.first()}
       anything_else -> anything_else
     end
   end
@@ -86,7 +86,7 @@ defmodule MessageDb.Reader do
       end
     )
     |> case do
-      {:ok, res} -> {:ok, Enum.to_list(res.rows)}
+      {:ok, result} -> {:ok, List.wrap(result.rows)}
       anything_else -> anything_else
     end
   end
