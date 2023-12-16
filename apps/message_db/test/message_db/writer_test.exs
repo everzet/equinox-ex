@@ -24,6 +24,10 @@ defmodule MessageDb.WriterTest do
       assert {:ok, 3} = Writer.write_messages(conn, @stream, [message.()], 2)
     end
 
+    test_in_isolation "returns current version when given empty list", %{conn: conn} do
+      assert {:ok, -1} = Writer.write_messages(conn, @stream, [], -1)
+    end
+
     test_in_isolation "failing to write messages with duplicate ID", %{conn: conn} do
       message = Writer.Message.new(type: "SomeMessageType")
 
