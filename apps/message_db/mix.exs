@@ -31,7 +31,8 @@ defmodule MessageDb.MixProject do
   defp deps do
     [
       {:postgrex, "~> 0.17"},
-      {:jason, "~> 1.0"}
+      {:jason, "~> 1.0"},
+      {:benchee, "~> 1.2", only: :dev}
     ]
   end
 end

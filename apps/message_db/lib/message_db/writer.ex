@@ -39,31 +39,66 @@ defmodule MessageDb.Writer do
           {:ok, new_version :: written_position()}
           | {:error, DuplicateMessageId.t() | StreamVersionConflict.t() | Postgrex.Error.t()}
   def write_messages(conn, stream, messages, version) when length(messages) > 0 do
-    try do
-      Postgrex.transaction(conn, fn conn ->
-        query = Postgrex.prepare!(conn, "write", "SELECT write_message($1, $2, $3, $4, $5, $6)")
+    messages
+    |> case do
+      [message] ->
+        with {:ok, _query, result} <- write_single_message(conn, stream, message, version) do
+          {:ok, result}
+        end
 
-        %Postgrex.Result{rows: [[written_position]]} =
-          messages
-          |> Stream.with_index()
-          |> Stream.map(fn {m, i} -> [m.id, stream, m.type, m.data, m.metadata, version + i] end)
-          |> Stream.map(&Postgrex.execute!(conn, query, &1))
-          |> Enum.at(-1)
+      [first | rest] ->
+        Postgrex.transaction(conn, fn conn ->
+          with {:ok, query, _result} <- write_single_message(conn, stream, first, version),
+               {:ok, result} <- write_multiple_messages(conn, query, stream, rest, version + 1) do
+            result
+          else
+            {:error, error} -> Postgrex.rollback(conn, error)
+          end
+        end)
+    end
+    |> case do
+      {:ok, %Postgrex.Result{rows: [[written_position]]}} ->
+        {:ok, written_position}
 
-        written_position
-      end)
-    rescue
-      error in [Postgrex.Error] ->
+      {:error, %Postgrex.Error{postgres: postgres} = error} when is_map(postgres) ->
         cond do
-          error.postgres && error.postgres.message =~ "constraint \"messages_id\"" ->
-            {:error, %DuplicateMessageId{}}
-
-          error.postgres && error.postgres.message =~ "Wrong expected version" ->
+          postgres.message =~ "Wrong expected version" ->
             {:error, %StreamVersionConflict{}}
+
+          postgres.message =~ "constraint \"messages_id\"" ->
+            {:error, %DuplicateMessageId{}}
 
           true ->
             {:error, error}
         end
+
+      anything_else ->
+        anything_else
     end
+  end
+
+  defp write_single_message(conn, stream, message, version) do
+    Postgrex.prepare_execute(
+      conn,
+      "write_message",
+      "SELECT write_message($1, $2, $3, $4, $5, $6)",
+      [message.id, stream, message.type, message.data, message.metadata, version]
+    )
+  end
+
+  defp write_multiple_messages(conn, prepared_query, stream, messages, version) do
+    messages
+    |> Stream.with_index()
+    |> Enum.reduce_while(nil, fn {message, idx}, _ ->
+      conn
+      |> Postgrex.execute(
+        prepared_query,
+        [message.id, stream, message.type, message.data, message.metadata, version + idx]
+      )
+      |> case do
+        {:ok, _query, result} -> {:cont, {:ok, result}}
+        anything_else -> {:halt, anything_else}
+      end
+    end)
   end
 end

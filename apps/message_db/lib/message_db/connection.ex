@@ -1,5 +1,5 @@
 defmodule MessageDb.Connection do
-  def start_link(opts) do
+  def start_link(opts \\ []) do
     opts
     |> default_opts()
     |> Postgrex.start_link()
