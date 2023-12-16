@@ -28,6 +28,7 @@ Benchee.run(
   },
   inputs: [
     {"1 message", 1},
+    {"3 messages", 3},
     {"10 messages", 10},
     {"1,000 messages", 1_000},
     {"10,000 messages", 10_000}
