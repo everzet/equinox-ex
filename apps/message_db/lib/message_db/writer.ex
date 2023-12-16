@@ -30,27 +30,25 @@ defmodule MessageDb.Writer do
     @type t :: %__MODULE__{}
   end
 
-  @spec write_messages(
-          Postgrex.conn(),
-          stream_name(),
-          nonempty_list(Message.t()),
-          expected_version()
-        ) ::
+  @spec write_messages(Postgrex.conn(), stream_name(), list(Message.t()), expected_version()) ::
           {:ok, new_version :: written_position()}
           | {:error, DuplicateMessageId.t() | StreamVersionConflict.t() | Postgrex.Error.t()}
-  def write_messages(conn, stream, messages, version) when length(messages) > 0 do
+  def write_messages(conn, stream, messages, version) do
     messages
     |> case do
+      [] ->
+        {:ok, version}
+
       [message] ->
-        with {:ok, _query, result} <- write_single_message(conn, stream, message, version) do
-          {:ok, result}
+        with {:ok, _query, res} <- write_single_message(conn, stream, message, version) do
+          {:ok, res}
         end
 
       [first | rest] ->
         Postgrex.transaction(conn, fn conn ->
-          with {:ok, query, _result} <- write_single_message(conn, stream, first, version),
-               {:ok, result} <- write_multiple_messages(conn, query, stream, rest, version + 1) do
-            result
+          with {:ok, qry, _res} <- write_single_message(conn, stream, first, version),
+               {:ok, last_res} <- write_multiple_messages(conn, qry, stream, rest, version + 1) do
+            last_res
           else
             {:error, error} -> Postgrex.rollback(conn, error)
           end
@@ -96,7 +94,7 @@ defmodule MessageDb.Writer do
         [message.id, stream, message.type, message.data, message.metadata, version + idx]
       )
       |> case do
-        {:ok, _query, result} -> {:cont, {:ok, result}}
+        {:ok, _query, res} -> {:cont, {:ok, res}}
         anything_else -> {:halt, anything_else}
       end
     end)
