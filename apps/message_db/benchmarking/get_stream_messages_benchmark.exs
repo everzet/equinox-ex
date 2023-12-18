@@ -1,11 +1,12 @@
-alias MessageDb.UUID
+alias Equinox.UUID
+alias Equinox.EventData
 alias MessageDb.{Writer, Reader}
 
 stream = "benchmarkStream-" <> UUID.generate()
 
 message_stream =
   Stream.repeatedly(fn ->
-    Writer.Message.new(
+    EventData.new(
       type: "TestMessage",
       data: %{
         "first_name" => "Konstantin",

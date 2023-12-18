@@ -3,23 +3,6 @@ defmodule MessageDb.Writer do
   @type expected_version :: -1 | non_neg_integer()
   @type written_position :: non_neg_integer()
 
-  defmodule Message do
-    @enforce_keys [:id, :type]
-    defstruct [:id, :type, :data, :metadata]
-
-    @type t :: %__MODULE__{
-            id: String.t(),
-            type: String.t(),
-            data: map() | nil,
-            metadata: map() | nil
-          }
-
-    def new(values) when is_list(values) do
-      values = Keyword.put_new(values, :id, MessageDb.UUID.generate())
-      struct!(__MODULE__, values)
-    end
-  end
-
   defmodule DuplicateMessageId do
     defexception message: "Message with given ID already exists"
     @type t :: %__MODULE__{}
@@ -30,7 +13,12 @@ defmodule MessageDb.Writer do
     @type t :: %__MODULE__{}
   end
 
-  @spec write_messages(Postgrex.conn(), stream_name(), list(Message.t()), expected_version()) ::
+  @spec write_messages(
+          Postgrex.conn(),
+          stream_name(),
+          list(Equinox.EventData.t()),
+          expected_version()
+        ) ::
           {:ok, new_version :: written_position()}
           | {:error, DuplicateMessageId.t() | StreamVersionConflict.t() | Postgrex.Error.t()}
   def write_messages(conn, stream, messages, version) do

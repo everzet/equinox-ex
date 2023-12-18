@@ -1,20 +1,21 @@
 defmodule MessageDb.ReaderTest do
   use MessageDb.ConnCase
   alias MessageDb.{Reader, Writer}
+  alias Equinox.{EventData, TimelineEvent}
 
   doctest Reader
 
   describe "get_category_messages/5" do
     @category "testStream"
-    @messages Stream.repeatedly(fn -> Writer.Message.new(type: "SomeMessageType") end)
+    @messages Stream.repeatedly(fn -> EventData.new(type: "SomeMessageType") end)
               |> Enum.take(10)
 
     test_in_isolation "retrieving messages across multiple streams", %{conn: conn} do
       assert {:ok, 0} =
-               Writer.write_messages(conn, @category <> "-4", [Writer.Message.new(type: "T")], -1)
+               Writer.write_messages(conn, @category <> "-4", [EventData.new(type: "T")], -1)
 
       assert {:ok, 0} =
-               Writer.write_messages(conn, @category <> "-2", [Writer.Message.new(type: "T")], -1)
+               Writer.write_messages(conn, @category <> "-2", [EventData.new(type: "T")], -1)
 
       assert {:ok, messages} = Reader.get_category_messages(conn, @category, 0, 2)
       assert length(messages) == 2
@@ -30,15 +31,15 @@ defmodule MessageDb.ReaderTest do
 
     test_in_isolation "successfully reading back written message", %{conn: conn} do
       message =
-        Writer.Message.new(
-          id: MessageDb.UUID.generate(),
+        EventData.new(
+          id: Equinox.UUID.generate(),
           type: "SomeMessageType",
           data: %{"test" => "value2"},
           metadata: %{"meta" => "value"}
         )
 
       assert {:ok, 0} = Writer.write_messages(conn, @stream, [message], -1)
-      assert {:ok, %Reader.Message{} = written} = Reader.get_last_stream_message(conn, @stream)
+      assert {:ok, %TimelineEvent{} = written} = Reader.get_last_stream_message(conn, @stream)
 
       assert written.id == message.id
       assert written.type == message.type
@@ -55,7 +56,7 @@ defmodule MessageDb.ReaderTest do
 
   describe "get_stream_messages/4" do
     @stream "testStream-42"
-    @messages Stream.repeatedly(fn -> Writer.Message.new(type: "SomeMessageType") end)
+    @messages Stream.repeatedly(fn -> EventData.new(type: "SomeMessageType") end)
               |> Enum.take(4)
 
     test_in_isolation "retrieving all of the written messages", %{conn: conn} do
@@ -77,10 +78,10 @@ defmodule MessageDb.ReaderTest do
       first_message_id = @messages |> List.first() |> Map.get(:id)
       last_message_id = @messages |> List.last() |> Map.get(:id)
 
-      assert {:ok, [%Reader.Message{id: ^first_message_id}]} =
+      assert {:ok, [%TimelineEvent{id: ^first_message_id}]} =
                Reader.get_stream_messages(conn, @stream, 0, 1)
 
-      assert {:ok, [%Reader.Message{id: ^last_message_id}]} =
+      assert {:ok, [%TimelineEvent{id: ^last_message_id}]} =
                Reader.get_stream_messages(conn, @stream, 3, 1)
     end
 
@@ -91,7 +92,7 @@ defmodule MessageDb.ReaderTest do
 
   describe "stream_stream_messages/4" do
     @stream "testStream-42"
-    @messages Stream.repeatedly(fn -> Writer.Message.new(type: "SomeMessageType") end)
+    @messages Stream.repeatedly(fn -> EventData.new(type: "SomeMessageType") end)
               |> Enum.take(10)
 
     test_in_isolation "streaming all written messages in one large batch", %{conn: conn} do

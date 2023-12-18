@@ -1,4 +1,4 @@
-defmodule MessageDb.UUID do
+defmodule Equinox.UUID do
   @moduledoc """
   A shameless borrow of Ecto type for UUID strings.
   """
