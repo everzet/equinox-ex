@@ -1,5 +1,5 @@
 alias Equinox.UUID
-alias Equinox.EventData
+alias Equinox.Events.EventData
 alias MessageDb.Writer
 
 message_stream =

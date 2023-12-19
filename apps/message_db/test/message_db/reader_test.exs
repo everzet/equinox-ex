@@ -1,7 +1,7 @@
 defmodule MessageDb.ReaderTest do
   use MessageDb.ConnCase
   alias MessageDb.{Reader, Writer}
-  alias Equinox.{EventData, TimelineEvent}
+  alias Equinox.Events.{EventData, TimelineEvent}
 
   doctest Reader
 

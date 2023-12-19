@@ -1,4 +1,6 @@
 defmodule MessageDb.Writer do
+  alias Equinox.Events.EventData
+
   @type stream_name :: String.t()
   @type expected_version :: -1 | non_neg_integer()
   @type written_position :: non_neg_integer()
@@ -13,12 +15,7 @@ defmodule MessageDb.Writer do
     @type t :: %__MODULE__{}
   end
 
-  @spec write_messages(
-          Postgrex.conn(),
-          stream_name(),
-          list(Equinox.EventData.t()),
-          expected_version()
-        ) ::
+  @spec write_messages(Postgrex.conn(), stream_name(), list(EventData.t()), expected_version()) ::
           {:ok, new_version :: written_position()}
           | {:error, DuplicateMessageId.t() | StreamVersionConflict.t() | Postgrex.Error.t()}
   def write_messages(conn, stream, messages, version) do

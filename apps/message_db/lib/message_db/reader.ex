@@ -1,4 +1,6 @@
 defmodule MessageDb.Reader do
+  alias Equinox.Events.TimelineEvent
+
   @type category_name :: String.t()
   @type stream_name :: String.t()
   @type position :: non_neg_integer()
@@ -12,7 +14,7 @@ defmodule MessageDb.Reader do
           global_position(),
           batch_size(),
           consumer_group() | {nil, nil}
-        ) :: {:ok, list(Equinox.TimelineEvent.t())} | {:error, Exception.t()}
+        ) :: {:ok, list(TimelineEvent.t())} | {:error, Exception.t()}
   def get_category_messages(conn, category, position, batch_size, {member, size} \\ {nil, nil}) do
     conn
     |> Postgrex.query(
@@ -22,7 +24,7 @@ defmodule MessageDb.Reader do
       decode_mapper: fn row ->
         ~w(id type stream_name position global_position data metadata time)a
         |> Enum.zip(row)
-        |> Equinox.TimelineEvent.new()
+        |> TimelineEvent.new()
       end
     )
     |> case do
@@ -32,7 +34,7 @@ defmodule MessageDb.Reader do
   end
 
   @spec get_last_stream_message(Postgrex.conn(), stream_name()) ::
-          {:ok, Equinox.TimelineEvent.t() | nil} | {:error, Exception.t()}
+          {:ok, TimelineEvent.t() | nil} | {:error, Exception.t()}
   def get_last_stream_message(conn, stream) do
     conn
     |> Postgrex.query(
@@ -42,7 +44,7 @@ defmodule MessageDb.Reader do
       decode_mapper: fn row ->
         ~w(id type stream_name position global_position data metadata time)a
         |> Enum.zip(row)
-        |> Equinox.TimelineEvent.new()
+        |> TimelineEvent.new()
       end
     )
     |> case do
@@ -52,7 +54,7 @@ defmodule MessageDb.Reader do
   end
 
   @spec get_stream_messages(Postgrex.conn(), stream_name(), position(), batch_size()) ::
-          {:ok, list(Equinox.TimelineEvent.t())} | {:error, Exception.t()}
+          {:ok, list(TimelineEvent.t())} | {:error, Exception.t()}
   def get_stream_messages(conn, stream, position, batch_size) do
     conn
     |> Postgrex.query(
@@ -62,7 +64,7 @@ defmodule MessageDb.Reader do
       decode_mapper: fn row ->
         ~w(id type stream_name position global_position data metadata time)a
         |> Enum.zip(row)
-        |> Equinox.TimelineEvent.new()
+        |> TimelineEvent.new()
       end
     )
     |> case do
@@ -72,7 +74,7 @@ defmodule MessageDb.Reader do
   end
 
   @spec stream_stream_messages(Postgrex.conn(), stream_name(), position(), batch_size()) ::
-          Enumerable.t(Equinox.TimelineEvent.t())
+          Enumerable.t(TimelineEvent.t())
   def stream_stream_messages(conn, stream, start_position, batch_size) do
     {start_position, batch_size}
     |> Stream.unfold(fn {position, batch_size} ->

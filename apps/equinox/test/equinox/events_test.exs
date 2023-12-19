@@ -1,0 +1,103 @@
+defmodule Equinox.EventsTest do
+  use ExUnit.Case, async: true
+  alias Equinox.Events.TimelineEvent
+  alias Equinox.Events.Codec.{EventStructs, CodecError}
+
+  defmodule TestStruct do
+    @enforce_keys [:val1]
+    defstruct [:val1, :val2]
+  end
+
+  describe "Codec.EventStructs.struct_to_event_data/1" do
+    test "converts structs into string maps" do
+      struct = %TestStruct{val1: 1, val2: 2}
+
+      assert {:ok, event_data} = EventStructs.struct_to_event_data(struct, __MODULE__)
+
+      assert event_data.type == "TestStruct"
+      assert event_data.data == %{"val1" => 1, "val2" => 2}
+    end
+
+    test "errors if given struct under different parent module" do
+      struct = %TestStruct{val1: 1, val2: 2}
+      assert {:error, %CodecError{}} = EventStructs.struct_to_event_data(struct, Enum)
+    end
+
+    test "errors if given anything but struct" do
+      assert {:error, %CodecError{}} = EventStructs.struct_to_event_data(nil, __MODULE__)
+      assert {:error, %CodecError{}} = EventStructs.struct_to_event_data(false, __MODULE__)
+      assert {:error, %CodecError{}} = EventStructs.struct_to_event_data("str", __MODULE__)
+      assert {:error, %CodecError{}} = EventStructs.struct_to_event_data(%{}, __MODULE__)
+    end
+  end
+
+  describe "Codec.EventStructs.timeline_event_to_struct/2" do
+    test "converts timeline event into existing struct under specified module" do
+      event =
+        TimelineEvent.new(
+          id: Equinox.UUID.generate(),
+          type: "TestStruct",
+          stream_name: "testStream-42",
+          position: 0,
+          global_position: 0,
+          data: %{"val1" => 1, "val2" => 2},
+          metadata: nil,
+          time: NaiveDateTime.utc_now()
+        )
+
+      assert {:ok, struct} = EventStructs.timeline_event_to_struct(event, __MODULE__)
+
+      assert %TestStruct{val1: 1, val2: 2} = struct
+    end
+
+    test "errors if struct with given type does not exist" do
+      event =
+        TimelineEvent.new(
+          id: Equinox.UUID.generate(),
+          type: "InexistentStruct",
+          stream_name: "testStream-42",
+          position: 0,
+          global_position: 0,
+          data: %{"val1" => 1, "val2" => 2},
+          metadata: nil,
+          time: NaiveDateTime.utc_now()
+        )
+
+      assert {:error, %CodecError{}} =
+               EventStructs.timeline_event_to_struct(event, __MODULE__)
+    end
+
+    test "errors if wrong parent module given" do
+      event =
+        TimelineEvent.new(
+          id: Equinox.UUID.generate(),
+          type: "TestStruct",
+          stream_name: "testStream-42",
+          position: 0,
+          global_position: 0,
+          data: %{"val1" => 1, "val2" => 2},
+          metadata: nil,
+          time: NaiveDateTime.utc_now()
+        )
+
+      assert {:error, %CodecError{}} = EventStructs.timeline_event_to_struct(event, Enum)
+    end
+
+    test "errors if required struct fields are missing" do
+      event =
+        TimelineEvent.new(
+          id: Equinox.UUID.generate(),
+          type: "TestStruct",
+          stream_name: "testStream-42",
+          position: 0,
+          global_position: 0,
+          data: %{"val2" => 2},
+          metadata: nil,
+          time: NaiveDateTime.utc_now()
+        )
+
+      assert {:error, %CodecError{}} =
+               EventStructs.timeline_event_to_struct(event, __MODULE__)
+    end
+  end
+end

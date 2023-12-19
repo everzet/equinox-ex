@@ -1,7 +1,7 @@
 defmodule MessageDb.WriterTest do
   use MessageDb.ConnCase
   alias MessageDb.Writer
-  alias Equinox.EventData
+  alias Equinox.Events.EventData
 
   doctest Writer
 
