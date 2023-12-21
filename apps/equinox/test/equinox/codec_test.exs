@@ -1,14 +1,14 @@
-defmodule Equinox.EventsTest do
+defmodule Equinox.CodecTest do
   use ExUnit.Case, async: true
   alias Equinox.Events.TimelineEvent
-  alias Equinox.Events.Codec.{EventStructs, CodecError}
+  alias Equinox.Codec.{EventStructs, CodecError}
 
   defmodule TestStruct do
     @enforce_keys [:val1]
     defstruct [:val1, :val2]
   end
 
-  describe "Codec.EventStructs.struct_to_event_data/1" do
+  describe "EventStructs.struct_to_event_data/1" do
     test "converts structs into string maps" do
       struct = %TestStruct{val1: 1, val2: 2}
 
@@ -31,7 +31,7 @@ defmodule Equinox.EventsTest do
     end
   end
 
-  describe "Codec.EventStructs.timeline_event_to_struct/2" do
+  describe "EventStructs.timeline_event_to_struct/2" do
     test "converts timeline event into existing struct under specified module" do
       event =
         TimelineEvent.new(
