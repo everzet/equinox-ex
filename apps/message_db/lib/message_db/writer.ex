@@ -1,19 +1,10 @@
 defmodule MessageDb.Writer do
+  alias Equinox.Store.{DuplicateMessageId, StreamVersionConflict}
   alias Equinox.Events.EventData
 
   @type stream_name :: String.t()
   @type expected_version :: -1 | non_neg_integer()
   @type written_position :: non_neg_integer()
-
-  defmodule DuplicateMessageId do
-    defexception message: "Message with given ID already exists"
-    @type t :: %__MODULE__{}
-  end
-
-  defmodule StreamVersionConflict do
-    defexception message: "Wrong expected version"
-    @type t :: %__MODULE__{}
-  end
 
   @spec write_messages(Postgrex.conn(), stream_name(), list(EventData.t()), expected_version()) ::
           {:ok, new_version :: written_position()}

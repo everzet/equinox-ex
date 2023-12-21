@@ -1,7 +1,8 @@
 defmodule MessageDb.WriterTest do
   use MessageDb.ConnCase
-  alias MessageDb.Writer
+  alias Equinox.Store.{DuplicateMessageId, StreamVersionConflict}
   alias Equinox.Events.EventData
+  alias MessageDb.Writer
 
   doctest Writer
 
@@ -32,14 +33,14 @@ defmodule MessageDb.WriterTest do
     test_in_isolation "failing to write messages with duplicate ID", %{conn: conn} do
       message = EventData.new(type: "SomeMessageType")
 
-      assert {:error, %Writer.DuplicateMessageId{}} =
+      assert {:error, %DuplicateMessageId{}} =
                Writer.write_messages(conn, @stream, [message, message], -1)
     end
 
     test_in_isolation "failing to write message with wrong expected_version", %{conn: conn} do
       message = EventData.new(type: "SomeMessageType")
 
-      assert {:error, %Writer.StreamVersionConflict{}} =
+      assert {:error, %StreamVersionConflict{}} =
                Writer.write_messages(conn, @stream, [message], 999)
     end
   end
