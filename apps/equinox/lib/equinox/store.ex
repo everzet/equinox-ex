@@ -1,13 +1,13 @@
 defmodule Equinox.Store do
+  alias Equinox.Stream.StreamName
   alias Equinox.Events.{TimelineEvent, EventData}
 
-  @type stream_name :: String.t()
   @type expected_version :: -1 | non_neg_integer()
   @type written_position :: non_neg_integer()
 
-  @type event_fetcher :: (stream_name() -> Enumerable.t(TimelineEvent.t()))
-  @type event_writer ::
-          (stream_name(), list(EventData.t()), expected_version() ->
+  @type fetcher :: (StreamName.t() -> Enumerable.t(TimelineEvent.t()))
+  @type writer ::
+          (StreamName.t(), list(EventData.t()), expected_version() ->
              {:ok, new_version :: written_position()}
              | {:error, DuplicateMessageId.t() | StreamVersionConflict.t() | Exception.t()})
 

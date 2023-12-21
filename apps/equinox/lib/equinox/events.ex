@@ -1,4 +1,8 @@
 defmodule Equinox.Events do
+  defmodule DomainEvent do
+    @type t :: any()
+  end
+
   defmodule EventData do
     @enforce_keys [:id, :type]
     defstruct [:id, :type, :data, :metadata]

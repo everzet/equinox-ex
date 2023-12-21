@@ -1,10 +1,11 @@
 defmodule Equinox.Codec do
-  @type t :: module()
+  alias Equinox.Events.{DomainEvent, EventData, TimelineEvent}
 
-  @callback encode(domain_event :: any(), context :: any()) ::
-              {:ok, EventData.t()} | {:error, CodecError.t()}
-  @callback decode(TimelineEvent.t()) ::
-              {:ok, domain_event :: any()} | {:error, CodecError.t()}
+  @type t :: module()
+  @type context :: any()
+
+  @callback encode(DomainEvent.t(), context()) :: {:ok, EventData.t()} | {:error, CodecError.t()}
+  @callback decode(TimelineEvent.t()) :: {:ok, DomainEvent.t()} | {:error, CodecError.t()}
 
   defmodule CodecError do
     defexception [:message]
@@ -15,16 +16,16 @@ defmodule Equinox.Codec do
     defmacro __using__(structs_module: structs_mod) do
       quote do
         @behaviour Equinox.Codec
-        @structs_mod unquote(structs_mod)
+        @structs_module unquote(structs_mod)
 
         @impl Equinox.Codec
-        def encode(%{__struct__: struct} = event, _ctx) do
-          Equinox.Codec.EventStructs.struct_to_event_data(event, @structs_mod)
+        def encode(%{__struct__: struct} = event, _context) do
+          Equinox.Codec.EventStructs.struct_to_event_data(event, @structs_module)
         end
 
         @impl Equinox.Codec
         def decode(event) do
-          Equinox.Codec.EventStructs.timeline_event_to_struct(event, @structs_mod)
+          Equinox.Codec.EventStructs.timeline_event_to_struct(event, @structs_module)
         end
 
         defoverridable encode: 2
@@ -43,13 +44,17 @@ defmodule Equinox.Codec do
       else
         {:error,
          %CodecError{
-           message: "Codec.encode: expected struct under #{parent_type}, got #{full_type}"
+           message:
+             "Codec.EventStructs.encode: Expected a struct under #{parent_type}, got #{full_type}"
          }}
       end
     end
 
     def struct_to_event_data(not_struct, _) do
-      {:error, %CodecError{message: "Codec.encode: expected struct, got #{inspect(not_struct)}"}}
+      {:error,
+       %CodecError{
+         message: "Codec.EventStructs.encode: Expected struct, got #{inspect(not_struct)}"
+       }}
     end
 
     def timeline_event_to_struct(%{type: type, data: data}, parent_module) do
@@ -59,7 +64,7 @@ defmodule Equinox.Codec do
         {:ok, struct}
       rescue
         e in [ArgumentError] ->
-          {:error, %CodecError{message: "Codec.decode: #{e.message}"}}
+          {:error, %CodecError{message: "Codec.EventStructs.decode: #{e.message}"}}
       end
     end
   end

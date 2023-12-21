@@ -1,6 +1,9 @@
 defmodule Equinox.Fold do
-  @type t :: module()
+  alias Equinox.Events.DomainEvent
 
-  @callback initial() :: any()
-  @callback fold(domain_events :: list(any()), state :: any()) :: any()
+  @type t :: module()
+  @type state :: any()
+
+  @callback initial() :: state()
+  @callback fold(list(DomainEvent.t()), state()) :: state()
 end
