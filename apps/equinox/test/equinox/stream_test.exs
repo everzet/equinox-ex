@@ -26,6 +26,11 @@ defmodule Equinox.StreamTest do
     test "works for single element ids" do
       assert {:ok, %StreamId{elements: ["a"]}} = StreamId.parse("a")
     end
+
+    test "requires non-empty string" do
+      assert {:error, %ElementError{}} = StreamId.parse("")
+      assert {:error, %ElementError{}} = StreamId.parse(:val)
+    end
   end
 
   describe "Category.new" do
@@ -46,6 +51,11 @@ defmodule Equinox.StreamTest do
   describe "Category.parse/1" do
     test "wraps name string into Category" do
       assert {:ok, %Category{name: "a"}} = Category.parse("a")
+    end
+
+    test "requires non-empty string" do
+      assert {:error, %ElementError{}} = Category.parse("")
+      assert {:error, %ElementError{}} = Category.parse(:val)
     end
   end
 
@@ -71,6 +81,11 @@ defmodule Equinox.StreamTest do
 
     test "always expects category and stream id present" do
       assert {:error, %ElementError{}} = StreamName.parse("Invoice")
+    end
+
+    test "requires non-empty string" do
+      assert {:error, %ElementError{}} = StreamName.parse("")
+      assert {:error, %ElementError{}} = StreamName.parse(:val)
     end
   end
 

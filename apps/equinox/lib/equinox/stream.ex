@@ -17,7 +17,7 @@ defmodule Equinox.Stream do
       if Enum.any?(elements, &String.contains?(&1, separator())) do
         raise %ElementError{
           message:
-            "StreamId: Expected elements to not contain #{separator()}, but got: '#{elements}'"
+            "StreamId: Expected elements to not contain #{separator()}, but got: #{inspect(elements)}"
         }
       end
 
@@ -25,8 +25,17 @@ defmodule Equinox.Stream do
     end
 
     @spec parse(String.t()) :: {:ok, t()} | {:error, ElementError.t()}
-    def parse(string) when is_bitstring(string) do
-      {:ok, %StreamId{elements: String.split(string, separator())}}
+    def parse(string) do
+      case string do
+        "" ->
+          {:error, %ElementError{message: "StreamId: Expected non-empty string, but got one"}}
+
+        val when not is_bitstring(val) ->
+          {:error, %ElementError{message: "StreamId: Expected a string, but got #{inspect(val)}"}}
+
+        _ ->
+          {:ok, %StreamId{elements: String.split(string, separator())}}
+      end
     end
 
     defimpl String.Chars do
@@ -46,7 +55,8 @@ defmodule Equinox.Stream do
     def new(name) do
       if String.contains?(name, separator()) do
         raise %ElementError{
-          message: "Category: Expected name to not contain #{separator()}, but got: '#{name}'"
+          message:
+            "Category: Expected name to not contain #{separator()}, but got: #{inspect(name)}"
         }
       end
 
@@ -54,8 +64,17 @@ defmodule Equinox.Stream do
     end
 
     @spec parse(String.t()) :: {:ok, t()} | {:error, ElementError.t()}
-    def parse(string) when is_bitstring(string) do
-      {:ok, %Category{name: string}}
+    def parse(string) do
+      case string do
+        "" ->
+          {:error, %ElementError{message: "Category: Expected non-empty string, but got one"}}
+
+        val when not is_bitstring(val) ->
+          {:error, %ElementError{message: "Category: Expected a string, but got #{inspect(val)}"}}
+
+        _ ->
+          {:ok, %Category{name: string}}
+      end
     end
 
     defimpl String.Chars do
@@ -89,7 +108,12 @@ defmodule Equinox.Stream do
     end
 
     @spec parse(String.t()) :: {:ok, t()} | {:error, ElementError.t()}
-    def parse(string) when is_bitstring(string) do
+
+    def parse(val) when not is_bitstring(val) do
+      {:error, %ElementError{message: "StreamName: Expected a string, but got: #{inspect(val)}"}}
+    end
+
+    def parse(string) do
       with [category_str, stream_id_str] <- String.split(string, Category.separator(), parts: 2),
            {:ok, category} <- Category.parse(category_str),
            {:ok, stream_id} <- StreamId.parse(stream_id_str) do
@@ -99,7 +123,7 @@ defmodule Equinox.Stream do
           {:error,
            %ElementError{
              message:
-               "StreamName: Expected to contain 2 elements separated by #{Category.separator()}, but got: '#{string}'"
+               "StreamName: Expected a string with 2 elements separated by #{Category.separator()}, but got: #{inspect(string)}"
            }}
       end
     end
