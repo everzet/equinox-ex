@@ -31,8 +31,8 @@ defmodule Equinox.DeciderTest do
       decider = build(:decider, stream_name: stream)
 
       stub(FoldMock, :initial, fn -> 1 end)
-      stub(FoldMock, :evolve!, &(&1 + &2))
-      stub(CodecMock, :decode!, & &1.data)
+      stub(FoldMock, :evolve, &(&1 + &2))
+      stub(CodecMock, :decode, &{:ok, &1.data})
 
       expect(StoreMock, :fetch_events, fn ^stream, -1 ->
         [
@@ -78,7 +78,7 @@ defmodule Equinox.DeciderTest do
       stub(FoldMock, :initial, fn -> :initial end)
       stub(StoreMock, :fetch_events, fn ^stream, -1 -> [build(:timeline_event)] end)
 
-      expect(CodecMock, :decode!, fn _ -> raise RuntimeError end)
+      expect(CodecMock, :decode, fn _ -> raise RuntimeError end)
 
       assert capture_exit(fn -> Decider.Stateful.start_link(decider) end) =~ "CodecError"
     end
@@ -88,10 +88,10 @@ defmodule Equinox.DeciderTest do
       decider = build(:decider, stream_name: stream, max_load_attempts: 3)
 
       stub(FoldMock, :initial, fn -> :initial end)
-      stub(CodecMock, :decode!, & &1.data)
+      stub(CodecMock, :decode, &{:ok, &1.data})
       stub(StoreMock, :fetch_events, fn ^stream, -1 -> [build(:timeline_event)] end)
 
-      expect(FoldMock, :evolve!, fn _, _ -> raise RuntimeError end)
+      expect(FoldMock, :evolve, fn _, _ -> raise RuntimeError end)
 
       assert capture_exit(fn -> Decider.Stateful.start_link(decider) end) =~ "FoldError"
     end
@@ -129,9 +129,9 @@ defmodule Equinox.DeciderTest do
       decider = build(:decider, stream_name: stream)
 
       stub(FoldMock, :initial, fn -> 0 end)
-      stub(FoldMock, :evolve!, &(&1 + &2))
-      stub(CodecMock, :encode!, fn e, :context -> build(:event_data, data: e) end)
-      stub(CodecMock, :decode!, & &1.data)
+      stub(FoldMock, :evolve, &(&1 + &2))
+      stub(CodecMock, :encode, fn e, :context -> {:ok, build(:event_data, data: e)} end)
+      stub(CodecMock, :decode, &{:ok, &1.data})
       stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
 
       expect(StoreMock, :write_events, fn ^stream, events, -1 ->
@@ -185,9 +185,9 @@ defmodule Equinox.DeciderTest do
       decider = build(:decider, stream_name: stream)
 
       stub(FoldMock, :initial, fn -> 0 end)
-      stub(FoldMock, :evolve!, &(&1 + &2))
-      stub(CodecMock, :encode!, fn e, _ -> build(:event_data, data: e) end)
-      stub(CodecMock, :decode!, & &1.data)
+      stub(FoldMock, :evolve, &(&1 + &2))
+      stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
+      stub(CodecMock, :decode, &{:ok, &1.data})
 
       expect(StoreMock, :fetch_events, fn ^stream, -1 ->
         [build(:timeline_event, data: 2, position: 0)]
@@ -208,12 +208,13 @@ defmodule Equinox.DeciderTest do
       decider = build(:decider, stream_name: stream)
 
       stub(FoldMock, :initial, fn -> 0 end)
-      stub(FoldMock, :evolve!, &(&1 + &2))
-      stub(CodecMock, :encode!, fn e, _ -> build(:event_data, data: e) end)
-      stub(CodecMock, :decode!, & &1.data)
+      stub(FoldMock, :evolve, &(&1 + &2))
+      stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
+      stub(CodecMock, :decode, &{:ok, &1.data})
 
       expect(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
-      expect(StoreMock, :write_events, fn ^stream, _, -1 -> raise StreamVersionConflict end)
+
+      expect(StoreMock, :write_events, fn ^stream, _, -1 -> {:error, %StreamVersionConflict{}} end)
 
       expect(StoreMock, :fetch_events, fn ^stream, -1 ->
         [build(:timeline_event, data: 2, position: 0)]
@@ -231,12 +232,12 @@ defmodule Equinox.DeciderTest do
       decider = build(:decider, stream_name: stream, max_resync_attempts: 0)
 
       stub(FoldMock, :initial, fn -> 0 end)
-      stub(FoldMock, :evolve!, &(&1 + &2))
-      stub(CodecMock, :encode!, fn e, _ -> build(:event_data, data: e) end)
-      stub(CodecMock, :decode!, & &1.data)
+      stub(FoldMock, :evolve, &(&1 + &2))
+      stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
+      stub(CodecMock, :decode, &{:ok, &1.data})
       stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
 
-      expect(StoreMock, :write_events, fn ^stream, _, -1 -> raise StreamVersionConflict end)
+      expect(StoreMock, :write_events, fn ^stream, _, -1 -> {:error, %StreamVersionConflict{}} end)
 
       {:ok, pid} = Decider.Stateful.start_link(decider)
 
@@ -248,9 +249,9 @@ defmodule Equinox.DeciderTest do
       decider = build(:decider, stream_name: stream)
 
       stub(FoldMock, :initial, fn -> 0 end)
-      stub(FoldMock, :evolve!, &(&1 + &2))
-      stub(CodecMock, :encode!, fn e, _ -> build(:event_data, data: e) end)
-      stub(CodecMock, :decode!, & &1.data)
+      stub(FoldMock, :evolve, &(&1 + &2))
+      stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
+      stub(CodecMock, :decode, &{:ok, &1.data})
 
       expect(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
       expect(StoreMock, :write_events, 2, fn ^stream, _, -1 -> raise RuntimeError end)
@@ -266,9 +267,9 @@ defmodule Equinox.DeciderTest do
       decider = build(:decider, stream_name: stream, max_write_attempts: 1)
 
       stub(FoldMock, :initial, fn -> 0 end)
-      stub(FoldMock, :evolve!, &(&1 + &2))
-      stub(CodecMock, :encode!, fn e, _ -> build(:event_data, data: e) end)
-      stub(CodecMock, :decode!, & &1.data)
+      stub(FoldMock, :evolve, &(&1 + &2))
+      stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
+      stub(CodecMock, :decode, &{:ok, &1.data})
 
       expect(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
       expect(StoreMock, :write_events, fn ^stream, _, -1 -> raise RuntimeError end)
@@ -283,10 +284,10 @@ defmodule Equinox.DeciderTest do
       decider = build(:decider, stream_name: stream)
 
       stub(FoldMock, :initial, fn -> 0 end)
-      stub(CodecMock, :encode!, fn e, _ -> build(:event_data, data: e) end)
-      stub(CodecMock, :decode!, & &1.data)
+      stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
+      stub(CodecMock, :decode, &{:ok, &1.data})
 
-      stub(FoldMock, :evolve!, fn _, _ -> raise RuntimeError end)
+      stub(FoldMock, :evolve, fn _, _ -> raise RuntimeError end)
       expect(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
       expect(StoreMock, :write_events, fn ^stream, events, -1 -> {:ok, length(events)} end)
 

@@ -104,7 +104,7 @@ defmodule Equinox.Decider do
       try do
         {stream_state, stream_position} =
           decider.stream_name
-          |> fetch_timeline_events!(decider.stream_position, decider.store)
+          |> decider.store.fetch_events(decider.stream_position)
           |> decode_timeline_into_domain_events!(decider.codec)
           |> fold_domain_events!(decider.stream_state, decider.stream_position, decider.fold)
 
@@ -148,10 +148,6 @@ defmodule Equinox.Decider do
       end
     end
 
-    defp fetch_timeline_events!(stream_name, from_position, store) do
-      store.fetch_events(stream_name, from_position)
-    end
-
     defp write_event_data!(events_data, stream_name, expected_version, store) do
       case store.write_events(stream_name, events_data, expected_version) do
         {:ok, written_position} -> written_position
@@ -162,12 +158,16 @@ defmodule Equinox.Decider do
     defp decode_timeline_into_domain_events!(timeline_events, codec) do
       Stream.map(timeline_events, fn timeline_event ->
         try do
-          {codec.decode!(timeline_event), timeline_event.position}
+          codec.decode(timeline_event)
         rescue
           exception ->
             reraise Codec.CodecError,
-                    [message: "#{inspect(codec)}.decode!: #{exception.message}"],
+                    [message: "#{inspect(codec)}.decode: #{inspect(exception)}"],
                     __STACKTRACE__
+        end
+        |> case do
+          {:ok, domain_event} -> {domain_event, timeline_event.position}
+          {:error, exception} -> raise exception
         end
       end)
     end
@@ -175,12 +175,16 @@ defmodule Equinox.Decider do
     defp encode_domain_events_into_event_data!(domain_events, change_context, codec) do
       Enum.map(domain_events, fn domain_event ->
         try do
-          codec.encode!(domain_event, change_context)
+          codec.encode(domain_event, change_context)
         rescue
           exception ->
             reraise Codec.CodecError,
-                    [message: "#{inspect(codec)}.encode!: #{exception.message}"],
+                    [message: "#{inspect(codec)}.encode: #{inspect(exception)}"],
                     __STACKTRACE__
+        end
+        |> case do
+          {:ok, timeline_event} -> timeline_event
+          {:error, exception} -> raise exception
         end
       end)
     end
@@ -188,13 +192,14 @@ defmodule Equinox.Decider do
     defp fold_domain_events!(domain_events, state, position, fold) do
       Enum.reduce(domain_events, {state, position}, fn {event, position}, {state, _} ->
         try do
-          {fold.evolve!(state, event), position}
+          fold.evolve(state, event)
         rescue
           exception ->
             reraise Fold.FoldError,
-                    [message: "#{inspect(fold)}.evolve!: #{exception.message}"],
+                    [message: "#{inspect(fold)}.evolve: #{inspect(exception)}"],
                     __STACKTRACE__
         end
+        |> then(&{&1, position})
       end)
     end
 
