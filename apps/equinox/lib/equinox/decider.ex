@@ -257,6 +257,7 @@ defmodule Equinox.Decider do
 
     @enforce_keys [:stream_name, :supervisor, :registry, :store, :codec, :fold]
     defstruct stream_name: nil,
+              process_name: nil,
               supervisor: nil,
               registry: nil,
               lifetime: Lifetime.Default,
@@ -271,6 +272,7 @@ defmodule Equinox.Decider do
 
     @type t :: %__MODULE__{
             stream_name: StreamName.t(),
+            process_name: GenServer.server(),
             supervisor: :disabled | GenServer.server(),
             registry: :disabled | :global | GenServer.server(),
             lifetime: Lifetime.t(),
@@ -282,7 +284,16 @@ defmodule Equinox.Decider do
 
     @spec for_stream(StreamName.t(), Enumerable.t()) :: t()
     def for_stream(%StreamName{} = stream_name, opts) do
-      struct!(__MODULE__, Keyword.put(opts, :stream_name, stream_name))
+      decider = struct!(__MODULE__, Keyword.put(opts, :stream_name, stream_name))
+
+      process_name =
+        case decider.registry do
+          :disabled -> nil
+          :global -> {:global, String.Chars.to_string(decider.stream_name)}
+          module -> {:via, Registry, {module, String.Chars.to_string(decider.stream_name)}}
+        end
+
+      %{decider | process_name: process_name}
     end
 
     @spec to_stateless(t()) :: Stateless.t()
@@ -292,21 +303,22 @@ defmodule Equinox.Decider do
       Stateless.for_stream(stream_name, opts)
     end
 
-    @spec start_supervised(t()) :: DynamicSupervisor.on_start_child()
-    def start_supervised(%__MODULE__{} = decider) do
+    @spec start_server(t()) :: GenServer.on_start() | DynamicSupervisor.on_start_child()
+    def start_server(%__MODULE__{} = decider) do
       case decider.supervisor do
-        nil ->
-          raise Decider.DeciderError,
-            message: "start_supervised: Supervision requires supervisor, but it is disabled"
-
-        sup ->
-          DynamicSupervisor.start_child(sup, {__MODULE__, decider})
+        :disabled -> start_link(decider)
+        supervisor -> start_supervised(decider, supervisor)
       end
     end
 
     @spec start_link(t()) :: GenServer.on_start()
     def start_link(%__MODULE__{} = decider) do
-      GenServer.start_link(__MODULE__, decider, name: process_name(decider))
+      GenServer.start_link(__MODULE__, decider, name: decider.process_name)
+    end
+
+    @spec start_supervised(t(), module()) :: DynamicSupervisor.on_start_child()
+    def start_supervised(%__MODULE__{} = decider, supervisor) do
+      DynamicSupervisor.start_child(supervisor, {__MODULE__, decider})
     end
 
     @spec query(t() | pid(), Decider.query()) :: any()
@@ -334,37 +346,22 @@ defmodule Equinox.Decider do
         fun.(pid)
       else
         raise Decider.DeciderError,
-          message: "ensure_process_alive!: Given process is not alive"
+          message: "ensure_process_alive!: Given process #{inspect(pid)} is not alive"
       end
     end
 
     defp ensure_process_alive!(%__MODULE__{} = decider, fun) do
-      case process_name(decider) do
+      case decider.process_name do
         nil ->
           raise Decider.DeciderError,
-            message: "ensure_process_alive!: Failed to generate dynamic process name"
+            message: "ensure_process_alive!: On-demand spawning requires registry"
 
         via_registry ->
           try do
             fun.(via_registry)
           catch
-            :exit, {:noproc, _} -> with({:ok, pid} <- start_process(decider), do: fun.(pid))
+            :exit, {:noproc, _} -> with({:ok, pid} <- start_server(decider), do: fun.(pid))
           end
-      end
-    end
-
-    defp process_name(%__MODULE__{} = decider) do
-      case decider.registry do
-        :disabled -> nil
-        :global -> {:global, String.Chars.to_string(decider.stream_name)}
-        module -> {:via, module, String.Chars.to_string(decider.stream_name)}
-      end
-    end
-
-    defp start_process(%__MODULE__{} = decider) do
-      case decider.supervisor do
-        :disabled -> start_link(decider)
-        _supervisor -> start_supervised(decider)
       end
     end
 
