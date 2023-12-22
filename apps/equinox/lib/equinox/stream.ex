@@ -107,6 +107,14 @@ defmodule Equinox.Stream do
       end
     end
 
+    @spec parse!(String.t()) :: t()
+    def parse!(val) do
+      case parse(val) do
+        {:ok, stream_name} -> stream_name
+        {:error, error} -> raise error
+      end
+    end
+
     @spec parse(String.t()) :: {:ok, t()} | {:error, ElementError.t()}
 
     def parse(val) when not is_bitstring(val) do
