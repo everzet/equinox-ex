@@ -8,6 +8,7 @@ defmodule Equinox.Codec do
   @callback decode(TimelineEvent.t()) :: {:ok, DomainEvent.t()} | {:error, CodecError.t()}
 
   defmodule CodecError do
+    @enforce_keys [:message]
     defexception [:message, :exception]
     @type t :: %__MODULE__{message: String.t(), exception: nil | Exception.t()}
   end

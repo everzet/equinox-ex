@@ -14,11 +14,11 @@ defmodule Equinox.Store do
 
   defmodule DuplicateMessageId do
     defexception message: "Message with given ID already exists"
-    @type t :: %__MODULE__{}
+    @type t :: %__MODULE__{message: String.t()}
   end
 
   defmodule StreamVersionConflict do
     defexception message: "Wrong expected version"
-    @type t :: %__MODULE__{}
+    @type t :: %__MODULE__{message: String.t()}
   end
 end

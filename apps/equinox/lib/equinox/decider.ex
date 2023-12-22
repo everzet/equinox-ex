@@ -14,17 +14,20 @@ defmodule Equinox.Decider do
   @type context :: any()
 
   defmodule DeciderError do
+    @enforce_keys [:message]
     defexception [:message]
-    @type t :: %__MODULE__{}
+    @type t :: %__MODULE__{message: String.t()}
   end
 
   defmodule DecisionError do
-    defexception message: "Error occurred in decision function", exception: nil
+    @enforce_keys [:message, :exception]
+    defexception [:message, :exception]
     @type t :: %__MODULE__{message: String.t(), exception: Exception.t()}
   end
 
   defmodule QueryError do
-    defexception message: "Error occurred in query function", exception: nil
+    @enforce_keys [:message, :exception]
+    defexception [:message, :exception]
     @type t :: %__MODULE__{message: String.t(), exception: Exception.t()}
   end
 

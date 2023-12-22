@@ -1,5 +1,6 @@
 defmodule Equinox.Stream do
   defmodule ElementError do
+    @enforce_keys [:message]
     defexception [:message]
     @type t :: %__MODULE__{message: String.t()}
   end
@@ -15,10 +16,9 @@ defmodule Equinox.Stream do
     @spec new(nonempty_list(String.t())) :: t()
     def new(elements) when is_list(elements) and length(elements) > 0 do
       if Enum.any?(elements, &String.contains?(&1, separator())) do
-        raise %ElementError{
+        raise ElementError,
           message:
             "StreamId: Expected elements to not contain #{separator()}, but got: #{inspect(elements)}"
-        }
       end
 
       %StreamId{elements: elements}
@@ -54,10 +54,9 @@ defmodule Equinox.Stream do
     @spec new(String.t()) :: t()
     def new(name) do
       if String.contains?(name, separator()) do
-        raise %ElementError{
+        raise ElementError,
           message:
             "Category: Expected name to not contain #{separator()}, but got: #{inspect(name)}"
-        }
       end
 
       %Category{name: name}
@@ -98,7 +97,7 @@ defmodule Equinox.Stream do
       with {:ok, stream_name} when stream_name.category.name == expected_name <- parse(string) do
         {:ok, stream_name}
       else
-        {:ok, _} ->
+        {:ok, _not_matching_stream_name} ->
           {:error,
            %ElementError{
              message:

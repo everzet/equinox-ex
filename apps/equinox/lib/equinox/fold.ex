@@ -8,6 +8,7 @@ defmodule Equinox.Fold do
   @callback evolve(state(), DomainEvent.t()) :: state()
 
   defmodule FoldError do
+    @enforce_keys [:message]
     defexception [:message, :exception]
     @type t :: %__MODULE__{message: String.t(), exception: nil | Exception.t()}
   end
