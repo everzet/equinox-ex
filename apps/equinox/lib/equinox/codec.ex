@@ -8,8 +8,8 @@ defmodule Equinox.Codec do
   @callback decode(TimelineEvent.t()) :: {:ok, DomainEvent.t()} | {:error, CodecError.t()}
 
   defmodule CodecError do
-    defexception [:message]
-    @type t :: %__MODULE__{message: String.t()}
+    defexception [:message, :exception]
+    @type t :: %__MODULE__{message: String.t(), exception: nil | Exception.t()}
   end
 
   defmodule EventStructs do

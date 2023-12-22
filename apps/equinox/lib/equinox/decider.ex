@@ -18,6 +18,16 @@ defmodule Equinox.Decider do
     @type t :: %__MODULE__{}
   end
 
+  defmodule DecisionError do
+    defexception message: "Error occurred in decision function", exception: nil
+    @type t :: %__MODULE__{message: String.t(), exception: Exception.t()}
+  end
+
+  defmodule QueryError do
+    defexception message: "Error occurred in query function", exception: nil
+    @type t :: %__MODULE__{message: String.t(), exception: Exception.t()}
+  end
+
   defmodule Stateless do
     alias Equinox.{Decider, Store, Codec, Fold}
     alias Equinox.Stream.StreamName
@@ -62,7 +72,14 @@ defmodule Equinox.Decider do
 
     @spec query(t(), Decider.query_function()) :: any()
     def query(%__MODULE__{} = decider, query_fun) do
-      query_fun.(decider.stream_state)
+      try do
+        query_fun.(decider.stream_state)
+      rescue
+        exception ->
+          reraise Decider.QueryError,
+                  [message: inspect(exception), exception: exception],
+                  __STACKTRACE__
+      end
     end
 
     @spec transact(t(), Decider.decision_function(), Decider.context()) ::
@@ -72,8 +89,14 @@ defmodule Equinox.Decider do
     end
 
     defp do_transact(%__MODULE__{} = decider, decision_fun, context, resync_attempt \\ 0) do
-      decider.stream_state
-      |> decision_fun.()
+      try do
+        decision_fun.(decider.stream_state)
+      rescue
+        exception ->
+          reraise Decider.DecisionError,
+                  [message: inspect(exception), exception: exception],
+                  __STACKTRACE__
+      end
       |> handle_decision_result(decider, fn events ->
         try do
           {:ok, sync_stream_state(decider, events, context)}
@@ -162,7 +185,10 @@ defmodule Equinox.Decider do
         rescue
           exception ->
             reraise Codec.CodecError,
-                    [message: "#{inspect(codec)}.decode: #{inspect(exception)}"],
+                    [
+                      message: "#{inspect(codec)}.decode: #{inspect(exception)}",
+                      exception: exception
+                    ],
                     __STACKTRACE__
         end
         |> case do
@@ -179,7 +205,10 @@ defmodule Equinox.Decider do
         rescue
           exception ->
             reraise Codec.CodecError,
-                    [message: "#{inspect(codec)}.encode: #{inspect(exception)}"],
+                    [
+                      message: "#{inspect(codec)}.encode: #{inspect(exception)}",
+                      exception: exception
+                    ],
                     __STACKTRACE__
         end
         |> case do
@@ -196,7 +225,10 @@ defmodule Equinox.Decider do
         rescue
           exception ->
             reraise Fold.FoldError,
-                    [message: "#{inspect(fold)}.evolve: #{inspect(exception)}"],
+                    [
+                      message: "#{inspect(fold)}.evolve: #{inspect(exception)}",
+                      exception: exception
+                    ],
                     __STACKTRACE__
         end
         |> then(&{&1, position})
@@ -296,7 +328,8 @@ defmodule Equinox.Decider do
       if Process.alive?(pid) do
         fun.(pid)
       else
-        raise Decider.DeciderError, message: "ensure_process_alive!: Given process is not alive"
+        raise Decider.DeciderError,
+          message: "ensure_process_alive!: Given process is not alive"
       end
     end
 
@@ -304,8 +337,7 @@ defmodule Equinox.Decider do
       case process_name(decider) do
         nil ->
           raise Decider.DeciderError,
-            message:
-              "ensure_process_alive!: On-demand spawning requires registry, but it is disabled"
+            message: "ensure_process_alive!: Failed to generate dynamic process name"
 
         via_registry ->
           try do
@@ -335,8 +367,7 @@ defmodule Equinox.Decider do
 
     @impl GenServer
     def init(%__MODULE__{} = decider) do
-      on_init = Keyword.get(decider.opts, :on_init, fn -> nil end)
-      on_init.()
+      Keyword.get(decider.opts, :on_init, fn -> nil end).()
       {:ok, to_stateless(decider), {:continue, :load}}
     end
 
