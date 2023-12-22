@@ -21,7 +21,8 @@ defmodule Equinox.DeciderTest do
       stub(FoldMock, :initial, fn -> :initial end)
       stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
 
-      assert {:ok, pid} = Decider.start_link(decider)
+      assert {:ok, pid} = Decider.Stateful.start_link(decider)
+
       assert :initial = Decider.query(pid, & &1)
     end
 
@@ -41,50 +42,50 @@ defmodule Equinox.DeciderTest do
         ]
       end)
 
-      assert {:ok, pid} = Decider.start_link(decider)
+      assert {:ok, pid} = Decider.Stateful.start_link(decider)
       assert 7 = Decider.query(pid, & &1)
     end
 
     test "gracefully handles fetch failures by retrying certain number of attempts" do
       stream = build(:stream_name)
-      decider = build(:decider, stream_name: stream, max_reload_attempts: 3)
+      decider = build(:decider, stream_name: stream, max_load_attempts: 3)
 
       stub(FoldMock, :initial, fn -> :initial end)
 
       expect(StoreMock, :fetch_events, 2, fn ^stream, -1 -> raise RuntimeError end)
       expect(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
 
-      assert {:ok, pid} = Decider.start_link(decider)
+      assert {:ok, pid} = Decider.Stateful.start_link(decider)
       assert :initial = Decider.query(pid, & &1)
       refute_receive {:EXIT, ^pid, _}
     end
 
-    test "respects max_reload_attempts setting when retrying" do
+    test "respects max_load_attempts setting when retrying" do
       stream = build(:stream_name)
-      decider = build(:decider, stream_name: stream, max_reload_attempts: 2)
+      decider = build(:decider, stream_name: stream, max_load_attempts: 2)
 
       stub(FoldMock, :initial, fn -> :initial end)
 
       expect(StoreMock, :fetch_events, 2, fn ^stream, -1 -> raise RuntimeError end)
 
-      assert capture_exit(fn -> Decider.start_link(decider) end) =~ "RuntimeError"
+      assert capture_exit(fn -> Decider.Stateful.start_link(decider) end) =~ "RuntimeError"
     end
 
     test "codec errors do not trigger retries and instead just crash the process" do
       stream = build(:stream_name)
-      decider = build(:decider, stream_name: stream, max_reload_attempts: 3)
+      decider = build(:decider, stream_name: stream, max_load_attempts: 3)
 
       stub(FoldMock, :initial, fn -> :initial end)
       stub(StoreMock, :fetch_events, fn ^stream, -1 -> [build(:timeline_event)] end)
 
       expect(CodecMock, :decode!, fn _ -> raise RuntimeError end)
 
-      assert capture_exit(fn -> Decider.start_link(decider) end) =~ "CodecError"
+      assert capture_exit(fn -> Decider.Stateful.start_link(decider) end) =~ "CodecError"
     end
 
     test "fold errors do not trigger retries and instead just crash the process" do
       stream = build(:stream_name)
-      decider = build(:decider, stream_name: stream, max_reload_attempts: 3)
+      decider = build(:decider, stream_name: stream, max_load_attempts: 3)
 
       stub(FoldMock, :initial, fn -> :initial end)
       stub(CodecMock, :decode!, & &1.data)
@@ -92,7 +93,7 @@ defmodule Equinox.DeciderTest do
 
       expect(FoldMock, :evolve!, fn _, _ -> raise RuntimeError end)
 
-      assert capture_exit(fn -> Decider.start_link(decider) end) =~ "FoldError"
+      assert capture_exit(fn -> Decider.Stateful.start_link(decider) end) =~ "FoldError"
     end
   end
 
@@ -104,7 +105,7 @@ defmodule Equinox.DeciderTest do
       stub(FoldMock, :initial, fn -> :some_value end)
       stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
 
-      assert {:ok, pid} = Decider.start_link(decider)
+      assert {:ok, pid} = Decider.Stateful.start_link(decider)
       assert :some_value = Decider.query(pid, & &1)
     end
 
@@ -115,7 +116,7 @@ defmodule Equinox.DeciderTest do
       stub(FoldMock, :initial, fn -> :initial end)
       stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
 
-      assert {:ok, pid} = Decider.start_link(decider)
+      assert {:ok, pid} = Decider.Stateful.start_link(decider)
 
       assert capture_exit(fn -> Decider.query(pid, fn _ -> raise RuntimeError end) end) =~
                "RuntimeError"
@@ -138,8 +139,8 @@ defmodule Equinox.DeciderTest do
         {:ok, 1}
       end)
 
-      assert {:ok, pid} = Decider.start_link(decider)
-      assert :ok = Decider.transact(pid, fn 0 -> [2, 3] end, :context)
+      assert {:ok, pid} = Decider.Stateful.start_link(decider)
+      assert {:ok, ^pid} = Decider.transact(pid, fn 0 -> [2, 3] end, :context)
       assert 5 = Decider.query(pid, & &1)
     end
 
@@ -150,9 +151,9 @@ defmodule Equinox.DeciderTest do
       stub(FoldMock, :initial, fn -> 0 end)
       stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
 
-      assert {:ok, pid} = Decider.start_link(decider)
-      assert :ok = Decider.transact(pid, fn 0 -> nil end)
-      assert :ok = Decider.transact(pid, fn 0 -> [] end)
+      assert {:ok, pid} = Decider.Stateful.start_link(decider)
+      assert {:ok, ^pid} = Decider.transact(pid, fn 0 -> nil end)
+      assert {:ok, ^pid} = Decider.transact(pid, fn 0 -> [] end)
     end
 
     test "decision callback returning error simply propagates it back" do
@@ -162,7 +163,7 @@ defmodule Equinox.DeciderTest do
       stub(FoldMock, :initial, fn -> 0 end)
       stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
 
-      assert {:ok, pid} = Decider.start_link(decider)
+      assert {:ok, pid} = Decider.Stateful.start_link(decider)
       assert {:error, :custom_error} = Decider.transact(pid, fn 0 -> {:error, :custom_error} end)
     end
 
@@ -173,7 +174,7 @@ defmodule Equinox.DeciderTest do
       stub(FoldMock, :initial, fn -> 0 end)
       stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
 
-      assert {:ok, pid} = Decider.start_link(decider)
+      assert {:ok, pid} = Decider.Stateful.start_link(decider)
 
       assert capture_exit(fn -> Decider.transact(pid, fn _ -> raise RuntimeError end) end) =~
                "RuntimeError"
@@ -197,8 +198,8 @@ defmodule Equinox.DeciderTest do
         {:ok, 1}
       end)
 
-      assert {:ok, pid} = Decider.start_link(decider)
-      assert :ok = Decider.transact(pid, fn 2 -> 3 end)
+      assert {:ok, pid} = Decider.Stateful.start_link(decider)
+      assert {:ok, ^pid} = Decider.transact(pid, fn 2 -> 3 end)
       assert 5 = Decider.query(pid, & &1)
     end
 
@@ -220,8 +221,8 @@ defmodule Equinox.DeciderTest do
 
       expect(StoreMock, :write_events, fn ^stream, events, 0 -> {:ok, length(events)} end)
 
-      assert {:ok, pid} = Decider.start_link(decider)
-      assert :ok = Decider.transact(pid, fn _ -> 3 end)
+      assert {:ok, pid} = Decider.Stateful.start_link(decider)
+      assert {:ok, ^pid} = Decider.transact(pid, fn _ -> 3 end)
       assert 5 = Decider.query(pid, & &1)
     end
 
@@ -237,7 +238,7 @@ defmodule Equinox.DeciderTest do
 
       expect(StoreMock, :write_events, fn ^stream, _, -1 -> raise StreamVersionConflict end)
 
-      {:ok, pid} = Decider.start_link(decider)
+      {:ok, pid} = Decider.Stateful.start_link(decider)
 
       assert capture_exit(fn -> Decider.transact(pid, & &1) end) =~ "StreamVersionConflict"
     end
@@ -255,8 +256,8 @@ defmodule Equinox.DeciderTest do
       expect(StoreMock, :write_events, 2, fn ^stream, _, -1 -> raise RuntimeError end)
       expect(StoreMock, :write_events, fn ^stream, events, -1 -> {:ok, length(events)} end)
 
-      assert {:ok, pid} = Decider.start_link(decider)
-      assert :ok = Decider.transact(pid, fn _ -> 3 end)
+      assert {:ok, pid} = Decider.Stateful.start_link(decider)
+      assert {:ok, ^pid} = Decider.transact(pid, fn _ -> 3 end)
       assert 3 = Decider.query(pid, & &1)
     end
 
@@ -272,7 +273,7 @@ defmodule Equinox.DeciderTest do
       expect(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
       expect(StoreMock, :write_events, fn ^stream, _, -1 -> raise RuntimeError end)
 
-      assert {:ok, pid} = Decider.start_link(decider)
+      assert {:ok, pid} = Decider.Stateful.start_link(decider)
 
       assert capture_exit(fn -> Decider.transact(pid, & &1) end) =~ "RuntimeError"
     end
@@ -289,7 +290,7 @@ defmodule Equinox.DeciderTest do
       expect(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
       expect(StoreMock, :write_events, fn ^stream, events, -1 -> {:ok, length(events)} end)
 
-      assert {:ok, pid} = Decider.start_link(decider)
+      assert {:ok, pid} = Decider.Stateful.start_link(decider)
 
       assert capture_exit(fn -> Decider.transact(pid, & &1) end) =~ "FoldError"
     end
@@ -318,22 +319,24 @@ defmodule Equinox.DeciderTest do
   defp build(:decider, attrs) do
     test_pid = self()
 
-    %Decider{
-      stream_name: Keyword.get(attrs, :stream_name, build(:stream_name)),
-      max_reload_attempts: Keyword.get(attrs, :max_reload_attempts, 3),
-      max_write_attempts: Keyword.get(attrs, :max_write_attempts, 3),
-      max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 1),
+    Decider.Stateful.for_stream(
+      Keyword.get(attrs, :stream_name, build(:stream_name)),
       supervisor: :disabled,
       registry: :disabled,
       store: StoreMock,
       codec: CodecMock,
       fold: FoldMock,
-      on_init: fn ->
-        allow(StoreMock, test_pid, self())
-        allow(CodecMock, test_pid, self())
-        allow(FoldMock, test_pid, self())
-      end
-    }
+      opts: [
+        max_load_attempts: Keyword.get(attrs, :max_load_attempts, 3),
+        max_write_attempts: Keyword.get(attrs, :max_write_attempts, 3),
+        max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 1),
+        on_init: fn ->
+          allow(StoreMock, test_pid, self())
+          allow(CodecMock, test_pid, self())
+          allow(FoldMock, test_pid, self())
+        end
+      ]
+    )
   end
 
   defp build(:event_data, attrs) do

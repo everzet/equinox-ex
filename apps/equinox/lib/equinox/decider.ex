@@ -1,37 +1,17 @@
 defmodule Equinox.Decider do
-  use GenServer
-
-  alias Equinox.Stream.StreamName
+  alias Equinox.Fold
   alias Equinox.Events.DomainEvent
-  alias Equinox.{Store, Codec, Fold}
 
-  @enforce_keys [:stream_name, :supervisor, :registry, :store, :codec, :fold]
-  defstruct stream_name: nil,
-            store: nil,
-            codec: nil,
-            fold: nil,
-            max_reload_attempts: 3,
-            max_write_attempts: 3,
-            max_resync_attempts: 1,
-            supervisor: nil,
-            registry: nil,
-            on_init: nil
-
-  @type t :: %__MODULE__{
-          stream_name: StreamName.t(),
-          store: Store.t(),
-          codec: Codec.t(),
-          fold: Fold.t(),
-          max_reload_attempts: pos_integer(),
-          max_write_attempts: pos_integer(),
-          max_resync_attempts: pos_integer(),
-          supervisor: :disabled | GenServer.server(),
-          registry: :disabled | :global | GenServer.server(),
-          on_init: (-> nil)
-        }
-
-  @type query :: (Fold.state() -> any())
-  @type decision :: (Fold.state() -> nil | DomainEvent.t() | list(DomainEvent.t()))
+  @type query_function ::
+          (Fold.state() -> any())
+  @type decision_function ::
+          (Fold.state() ->
+             nil
+             | DomainEvent.t()
+             | list(DomainEvent.t())
+             | {:ok, list(DomainEvent.t())}
+             | {:error, term()})
+  @type context :: any()
 
   defmodule DeciderError do
     defexception [:message]
@@ -39,8 +19,7 @@ defmodule Equinox.Decider do
   end
 
   defmodule Stateless do
-    alias Equinox.{Store, Codec, Fold}
-    alias Equinox.Events.DomainEvent
+    alias Equinox.{Decider, Store, Codec, Fold}
     alias Equinox.Stream.StreamName
 
     @enforce_keys [:stream_name, :store, :codec, :fold]
@@ -69,16 +48,6 @@ defmodule Equinox.Decider do
             | {:max_write_attempts, pos_integer()}
             | {:max_resync_attempts, pos_integer()}
 
-    @type query_function :: (Fold.state() -> any())
-    @type decision_function ::
-            (Fold.state() ->
-               nil
-               | DomainEvent.t()
-               | list(DomainEvent.t())
-               | {:ok, list(DomainEvent.t())}
-               | {:error, term()})
-    @type context :: any()
-
     @spec for_stream(StreamName.t(), Enumerable.t()) :: t()
     def for_stream(%StreamName{} = stream_name, opts) do
       opts = Keyword.put(opts, :stream_name, stream_name)
@@ -91,12 +60,13 @@ defmodule Equinox.Decider do
       load_stream_state(decider)
     end
 
-    @spec query(t(), query_function()) :: any()
+    @spec query(t(), Decider.query_function()) :: any()
     def query(%__MODULE__{} = decider, query_fun) do
       query_fun.(decider.stream_state)
     end
 
-    @spec transact(t(), decision_function(), context()) :: {:ok, t()} | {:error, term()}
+    @spec transact(t(), Decider.decision_function(), Decider.context()) ::
+            {:ok, t()} | {:error, term()}
     def transact(%__MODULE__{} = decider, decision_fun, context \\ nil) do
       do_transact(decider, decision_fun, context)
     end
@@ -238,117 +208,174 @@ defmodule Equinox.Decider do
       do: Keyword.get(decider.opts, :max_resync_attempts, @default_max_resync_attempts)
   end
 
-  # Client API
+  defmodule Stateful do
+    use GenServer
 
-  @spec start_supervised(t()) :: DynamicSupervisor.on_start_child()
-  def start_supervised(%__MODULE__{} = decider) do
-    case decider.supervisor do
-      nil ->
-        {:error,
-         %DeciderError{
-           message: "start_supervised: Supervision requires supervisor, but it is disabled"
-         }}
+    alias Equinox.{Decider, Store, Codec, Fold}
+    alias Equinox.Stream.StreamName
+    alias Equinox.Decider.Stateless
 
-      sup ->
-        DynamicSupervisor.start_child(sup, {__MODULE__, decider})
+    @enforce_keys [:stream_name, :supervisor, :registry, :store, :codec, :fold]
+    defstruct stream_name: nil,
+              supervisor: nil,
+              registry: nil,
+              store: nil,
+              codec: nil,
+              fold: nil,
+              opts: []
+
+    @type option ::
+            Stateless.option()
+            | {:on_init, (-> nil)}
+
+    @type t :: %__MODULE__{
+            stream_name: StreamName.t(),
+            supervisor: :disabled | GenServer.server(),
+            registry: :disabled | :global | GenServer.server(),
+            store: Store.t(),
+            codec: Codec.t(),
+            fold: Fold.t(),
+            opts: list(option())
+          }
+
+    @spec for_stream(StreamName.t(), Enumerable.t()) :: t()
+    def for_stream(%StreamName{} = stream_name, opts) do
+      struct!(__MODULE__, Keyword.put(opts, :stream_name, stream_name))
     end
-  end
 
-  @spec start_link(t()) :: GenServer.on_start()
-  def start_link(%__MODULE__{} = decider) do
-    GenServer.start_link(__MODULE__, decider, name: process_name(decider))
-  end
+    @spec to_stateless(t()) :: Stateless.t()
+    def to_stateless(%__MODULE__{} = decider) do
+      stream_name = decider.stream_name
+      opts = decider |> Map.take([:store, :codec, :fold, :opts]) |> Map.to_list()
+      Stateless.for_stream(stream_name, opts)
+    end
 
-  @spec query(t() | pid(), query()) :: {:ok, result :: any()} | {:error, Exception.t()}
-  def query(decider_or_pid, query) do
-    ensure_process_alive(decider_or_pid, fn pid ->
-      GenServer.call(pid, {:query, query})
-    end)
-  end
+    @spec start_supervised(t()) :: DynamicSupervisor.on_start_child()
+    def start_supervised(%__MODULE__{} = decider) do
+      case decider.supervisor do
+        nil ->
+          raise Decider.DeciderError,
+            message: "start_supervised: Supervision requires supervisor, but it is disabled"
 
-  @spec transact(t() | pid(), decision(), context :: any()) :: :ok | {:error, term()}
-  def transact(decider_or_pid, decision, context \\ nil) do
-    ensure_process_alive(decider_or_pid, fn pid ->
-      GenServer.call(pid, {:transact, decision, context})
-    end)
-  end
+        sup ->
+          DynamicSupervisor.start_child(sup, {__MODULE__, decider})
+      end
+    end
 
-  defp ensure_process_alive(decider_or_pid, fun) do
-    case decider_or_pid do
-      pid when is_pid(pid) ->
-        fun.(pid)
+    @spec start_link(t()) :: GenServer.on_start()
+    def start_link(%__MODULE__{} = decider) do
+      GenServer.start_link(__MODULE__, decider, name: process_name(decider))
+    end
 
-      %__MODULE__{} = decider ->
-        case process_name(decider) do
-          nil ->
-            {:error,
-             %DeciderError{
-               message:
-                 "ensure_process_alive: On-demand spawning requires registry, but it is disabled"
-             }}
+    @spec query(t() | pid(), Decider.query()) :: any()
+    def query(decider_or_pid, query) do
+      ensure_process_alive!(decider_or_pid, fn pid ->
+        GenServer.call(pid, {:query, query})
+      end)
+    end
 
-          via_registry ->
-            try do
-              fun.(via_registry)
-            catch
-              :exit, {:noproc, _} -> with({:ok, pid} <- start_process(decider), do: fun.(pid))
-            end
+    @spec transact(t(), Decider.decision(), Decider.context()) ::
+            {:ok, t()} | {:error, term()}
+    @spec transact(pid(), Decider.decision(), Decider.context()) ::
+            {:ok, pid()} | {:error, term()}
+    def transact(decider_or_pid, decision, context \\ nil) do
+      ensure_process_alive!(decider_or_pid, fn pid ->
+        case GenServer.call(pid, {:transact, decision, context}) do
+          :ok -> {:ok, decider_or_pid}
+          {:error, error} -> {:error, error}
         end
+      end)
+    end
+
+    defp ensure_process_alive!(pid, fun) when is_pid(pid) do
+      if Process.alive?(pid) do
+        fun.(pid)
+      else
+        raise Decider.DeciderError, message: "ensure_process_alive!: Given process is not alive"
+      end
+    end
+
+    defp ensure_process_alive!(%__MODULE__{} = decider, fun) do
+      case process_name(decider) do
+        nil ->
+          raise Decider.DeciderError,
+            message:
+              "ensure_process_alive!: On-demand spawning requires registry, but it is disabled"
+
+        via_registry ->
+          try do
+            fun.(via_registry)
+          catch
+            :exit, {:noproc, _} -> with({:ok, pid} <- start_process(decider), do: fun.(pid))
+          end
+      end
+    end
+
+    defp process_name(%__MODULE__{} = decider) do
+      case decider.registry do
+        :disabled -> nil
+        :global -> {:global, String.Chars.to_string(decider.stream_name)}
+        module -> {:via, module, String.Chars.to_string(decider.stream_name)}
+      end
+    end
+
+    defp start_process(%__MODULE__{} = decider) do
+      case decider.supervisor do
+        :disabled -> start_link(decider)
+        _supervisor -> start_supervised(decider)
+      end
+    end
+
+    # Server (callbacks)
+
+    @impl GenServer
+    def init(%__MODULE__{} = decider) do
+      on_init = Keyword.get(decider.opts, :on_init, fn -> nil end)
+      on_init.()
+      {:ok, to_stateless(decider), {:continue, :load}}
+    end
+
+    @impl GenServer
+    def handle_continue(:load, decider) do
+      {:noreply, Stateless.load(decider)}
+    end
+
+    @impl GenServer
+    def handle_call({:query, query}, _from, decider) do
+      {:reply, Stateless.query(decider, query), decider}
+    end
+
+    @impl GenServer
+    def handle_call({:transact, decision, context}, _from, decider) do
+      case Stateless.transact(decider, decision, context) do
+        {:ok, new_decider} -> {:reply, :ok, new_decider}
+        {:error, error} -> {:reply, {:error, error}, decider}
+      end
     end
   end
 
-  defp process_name(%__MODULE__{} = decider) do
-    case decider.registry do
-      :disabled -> nil
-      :global -> {:global, String.Chars.to_string(decider.stream_name)}
-      module -> {:via, module, String.Chars.to_string(decider.stream_name)}
+  @spec query(pid(), query_function()) :: any()
+  @spec query(Stateful.t(), query_function()) :: any()
+  @spec query(Stateless.t(), query_function()) :: any()
+  def query(decider, query) do
+    case decider do
+      pid when is_pid(pid) -> Stateful.query(pid, query)
+      %Stateful{} = decider -> Stateful.query(decider, query)
+      %Stateless{} = decider -> Stateless.query(decider, query)
     end
   end
 
-  defp start_process(%__MODULE__{} = decider) do
-    case decider.supervisor do
-      :disabled -> start_link(decider)
-      _supervisor -> start_supervised(decider)
-    end
-  end
-
-  # Server (callbacks)
-
-  @impl GenServer
-  def init(%__MODULE__{} = decider) do
-    Map.get(decider, :on_init, fn -> nil end).()
-
-    server_state =
-      Stateless.for_stream(
-        decider.stream_name,
-        store: decider.store,
-        codec: decider.codec,
-        fold: decider.fold,
-        opts: [
-          max_load_attempts: decider.max_reload_attempts,
-          max_write_attempts: decider.max_write_attempts,
-          max_resync_attempts: decider.max_resync_attempts
-        ]
-      )
-
-    {:ok, server_state, {:continue, :reload_stream_state}}
-  end
-
-  @impl GenServer
-  def handle_continue(:reload_stream_state, server_state) do
-    {:noreply, Stateless.load(server_state)}
-  end
-
-  @impl GenServer
-  def handle_call({:query, query}, _from, server_state) do
-    {:reply, Stateless.query(server_state, query), server_state}
-  end
-
-  @impl GenServer
-  def handle_call({:transact, decision, context}, _from, server_state) do
-    case Stateless.transact(server_state, decision, context) do
-      {:ok, new_state} -> {:reply, :ok, new_state}
-      {:error, error} -> {:reply, {:error, error}, server_state}
+  @spec transact(pid(), decision_function(), context()) ::
+          {:ok, pid()} | {:error, term()}
+  @spec transact(Stateful.t(), decision_function(), context()) ::
+          {:ok, Stateful.t()} | {:error, term()}
+  @spec transact(Stateless.t(), decision_function(), context()) ::
+          {:ok, Stateless.t()} | {:error, term()}
+  def transact(decider, decision, context \\ nil) do
+    case decider do
+      pid when is_pid(pid) -> Stateful.transact(pid, decision, context)
+      %Stateful{} = decider -> Stateful.transact(decider, decision, context)
+      %Stateless{} = decider -> Stateless.transact(decider, decision, context)
     end
   end
 end
