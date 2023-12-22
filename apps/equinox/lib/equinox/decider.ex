@@ -249,9 +249,9 @@ defmodule Equinox.Decider do
   end
 
   defmodule Stateful do
-    use GenServer
+    use GenServer, restart: :transient
 
-    alias Equinox.{Decider, Store, Codec, Fold}
+    alias Equinox.{Decider, Lifetime, Store, Codec, Fold}
     alias Equinox.Stream.StreamName
     alias Equinox.Decider.Stateless
 
@@ -259,6 +259,7 @@ defmodule Equinox.Decider do
     defstruct stream_name: nil,
               supervisor: nil,
               registry: nil,
+              lifetime: Lifetime.Default,
               store: nil,
               codec: nil,
               fold: nil,
@@ -272,6 +273,7 @@ defmodule Equinox.Decider do
             stream_name: StreamName.t(),
             supervisor: :disabled | GenServer.server(),
             registry: :disabled | :global | GenServer.server(),
+            lifetime: Lifetime.t(),
             store: Store.t(),
             codec: Codec.t(),
             fold: Fold.t(),
@@ -371,25 +373,38 @@ defmodule Equinox.Decider do
     @impl GenServer
     def init(%__MODULE__{} = decider) do
       Keyword.get(decider.opts, :on_init, fn -> nil end).()
-      {:ok, to_stateless(decider), {:continue, :load}}
+      state = %{decider: to_stateless(decider), lifetime: decider.lifetime}
+      {:ok, state, {:continue, :load}}
     end
 
     @impl GenServer
-    def handle_continue(:load, decider) do
-      {:noreply, Stateless.load(decider)}
+    def handle_continue(:load, state) do
+      decider = Stateless.load(state.decider)
+      {:noreply, %{state | decider: decider}, state.lifetime.after_init(decider.stream_state)}
     end
 
     @impl GenServer
-    def handle_call({:query, query}, _from, decider) do
-      {:reply, Stateless.query(decider, query), decider}
+    def handle_call({:query, query}, _from, state) do
+      {:reply, Stateless.query(state.decider, query), state,
+       state.lifetime.after_query(state.decider.stream_state)}
     end
 
     @impl GenServer
-    def handle_call({:transact, decision, context}, _from, decider) do
-      case Stateless.transact(decider, decision, context) do
-        {:ok, new_decider} -> {:reply, :ok, new_decider}
-        {:error, error} -> {:reply, {:error, error}, decider}
+    def handle_call({:transact, decision, context}, _from, state) do
+      case Stateless.transact(state.decider, decision, context) do
+        {:ok, decider} ->
+          {:reply, :ok, %{state | decider: decider},
+           state.lifetime.after_transact(decider.stream_state)}
+
+        {:error, error} ->
+          {:reply, {:error, error}, state,
+           state.lifetime.after_transact(state.decider.stream_state)}
       end
+    end
+
+    @impl GenServer
+    def handle_info(:timeout, state) do
+      {:stop, :normal, state}
     end
   end
 

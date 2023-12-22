@@ -4,12 +4,11 @@ defmodule Equinox.StatefulDeciderTest do
   import Mox
   import ExUnit.CaptureLog
 
-  alias Equinox.TestMocks.{StoreMock, CodecMock, FoldMock}
+  alias Equinox.TestMocks.{StoreMock, CodecMock, FoldMock, LifetimeMock}
   alias Equinox.Events.{TimelineEvent, EventData}
   alias Equinox.Store.StreamVersionConflict
   alias Equinox.Stream.StreamName
-  alias Equinox.Decider
-  alias Equinox.UUID
+  alias Equinox.{Decider, Lifetime, UUID}
 
   setup :verify_on_exit!
 
@@ -297,6 +296,68 @@ defmodule Equinox.StatefulDeciderTest do
     end
   end
 
+  describe "lifetimes" do
+    test "after_init lifetime controls how long process will wait for query or transact until shutting down" do
+      stream = build(:stream_name)
+      decider = build(:decider, stream_name: stream, lifetime: LifetimeMock)
+
+      stub(FoldMock, :initial, fn -> 0 end)
+      stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
+
+      expect(LifetimeMock, :after_init, fn _ -> 0 end)
+      {:ok, pid} = Decider.Stateful.start_link(decider)
+      Process.sleep(100)
+      refute Process.alive?(pid)
+
+      expect(LifetimeMock, :after_init, fn _ -> :timer.seconds(10) end)
+      {:ok, pid} = Decider.Stateful.start_link(decider)
+      Process.sleep(100)
+      assert Process.alive?(pid)
+    end
+
+    test "after_query lifetime controls how long process will wait for another query or transact until shutting down" do
+      stream = build(:stream_name)
+      decider = build(:decider, stream_name: stream, lifetime: LifetimeMock)
+
+      stub(FoldMock, :initial, fn -> 0 end)
+      stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
+      stub(LifetimeMock, :after_init, fn _ -> :timer.seconds(10) end)
+
+      expect(LifetimeMock, :after_query, fn _ -> 0 end)
+      {:ok, pid} = Decider.Stateful.start_link(decider)
+      0 = Decider.query(pid, & &1)
+      Process.sleep(100)
+      refute Process.alive?(pid)
+
+      expect(LifetimeMock, :after_query, fn _ -> :timer.seconds(10) end)
+      {:ok, pid} = Decider.Stateful.start_link(decider)
+      0 = Decider.query(pid, & &1)
+      Process.sleep(100)
+      assert Process.alive?(pid)
+    end
+
+    test "after_transact lifetime controls how long process will wait for another query or transact until shutting down" do
+      stream = build(:stream_name)
+      decider = build(:decider, stream_name: stream, lifetime: LifetimeMock)
+
+      stub(FoldMock, :initial, fn -> 0 end)
+      stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
+      stub(LifetimeMock, :after_init, fn _ -> :timer.seconds(10) end)
+
+      expect(LifetimeMock, :after_transact, fn _ -> 0 end)
+      {:ok, pid} = Decider.Stateful.start_link(decider)
+      {:ok, ^pid} = Decider.transact(pid, fn _ -> nil end)
+      Process.sleep(100)
+      refute Process.alive?(pid)
+
+      expect(LifetimeMock, :after_transact, fn _ -> :timer.seconds(10) end)
+      {:ok, pid} = Decider.Stateful.start_link(decider)
+      {:ok, ^pid} = Decider.transact(pid, fn _ -> nil end)
+      Process.sleep(100)
+      assert Process.alive?(pid)
+    end
+  end
+
   defp capture_exit(fun) do
     capture_log(fn ->
       Process.flag(:trap_exit, true)
@@ -324,6 +385,7 @@ defmodule Equinox.StatefulDeciderTest do
       Keyword.get(attrs, :stream_name, build(:stream_name)),
       supervisor: :disabled,
       registry: :disabled,
+      lifetime: Keyword.get(attrs, :lifetime, Lifetime.Default),
       store: StoreMock,
       codec: CodecMock,
       fold: FoldMock,
@@ -332,6 +394,7 @@ defmodule Equinox.StatefulDeciderTest do
         max_write_attempts: Keyword.get(attrs, :max_write_attempts, 3),
         max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 1),
         on_init: fn ->
+          allow(LifetimeMock, test_pid, self())
           allow(StoreMock, test_pid, self())
           allow(CodecMock, test_pid, self())
           allow(FoldMock, test_pid, self())
