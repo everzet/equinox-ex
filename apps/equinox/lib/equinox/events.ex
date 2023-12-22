@@ -38,18 +38,5 @@ defmodule Equinox.Events do
     def new(values) when is_list(values) do
       struct!(__MODULE__, values)
     end
-
-    def from_data(stream_name, %EventData{} = data, position) do
-      new(
-        id: data.id,
-        type: data.type,
-        stream_name: String.Chars.to_string(stream_name),
-        position: position,
-        global_position: position,
-        data: data.data,
-        metadata: data.metadata,
-        time: NaiveDateTime.utc_now()
-      )
-    end
   end
 end
