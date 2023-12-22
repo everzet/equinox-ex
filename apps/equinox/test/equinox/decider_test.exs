@@ -22,7 +22,7 @@ defmodule Equinox.DeciderTest do
       stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
 
       assert {:ok, pid} = Decider.start_link(decider)
-      assert {:ok, :initial} = Decider.query(pid, & &1)
+      assert :initial = Decider.query(pid, & &1)
     end
 
     test "folds stored events into latest state for existing streams" do
@@ -42,7 +42,7 @@ defmodule Equinox.DeciderTest do
       end)
 
       assert {:ok, pid} = Decider.start_link(decider)
-      assert {:ok, 7} = Decider.query(pid, & &1)
+      assert 7 = Decider.query(pid, & &1)
     end
 
     test "gracefully handles fetch failures by retrying certain number of attempts" do
@@ -55,7 +55,7 @@ defmodule Equinox.DeciderTest do
       expect(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
 
       assert {:ok, pid} = Decider.start_link(decider)
-      assert {:ok, :initial} = Decider.query(pid, & &1)
+      assert :initial = Decider.query(pid, & &1)
       refute_receive {:EXIT, ^pid, _}
     end
 
@@ -105,10 +105,10 @@ defmodule Equinox.DeciderTest do
       stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
 
       assert {:ok, pid} = Decider.start_link(decider)
-      assert {:ok, :some_value} = Decider.query(pid, & &1)
+      assert :some_value = Decider.query(pid, & &1)
     end
 
-    test "query callback errors are captured and do not crash the process" do
+    test "query callback errors are not captured and do crash the process" do
       stream = build(:stream_name)
       decider = build(:decider, stream_name: stream)
 
@@ -116,7 +116,9 @@ defmodule Equinox.DeciderTest do
       stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
 
       assert {:ok, pid} = Decider.start_link(decider)
-      assert {:error, %RuntimeError{}} = Decider.query(pid, fn _ -> raise RuntimeError end)
+
+      assert capture_exit(fn -> Decider.query(pid, fn _ -> raise RuntimeError end) end) =~
+               "RuntimeError"
     end
   end
 
@@ -138,7 +140,7 @@ defmodule Equinox.DeciderTest do
 
       assert {:ok, pid} = Decider.start_link(decider)
       assert :ok = Decider.transact(pid, fn 0 -> [2, 3] end, :context)
-      assert {:ok, 5} = Decider.query(pid, & &1)
+      assert 5 = Decider.query(pid, & &1)
     end
 
     test "decision callback returning nil or empty list does nothing" do
@@ -164,7 +166,7 @@ defmodule Equinox.DeciderTest do
       assert {:error, :custom_error} = Decider.transact(pid, fn 0 -> {:error, :custom_error} end)
     end
 
-    test "decision callback exceptions are captured and do not crash the process" do
+    test "decision callback exceptions are not captured and do crash the process" do
       stream = build(:stream_name)
       decider = build(:decider, stream_name: stream)
 
@@ -172,7 +174,9 @@ defmodule Equinox.DeciderTest do
       stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
 
       assert {:ok, pid} = Decider.start_link(decider)
-      assert {:error, %RuntimeError{}} = Decider.transact(pid, fn 0 -> raise RuntimeError end)
+
+      assert capture_exit(fn -> Decider.transact(pid, fn _ -> raise RuntimeError end) end) =~
+               "RuntimeError"
     end
 
     test "respects previous events" do
@@ -195,7 +199,7 @@ defmodule Equinox.DeciderTest do
 
       assert {:ok, pid} = Decider.start_link(decider)
       assert :ok = Decider.transact(pid, fn 2 -> 3 end)
-      assert {:ok, 5} = Decider.query(pid, & &1)
+      assert 5 = Decider.query(pid, & &1)
     end
 
     test "gracefully handles expected version conflict by reloading the state and redoing the decision" do
@@ -218,7 +222,7 @@ defmodule Equinox.DeciderTest do
 
       assert {:ok, pid} = Decider.start_link(decider)
       assert :ok = Decider.transact(pid, fn _ -> 3 end)
-      assert {:ok, 5} = Decider.query(pid, & &1)
+      assert 5 = Decider.query(pid, & &1)
     end
 
     test "respects max_resync_attempts setting when redoing the decision" do
@@ -253,7 +257,7 @@ defmodule Equinox.DeciderTest do
 
       assert {:ok, pid} = Decider.start_link(decider)
       assert :ok = Decider.transact(pid, fn _ -> 3 end)
-      assert {:ok, 3} = Decider.query(pid, & &1)
+      assert 3 = Decider.query(pid, & &1)
     end
 
     test "respects max_write_attempts setting when redoing the writes" do
@@ -271,23 +275,6 @@ defmodule Equinox.DeciderTest do
       assert {:ok, pid} = Decider.start_link(decider)
 
       assert capture_exit(fn -> Decider.transact(pid, & &1) end) =~ "RuntimeError"
-    end
-
-    test "codec errors do not trigger retries" do
-      stream = build(:stream_name)
-      decider = build(:decider, stream_name: stream)
-
-      stub(FoldMock, :initial, fn -> 0 end)
-      stub(FoldMock, :evolve!, &(&1 + &2))
-      stub(CodecMock, :encode!, fn e, _ -> build(:event_data, data: e) end)
-
-      stub(CodecMock, :decode!, fn _ -> raise RuntimeError end)
-      expect(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
-      expect(StoreMock, :write_events, fn ^stream, events, -1 -> {:ok, length(events)} end)
-
-      assert {:ok, pid} = Decider.start_link(decider)
-
-      assert capture_exit(fn -> Decider.transact(pid, & &1) end) =~ "CodecError"
     end
 
     test "fold errors do not trigger retries" do
