@@ -24,6 +24,8 @@ defmodule Equinox.MixProject do
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
-    []
+    [
+      {:mox, "~> 1.1", only: :test}
+    ]
   end
 end
