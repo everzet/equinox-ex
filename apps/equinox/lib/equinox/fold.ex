@@ -5,5 +5,10 @@ defmodule Equinox.Fold do
   @type state :: any()
 
   @callback initial() :: state()
-  @callback fold(list(DomainEvent.t()), state()) :: state()
+  @callback evolve!(state(), DomainEvent.t()) :: state()
+
+  defmodule FoldError do
+    defexception [:message]
+    @type t :: %__MODULE__{message: String.t()}
+  end
 end
