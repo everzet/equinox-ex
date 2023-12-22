@@ -8,7 +8,7 @@ defmodule Equinox.Store do
 
   @callback fetch_events(StreamName.t(), from_version :: expected_version()) ::
               Enumerable.t(TimelineEvent.t())
-  @callback write_events(StreamName.t(), list(EventData.t()), expected_version()) ::
+  @callback write_events(StreamName.t(), nonempty_list(EventData.t()), expected_version()) ::
               {:ok, new_version :: written_position()}
               | {:error, DuplicateMessageId.t() | StreamVersionConflict.t() | Exception.t()}
 
