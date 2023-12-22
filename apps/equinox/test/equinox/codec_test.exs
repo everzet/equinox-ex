@@ -12,22 +12,21 @@ defmodule Equinox.CodecTest do
     test "converts structs into string maps" do
       struct = %TestStruct{val1: 1, val2: 2}
 
-      assert {:ok, event_data} = EventStructs.struct_to_event_data(struct, __MODULE__)
-
+      assert event_data = EventStructs.struct_to_event_data(struct, __MODULE__)
       assert event_data.type == "TestStruct"
       assert event_data.data == %{"val1" => 1, "val2" => 2}
     end
 
     test "errors if given struct under different parent module" do
       struct = %TestStruct{val1: 1, val2: 2}
-      assert {:error, %CodecError{}} = EventStructs.struct_to_event_data(struct, Enum)
+      assert_raise CodecError, fn -> EventStructs.struct_to_event_data(struct, Enum) end
     end
 
     test "errors if given anything but struct" do
-      assert {:error, %CodecError{}} = EventStructs.struct_to_event_data(nil, __MODULE__)
-      assert {:error, %CodecError{}} = EventStructs.struct_to_event_data(false, __MODULE__)
-      assert {:error, %CodecError{}} = EventStructs.struct_to_event_data("str", __MODULE__)
-      assert {:error, %CodecError{}} = EventStructs.struct_to_event_data(%{}, __MODULE__)
+      assert_raise CodecError, fn -> EventStructs.struct_to_event_data(nil, __MODULE__) end
+      assert_raise CodecError, fn -> EventStructs.struct_to_event_data(false, __MODULE__) end
+      assert_raise CodecError, fn -> EventStructs.struct_to_event_data("str", __MODULE__) end
+      assert_raise CodecError, fn -> EventStructs.struct_to_event_data(%{}, __MODULE__) end
     end
   end
 
@@ -45,9 +44,8 @@ defmodule Equinox.CodecTest do
           time: NaiveDateTime.utc_now()
         )
 
-      assert {:ok, struct} = EventStructs.timeline_event_to_struct(event, __MODULE__)
-
-      assert %TestStruct{val1: 1, val2: 2} = struct
+      assert %TestStruct{val1: 1, val2: 2} =
+               EventStructs.timeline_event_to_struct(event, __MODULE__)
     end
 
     test "errors if struct with given type does not exist" do
@@ -63,8 +61,9 @@ defmodule Equinox.CodecTest do
           time: NaiveDateTime.utc_now()
         )
 
-      assert {:error, %CodecError{}} =
-               EventStructs.timeline_event_to_struct(event, __MODULE__)
+      assert_raise CodecError, fn ->
+        EventStructs.timeline_event_to_struct(event, __MODULE__)
+      end
     end
 
     test "errors if wrong parent module given" do
@@ -80,7 +79,7 @@ defmodule Equinox.CodecTest do
           time: NaiveDateTime.utc_now()
         )
 
-      assert {:error, %CodecError{}} = EventStructs.timeline_event_to_struct(event, Enum)
+      assert_raise CodecError, fn -> EventStructs.timeline_event_to_struct(event, Enum) end
     end
 
     test "errors if required struct fields are missing" do
@@ -96,8 +95,7 @@ defmodule Equinox.CodecTest do
           time: NaiveDateTime.utc_now()
         )
 
-      assert {:error, %CodecError{}} =
-               EventStructs.timeline_event_to_struct(event, __MODULE__)
+      assert_raise CodecError, fn -> EventStructs.timeline_event_to_struct(event, __MODULE__) end
     end
   end
 end
