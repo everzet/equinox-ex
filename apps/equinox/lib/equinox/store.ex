@@ -6,9 +6,9 @@ defmodule Equinox.Store do
   @type expected_version :: -1 | non_neg_integer()
   @type written_position :: non_neg_integer()
 
-  @callback fetch_events(StreamName.t(), from_version :: expected_version()) ::
+  @callback fetch_timeline_events(StreamName.t(), from_version :: expected_version()) ::
               Enumerable.t(TimelineEvent.t())
-  @callback write_events(StreamName.t(), nonempty_list(EventData.t()), expected_version()) ::
+  @callback write_event_data(StreamName.t(), nonempty_list(EventData.t()), expected_version()) ::
               {:ok, new_version :: written_position()}
               | {:error, DuplicateMessageId.t() | StreamVersionConflict.t() | Exception.t()}
 

@@ -126,8 +126,8 @@ defmodule Equinox.Decider do
         {:ok, []} ->
           {:ok, decider}
 
-        {:ok, events} ->
-          case write_stream_state_with_retry(decider, events, context) do
+        {:ok, domain_events} ->
+          case write_domain_events_with_retry(decider, domain_events, context) do
             {:error, %Store.StreamVersionConflict{} = exception} ->
               if(resync_attempt >= max_resync_attempts(decider), do: raise(exception))
 
@@ -135,12 +135,12 @@ defmodule Equinox.Decider do
               |> load_stream_state_with_retry(1)
               |> transact_with_resync(decide, context, resync_attempt + 1)
 
-            {:error, exception} ->
-              raise exception
+            {:error, other_exception} ->
+              raise other_exception
 
             {:ok, written_position} ->
               {new_state, new_version} =
-                events
+                domain_events
                 |> Enum.zip((decider.stream_position + 1)..written_position)
                 |> then(&Fold.fold_versioned(decider.fold, decider.stream_state, &1))
 
@@ -149,18 +149,18 @@ defmodule Equinox.Decider do
       end
     end
 
-    defp write_stream_state_with_retry(%__MODULE__{} = decider, events, context, attempt \\ 1) do
+    defp write_domain_events_with_retry(%__MODULE__{} = decider, events, context, attempt \\ 1) do
       try do
         events
         |> then(&Codec.encode_domain_events!(decider.codec, context, &1))
-        |> then(&decider.store.write_events(decider.stream_name, &1, decider.stream_position))
+        |> then(&decider.store.write_event_data(decider.stream_name, &1, decider.stream_position))
       rescue
         exception in [Codec.CodecError] ->
           reraise exception, __STACKTRACE__
 
         exception ->
           if(attempt >= max_write_attempts(decider), do: reraise(exception, __STACKTRACE__))
-          write_stream_state_with_retry(decider, events, context, attempt + 1)
+          write_domain_events_with_retry(decider, events, context, attempt + 1)
       end
     end
 
@@ -168,7 +168,7 @@ defmodule Equinox.Decider do
       try do
         {new_state, new_version} =
           decider.stream_name
-          |> decider.store.fetch_events(decider.stream_position)
+          |> decider.store.fetch_timeline_events(decider.stream_position)
           |> then(&Codec.decode_timeline_events_with_indexes!(decider.codec, &1))
           |> then(&Fold.fold_versioned(decider.fold, decider.stream_state, &1))
 

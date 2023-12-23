@@ -18,7 +18,7 @@ defmodule Equinox.StatefulDeciderTest do
       decider = build(:decider, stream_name: stream)
 
       stub(FoldMock, :initial, fn -> :initial end)
-      stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
+      stub(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
 
       assert {:ok, pid} = Decider.Stateful.start_server(decider)
 
@@ -33,7 +33,7 @@ defmodule Equinox.StatefulDeciderTest do
       stub(FoldMock, :evolve, &(&1 + &2))
       stub(CodecMock, :decode, &{:ok, &1.data})
 
-      expect(StoreMock, :fetch_events, fn ^stream, -1 ->
+      expect(StoreMock, :fetch_timeline_events, fn ^stream, -1 ->
         [
           build(:timeline_event, data: 1),
           build(:timeline_event, data: 2),
@@ -51,8 +51,8 @@ defmodule Equinox.StatefulDeciderTest do
 
       stub(FoldMock, :initial, fn -> :initial end)
 
-      expect(StoreMock, :fetch_events, 2, fn ^stream, -1 -> raise RuntimeError end)
-      expect(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
+      expect(StoreMock, :fetch_timeline_events, 2, fn ^stream, -1 -> raise RuntimeError end)
+      expect(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
 
       assert {:ok, pid} = Decider.Stateful.start_server(decider)
       assert :initial = Decider.query(pid, & &1)
@@ -65,7 +65,7 @@ defmodule Equinox.StatefulDeciderTest do
 
       stub(FoldMock, :initial, fn -> :initial end)
 
-      expect(StoreMock, :fetch_events, 2, fn ^stream, -1 -> raise RuntimeError end)
+      expect(StoreMock, :fetch_timeline_events, 2, fn ^stream, -1 -> raise RuntimeError end)
 
       assert capture_exit(fn -> Decider.Stateful.start_server(decider) end) =~ "RuntimeError"
     end
@@ -75,7 +75,7 @@ defmodule Equinox.StatefulDeciderTest do
       decider = build(:decider, stream_name: stream, max_load_attempts: 3)
 
       stub(FoldMock, :initial, fn -> :initial end)
-      stub(StoreMock, :fetch_events, fn ^stream, -1 -> [build(:timeline_event)] end)
+      stub(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [build(:timeline_event)] end)
 
       expect(CodecMock, :decode, fn _ -> raise RuntimeError end)
 
@@ -88,7 +88,7 @@ defmodule Equinox.StatefulDeciderTest do
 
       stub(FoldMock, :initial, fn -> :initial end)
       stub(CodecMock, :decode, &{:ok, &1.data})
-      stub(StoreMock, :fetch_events, fn ^stream, -1 -> [build(:timeline_event)] end)
+      stub(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [build(:timeline_event)] end)
 
       expect(FoldMock, :evolve, fn _, _ -> raise RuntimeError end)
 
@@ -102,7 +102,7 @@ defmodule Equinox.StatefulDeciderTest do
       decider = build(:decider, stream_name: stream)
 
       stub(FoldMock, :initial, fn -> :some_value end)
-      stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
+      stub(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
 
       assert {:ok, pid} = Decider.Stateful.start_server(decider)
       assert :some_value = Decider.query(pid, & &1)
@@ -113,7 +113,7 @@ defmodule Equinox.StatefulDeciderTest do
       decider = build(:decider, stream_name: stream)
 
       stub(FoldMock, :initial, fn -> :initial end)
-      stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
+      stub(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
 
       assert {:ok, pid} = Decider.Stateful.start_server(decider)
 
@@ -131,9 +131,9 @@ defmodule Equinox.StatefulDeciderTest do
       stub(FoldMock, :evolve, &(&1 + &2))
       stub(CodecMock, :encode, fn e, :context -> {:ok, build(:event_data, data: e)} end)
       stub(CodecMock, :decode, &{:ok, &1.data})
-      stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
+      stub(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
 
-      expect(StoreMock, :write_events, fn ^stream, events, -1 ->
+      expect(StoreMock, :write_event_data, fn ^stream, events, -1 ->
         assert [%EventData{data: 2}, %EventData{data: 3}] = events
         {:ok, 1}
       end)
@@ -148,7 +148,7 @@ defmodule Equinox.StatefulDeciderTest do
       decider = build(:decider, stream_name: stream)
 
       stub(FoldMock, :initial, fn -> 0 end)
-      stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
+      stub(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
 
       assert {:ok, pid} = Decider.Stateful.start_server(decider)
       assert {:ok, ^pid} = Decider.transact(pid, fn 0 -> nil end)
@@ -160,7 +160,7 @@ defmodule Equinox.StatefulDeciderTest do
       decider = build(:decider, stream_name: stream)
 
       stub(FoldMock, :initial, fn -> 0 end)
-      stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
+      stub(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
 
       assert {:ok, pid} = Decider.Stateful.start_server(decider)
       assert {:error, :custom_error} = Decider.transact(pid, fn 0 -> {:error, :custom_error} end)
@@ -171,7 +171,7 @@ defmodule Equinox.StatefulDeciderTest do
       decider = build(:decider, stream_name: stream)
 
       stub(FoldMock, :initial, fn -> 0 end)
-      stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
+      stub(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
 
       assert {:ok, pid} = Decider.Stateful.start_server(decider)
 
@@ -188,11 +188,11 @@ defmodule Equinox.StatefulDeciderTest do
       stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
       stub(CodecMock, :decode, &{:ok, &1.data})
 
-      expect(StoreMock, :fetch_events, fn ^stream, -1 ->
+      expect(StoreMock, :fetch_timeline_events, fn ^stream, -1 ->
         [build(:timeline_event, data: 2, position: 0)]
       end)
 
-      expect(StoreMock, :write_events, fn ^stream, events, 0 ->
+      expect(StoreMock, :write_event_data, fn ^stream, events, 0 ->
         assert [%EventData{data: 3}] = events
         {:ok, 1}
       end)
@@ -211,15 +211,17 @@ defmodule Equinox.StatefulDeciderTest do
       stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
       stub(CodecMock, :decode, &{:ok, &1.data})
 
-      expect(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
+      expect(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
 
-      expect(StoreMock, :write_events, fn ^stream, _, -1 -> {:error, %StreamVersionConflict{}} end)
+      expect(StoreMock, :write_event_data, fn ^stream, _, -1 ->
+        {:error, %StreamVersionConflict{}}
+      end)
 
-      expect(StoreMock, :fetch_events, fn ^stream, -1 ->
+      expect(StoreMock, :fetch_timeline_events, fn ^stream, -1 ->
         [build(:timeline_event, data: 2, position: 0)]
       end)
 
-      expect(StoreMock, :write_events, fn ^stream, events, 0 -> {:ok, length(events)} end)
+      expect(StoreMock, :write_event_data, fn ^stream, events, 0 -> {:ok, length(events)} end)
 
       assert {:ok, pid} = Decider.Stateful.start_server(decider)
       assert {:ok, ^pid} = Decider.transact(pid, fn _ -> 3 end)
@@ -234,9 +236,11 @@ defmodule Equinox.StatefulDeciderTest do
       stub(FoldMock, :evolve, &(&1 + &2))
       stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
       stub(CodecMock, :decode, &{:ok, &1.data})
-      stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
+      stub(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
 
-      expect(StoreMock, :write_events, fn ^stream, _, -1 -> {:error, %StreamVersionConflict{}} end)
+      expect(StoreMock, :write_event_data, fn ^stream, _, -1 ->
+        {:error, %StreamVersionConflict{}}
+      end)
 
       {:ok, pid} = Decider.Stateful.start_server(decider)
 
@@ -252,9 +256,9 @@ defmodule Equinox.StatefulDeciderTest do
       stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
       stub(CodecMock, :decode, &{:ok, &1.data})
 
-      expect(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
-      expect(StoreMock, :write_events, 2, fn ^stream, _, -1 -> raise RuntimeError end)
-      expect(StoreMock, :write_events, fn ^stream, events, -1 -> {:ok, length(events)} end)
+      expect(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
+      expect(StoreMock, :write_event_data, 2, fn ^stream, _, -1 -> raise RuntimeError end)
+      expect(StoreMock, :write_event_data, fn ^stream, events, -1 -> {:ok, length(events)} end)
 
       assert {:ok, pid} = Decider.Stateful.start_server(decider)
       assert {:ok, ^pid} = Decider.transact(pid, fn _ -> 3 end)
@@ -270,8 +274,8 @@ defmodule Equinox.StatefulDeciderTest do
       stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
       stub(CodecMock, :decode, &{:ok, &1.data})
 
-      expect(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
-      expect(StoreMock, :write_events, fn ^stream, _, -1 -> raise RuntimeError end)
+      expect(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
+      expect(StoreMock, :write_event_data, fn ^stream, _, -1 -> raise RuntimeError end)
 
       assert {:ok, pid} = Decider.Stateful.start_server(decider)
 
@@ -287,8 +291,8 @@ defmodule Equinox.StatefulDeciderTest do
       stub(CodecMock, :decode, &{:ok, &1.data})
 
       stub(FoldMock, :evolve, fn _, _ -> raise RuntimeError end)
-      expect(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
-      expect(StoreMock, :write_events, fn ^stream, events, -1 -> {:ok, length(events)} end)
+      expect(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
+      expect(StoreMock, :write_event_data, fn ^stream, events, -1 -> {:ok, length(events)} end)
 
       assert {:ok, pid} = Decider.Stateful.start_server(decider)
 
@@ -314,8 +318,11 @@ defmodule Equinox.StatefulDeciderTest do
       stub(FoldMock, :evolve, &(&1 + &2))
       stub(CodecMock, :encode, fn e, nil -> {:ok, build(:event_data, data: e)} end)
       stub(CodecMock, :decode, &{:ok, &1.data})
-      stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
-      stub(StoreMock, :write_events, fn ^stream, events, idx -> {:ok, idx + length(events)} end)
+      stub(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
+
+      stub(StoreMock, :write_event_data, fn ^stream, events, idx ->
+        {:ok, idx + length(events)}
+      end)
 
       assert {:ok, ^decider} = Decider.transact(decider, fn 0 -> [2] end)
       assert {:ok, ^decider} = Decider.transact(decider, fn 2 -> [3] end)
@@ -329,8 +336,8 @@ defmodule Equinox.StatefulDeciderTest do
       stub(FoldMock, :evolve, &(&1 + &2))
       stub(CodecMock, :encode, fn e, nil -> {:ok, build(:event_data, data: e)} end)
       stub(CodecMock, :decode, &{:ok, &1.data})
-      stub(StoreMock, :fetch_events, fn _, -1 -> [] end)
-      stub(StoreMock, :write_events, fn _, events, idx -> {:ok, idx + length(events)} end)
+      stub(StoreMock, :fetch_timeline_events, fn _, -1 -> [] end)
+      stub(StoreMock, :write_event_data, fn _, events, idx -> {:ok, idx + length(events)} end)
 
       stream_1 = StreamName.parse!("Invoice-1")
       decider_1 = build(:decider, stream_name: stream_1, registry: DeciderTestRegistry)
@@ -351,7 +358,7 @@ defmodule Equinox.StatefulDeciderTest do
       decider = build(:decider, stream_name: stream, lifetime: LifetimeMock)
 
       stub(FoldMock, :initial, fn -> 0 end)
-      stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
+      stub(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
 
       expect(LifetimeMock, :after_init, fn _ -> 0 end)
       {:ok, pid} = Decider.Stateful.start_server(decider)
@@ -369,7 +376,7 @@ defmodule Equinox.StatefulDeciderTest do
       decider = build(:decider, stream_name: stream, lifetime: LifetimeMock)
 
       stub(FoldMock, :initial, fn -> 0 end)
-      stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
+      stub(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
       stub(LifetimeMock, :after_init, fn _ -> :timer.seconds(10) end)
 
       expect(LifetimeMock, :after_query, fn _ -> 0 end)
@@ -390,7 +397,7 @@ defmodule Equinox.StatefulDeciderTest do
       decider = build(:decider, stream_name: stream, lifetime: LifetimeMock)
 
       stub(FoldMock, :initial, fn -> 0 end)
-      stub(StoreMock, :fetch_events, fn ^stream, -1 -> [] end)
+      stub(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
       stub(LifetimeMock, :after_init, fn _ -> :timer.seconds(10) end)
 
       expect(LifetimeMock, :after_transact, fn _ -> 0 end)
@@ -413,11 +420,10 @@ defmodule Equinox.StatefulDeciderTest do
 
       try do
         fun.()
+        assert_receive {:EXIT, _, _}
       catch
         :exit, _ -> nil
       end
-
-      assert_receive {:EXIT, _, _}
     end)
   end
 
