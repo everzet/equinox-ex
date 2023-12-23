@@ -302,9 +302,53 @@ defmodule Equinox.StatefulDeciderTest do
 
   describe "supervisor" do
     test "restarts process (which reloads state from store) when it crashes" do
+      start_supervised!({DynamicSupervisor, strategy: :one_for_one, name: DeciderTestSupervisor})
+      start_supervised!({Registry, keys: :unique, name: DeciderTestRegistry})
+
+      decider =
+        build(:decider,
+          stream_name: StreamName.parse!("Invoice-1"),
+          supervisor: DeciderTestSupervisor,
+          registry: DeciderTestRegistry
+        )
+
+      expect(FoldMock, :initial, 2, fn -> :initial end)
+      expect(StoreMock, :fetch_timeline_events, 2, fn _, -1 -> [] end)
+
+      {:ok, initial_pid} = Decider.Stateful.start_server(decider)
+      assert initial_pid == GenServer.whereis(decider.process_name)
+
+      capture_exit(fn -> Decider.transact(initial_pid, fn _ -> raise RuntimeError end) end)
+      refute Process.alive?(initial_pid)
+
+      new_pid = GenServer.whereis(decider.process_name)
+      assert Process.alive?(new_pid)
+      assert new_pid != initial_pid
     end
 
     test "does not restart processes that exited due to lifetime timeout" do
+      start_supervised!({DynamicSupervisor, strategy: :one_for_one, name: DeciderTestSupervisor})
+      start_supervised!({Registry, keys: :unique, name: DeciderTestRegistry})
+
+      decider =
+        build(:decider,
+          stream_name: StreamName.parse!("Invoice-1"),
+          supervisor: DeciderTestSupervisor,
+          registry: DeciderTestRegistry,
+          lifetime: LifetimeMock
+        )
+
+      expect(FoldMock, :initial, fn -> :initial end)
+      expect(StoreMock, :fetch_timeline_events, fn _, -1 -> [] end)
+      expect(LifetimeMock, :after_init, fn _ -> 0 end)
+
+      {:ok, pid} = Decider.Stateful.start_server(decider)
+      assert pid == GenServer.whereis(decider.process_name)
+
+      Process.sleep(100)
+
+      refute Process.alive?(pid)
+      assert GenServer.whereis(decider.process_name) == nil
     end
   end
 
