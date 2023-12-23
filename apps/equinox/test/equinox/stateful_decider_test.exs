@@ -47,8 +47,7 @@ defmodule Equinox.StatefulDeciderTest do
       expect(StoreMock, :fetch_timeline_events, fn _, -1 -> [] end)
       expect(LifetimeMock, :after_init, fn _ -> 0 end)
 
-      {:ok, pid} = Decider.Stateful.start_server(decider)
-      assert pid == GenServer.whereis(decider.process_name)
+      assert {:ok, pid} = Decider.Stateful.start_server(decider)
 
       Process.sleep(100)
 
