@@ -6,13 +6,10 @@ defmodule Equinox.Lifetime do
   @callback after_query(Fold.state()) :: timeout()
   @callback after_transact(Fold.state()) :: timeout()
 
-  defmodule Default do
+  defmodule StayAliveFor30Seconds do
     @behaviour Equinox.Lifetime
-
-    @timeout :timer.seconds(30)
-
-    def after_init(_), do: @timeout
-    def after_query(_), do: @timeout
-    def after_transact(_), do: @timeout
+    def after_init(_), do: :timer.seconds(30)
+    def after_query(_), do: :timer.seconds(30)
+    def after_transact(_), do: :timer.seconds(30)
   end
 end

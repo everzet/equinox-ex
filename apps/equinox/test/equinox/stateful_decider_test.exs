@@ -184,7 +184,7 @@ defmodule Equinox.StatefulDeciderTest do
       Keyword.get(attrs, :stream_name, StreamName.parse!("Invoice-1")),
       supervisor: Keyword.get(attrs, :supervisor, :disabled),
       registry: Keyword.get(attrs, :registry, :disabled),
-      lifetime: Keyword.get(attrs, :lifetime, Lifetime.Default),
+      lifetime: Keyword.get(attrs, :lifetime, Lifetime.StayAliveFor30Seconds),
       store: StoreMock,
       codec: CodecMock,
       fold: FoldMock,

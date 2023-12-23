@@ -323,7 +323,7 @@ defmodule Equinox.DeciderTest do
     |> Decider.Stateful.for_stream(
       supervisor: :disabled,
       registry: :disabled,
-      lifetime: Lifetime.Default,
+      lifetime: Lifetime.StayAliveFor30Seconds,
       store: StoreMock,
       codec: CodecMock,
       fold: FoldMock,

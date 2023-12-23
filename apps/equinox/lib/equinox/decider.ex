@@ -205,7 +205,7 @@ defmodule Equinox.Decider do
               process_name: nil,
               supervisor: nil,
               registry: nil,
-              lifetime: Lifetime.Default,
+              lifetime: Lifetime.StayAliveFor30Seconds,
               store: nil,
               codec: nil,
               fold: nil,
