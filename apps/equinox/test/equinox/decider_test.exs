@@ -42,10 +42,13 @@ defmodule Equinox.DeciderTest do
         assert 7 = Decider.query(decider, & &1)
       end
 
-      test "gracefully handles event fetch failures by retrying" do
+      test "gracefully handles event fetch exceptions by retrying" do
         stub(FoldMock, :initial, fn -> :initial end)
 
-        expect(StoreMock, :fetch_timeline_events, 2, fn @stream, -1 -> raise RuntimeError end)
+        expect(StoreMock, :fetch_timeline_events, 2, fn @stream, -1 ->
+          Stream.repeatedly(fn -> raise RuntimeError end)
+        end)
+
         expect(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
 
         decider = init(unquote(decider_mod), stream_name: @stream)
@@ -55,7 +58,9 @@ defmodule Equinox.DeciderTest do
       test "does not retry past max_load_attempts option" do
         stub(FoldMock, :initial, fn -> :initial end)
 
-        expect(StoreMock, :fetch_timeline_events, 2, fn @stream, -1 -> raise RuntimeError end)
+        expect(StoreMock, :fetch_timeline_events, 2, fn @stream, -1 ->
+          Stream.repeatedly(fn -> raise RuntimeError end)
+        end)
 
         assert capture_crash(fn ->
                  init(unquote(decider_mod), stream_name: @stream, max_load_attempts: 2)
@@ -66,13 +71,23 @@ defmodule Equinox.DeciderTest do
         stub(FoldMock, :initial, fn -> :initial end)
         stub(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [build(:timeline_event)] end)
 
+        expect(CodecMock, :decode, fn _ -> {:error, %RuntimeError{}} end)
+
+        assert capture_crash(fn -> init(unquote(decider_mod), stream_name: @stream) end) =~
+                 "RuntimeError"
+      end
+
+      test "codec exceptions never trigger fetch retries as they should be unrecoverable" do
+        stub(FoldMock, :initial, fn -> :initial end)
+        stub(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [build(:timeline_event)] end)
+
         expect(CodecMock, :decode, fn _ -> raise RuntimeError end)
 
         assert capture_crash(fn -> init(unquote(decider_mod), stream_name: @stream) end) =~
                  "RuntimeError"
       end
 
-      test "fold errors never trigger fetch retries as they should be unrecoberable" do
+      test "fold exceptions never trigger fetch retries as they should be unrecoberable" do
         stub(FoldMock, :initial, fn -> :initial end)
         stub(CodecMock, :decode, &{:ok, &1.data})
         stub(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [build(:timeline_event)] end)
@@ -194,7 +209,25 @@ defmodule Equinox.DeciderTest do
         assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "StreamVersionConflict"
       end
 
-      test "gracefully handles other event write failures by retrying" do
+      test "gracefully handles event write errors (non-conflicts) by retrying" do
+        stub(FoldMock, :initial, fn -> 0 end)
+        stub(FoldMock, :evolve, &(&1 + &2))
+        stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
+        stub(CodecMock, :decode, &{:ok, &1.data})
+
+        expect(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
+
+        expect(StoreMock, :write_event_data, 2, fn @stream, _, -1 -> {:error, %RuntimeError{}} end)
+
+        expect(StoreMock, :write_event_data, fn @stream, events, -1 -> {:ok, length(events)} end)
+
+        decider = init(unquote(decider_mod), stream_name: @stream)
+
+        assert {:ok, decider} = Decider.transact(decider, fn _ -> 3 end)
+        assert 3 = Decider.query(decider, & &1)
+      end
+
+      test "gracefully handles event write exceptions by retrying" do
         stub(FoldMock, :initial, fn -> 0 end)
         stub(FoldMock, :evolve, &(&1 + &2))
         stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
@@ -224,7 +257,7 @@ defmodule Equinox.DeciderTest do
         assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "RuntimeError"
       end
 
-      test "fold errors never trigger write retries as they should be unrecoverable" do
+      test "fold exceptions never trigger write retries as they should be unrecoverable" do
         stub(FoldMock, :initial, fn -> 0 end)
         stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
         stub(CodecMock, :decode, &{:ok, &1.data})

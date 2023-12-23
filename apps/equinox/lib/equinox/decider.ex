@@ -127,16 +127,6 @@ defmodule Equinox.Decider do
 
         {:ok, domain_events} ->
           case write_domain_events_with_retry(decider, domain_events, context) do
-            {:error, %Store.StreamVersionConflict{} = exception} ->
-              if(resync_attempt >= max_resync_attempts(decider), do: raise(exception))
-
-              decider
-              |> load_stream_state_with_retry(1)
-              |> transact_with_resync(decide, context, resync_attempt + 1)
-
-            {:error, other_exception} ->
-              raise other_exception
-
             {:ok, written_position} ->
               {new_state, new_version} =
                 domain_events
@@ -144,6 +134,13 @@ defmodule Equinox.Decider do
                 |> then(&Fold.fold_versioned(decider.fold, decider.stream_state, &1))
 
               {:ok, %{decider | stream_state: new_state, stream_position: new_version}}
+
+            {:conflict, %Store.StreamVersionConflict{} = exception} ->
+              if(resync_attempt >= max_resync_attempts(decider), do: raise(exception))
+
+              decider
+              |> load_stream_state_with_retry(1)
+              |> transact_with_resync(decide, context, resync_attempt + 1)
           end
       end
     end
@@ -153,6 +150,11 @@ defmodule Equinox.Decider do
         events
         |> then(&Codec.encode_domain_events!(decider.codec, context, &1))
         |> then(&decider.store.write_event_data(decider.stream_name, &1, decider.stream_position))
+        |> case do
+          {:error, %Store.StreamVersionConflict{} = exception} -> {:conflict, exception}
+          {:error, exception} -> raise exception
+          {:ok, value} -> {:ok, value}
+        end
       rescue
         exception in [Codec.CodecError] ->
           reraise exception, __STACKTRACE__
