@@ -155,7 +155,7 @@ defmodule Equinox.Decider do
         |> then(&Codec.encode_domain_events!(decider.codec, context, &1))
         |> then(&decider.store.write_events(decider.stream_name, &1, decider.stream_position))
       rescue
-        exception in [Codec.CodecError, Fold.FoldError] ->
+        exception in [Codec.CodecError] ->
           reraise exception, __STACKTRACE__
 
         exception ->
