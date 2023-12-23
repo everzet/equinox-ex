@@ -71,4 +71,52 @@ defmodule Equinox.Codec do
       end
     end
   end
+
+  @spec encode_domain_events!(t(), context(), Enumerable.t(DomainEvent.t())) ::
+          Enumerable.t(TimelineEvent.t())
+  def encode_domain_events!(codec, context, domain_events) do
+    Enum.map(domain_events, fn domain_event ->
+      try do
+        case codec.encode(domain_event, context) do
+          {:ok, timeline_event} -> timeline_event
+          {:error, exception} -> raise exception
+        end
+      rescue
+        exception in [CodecError] ->
+          reraise exception, __STACKTRACE__
+
+        exception ->
+          reraise CodecError,
+                  [
+                    message: "#{inspect(codec)}.encode: #{inspect(exception)}",
+                    exception: exception
+                  ],
+                  __STACKTRACE__
+      end
+    end)
+  end
+
+  @spec decode_timeline_events_with_indexes!(t(), Enumerable.t(TimelineEvent.t())) ::
+          Enumerable.t(DomainEvent.indexed())
+  def decode_timeline_events_with_indexes!(codec, timeline_events) do
+    Stream.map(timeline_events, fn timeline_event ->
+      try do
+        case codec.decode(timeline_event) do
+          {:ok, domain_event} -> {domain_event, timeline_event.position}
+          {:error, exception} -> raise exception
+        end
+      rescue
+        exception in [CodecError] ->
+          reraise exception, __STACKTRACE__
+
+        exception ->
+          reraise CodecError,
+                  [
+                    message: "#{inspect(codec)}.decode: #{inspect(exception)}",
+                    exception: exception
+                  ],
+                  __STACKTRACE__
+      end
+    end)
+  end
 end

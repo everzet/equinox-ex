@@ -1,6 +1,7 @@
 defmodule Equinox.Events do
   defmodule DomainEvent do
     @type t :: any()
+    @type indexed :: {t(), non_neg_integer()}
   end
 
   defmodule EventData do
