@@ -1,12 +1,11 @@
 defmodule Equinox.Fold do
   alias Equinox.Events.DomainEvent
+  alias Equinox.State
 
   @type t :: module()
-  @type state :: any()
-  @type versioned_state :: {state(), non_neg_integer()}
 
-  @callback initial() :: state()
-  @callback evolve(state(), DomainEvent.t()) :: state()
+  @callback initial() :: State.value()
+  @callback evolve(State.value(), DomainEvent.t()) :: State.value()
 
   defmodule FoldError do
     @enforce_keys [:message]
@@ -14,11 +13,11 @@ defmodule Equinox.Fold do
     @type t :: %__MODULE__{message: String.t(), exception: nil | Exception.t()}
   end
 
-  @spec fold_versioned(t(), state(), Enumerable.t(DomainEvent.indexed())) :: versioned_state()
-  def fold_versioned(fold, state, domain_events) do
-    Enum.reduce(domain_events, {state, -1}, fn {event, position}, {state, _} ->
+  @spec fold(t(), State.t(), Enumerable.t(DomainEvent.indexed())) :: State.t()
+  def fold(fold, state, domain_events) do
+    Enum.reduce(domain_events, state, fn {event, position}, state ->
       try do
-        {fold.evolve(state, event), position}
+        %State{value: fold.evolve(state.value, event), version: position}
       rescue
         exception ->
           reraise FoldError,

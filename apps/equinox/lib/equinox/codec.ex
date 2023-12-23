@@ -72,9 +72,9 @@ defmodule Equinox.Codec do
     end
   end
 
-  @spec encode_domain_events!(t(), context(), Enumerable.t(DomainEvent.t())) ::
-          Enumerable.t(TimelineEvent.t())
-  def encode_domain_events!(codec, context, domain_events) do
+  @spec encode_domain_events(t(), context(), Enumerable.t(DomainEvent.t())) ::
+          Enumerable.t(EventData.t())
+  def encode_domain_events(codec, context, domain_events) do
     Enum.map(domain_events, fn domain_event ->
       try do
         case codec.encode(domain_event, context) do
@@ -96,9 +96,9 @@ defmodule Equinox.Codec do
     end)
   end
 
-  @spec decode_timeline_events_with_indexes!(t(), Enumerable.t(TimelineEvent.t())) ::
+  @spec decode_timeline_events_with_indexes(t(), Enumerable.t(TimelineEvent.t())) ::
           Enumerable.t(DomainEvent.indexed())
-  def decode_timeline_events_with_indexes!(codec, timeline_events) do
+  def decode_timeline_events_with_indexes(codec, timeline_events) do
     Stream.map(timeline_events, fn timeline_event ->
       try do
         case codec.decode(timeline_event) do

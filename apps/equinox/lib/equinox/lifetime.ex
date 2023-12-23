@@ -1,10 +1,10 @@
 defmodule Equinox.Lifetime do
-  alias Equinox.Fold
+  alias Equinox.State
 
   @type t :: module()
-  @callback after_init(Fold.state()) :: timeout()
-  @callback after_query(Fold.state()) :: timeout()
-  @callback after_transact(Fold.state()) :: timeout()
+  @callback after_init(State.value()) :: timeout()
+  @callback after_query(State.value()) :: timeout()
+  @callback after_transact(State.value()) :: timeout()
 
   defmodule StayAliveFor30Seconds do
     @behaviour Equinox.Lifetime

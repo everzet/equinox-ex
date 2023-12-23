@@ -6,9 +6,9 @@ defmodule Equinox.Decider do
   end
 
   defmodule QueryFunction do
-    alias Equinox.Fold
+    alias Equinox.State
 
-    @type t :: (Fold.state() -> any())
+    @type t :: (State.value() -> any())
 
     defmodule QueryError do
       @enforce_keys [:message, :exception]
@@ -16,7 +16,7 @@ defmodule Equinox.Decider do
       @type t :: %__MODULE__{message: String.t(), exception: Exception.t()}
     end
 
-    @spec execute(t(), Fold.state()) :: any()
+    @spec execute(t(), State.value()) :: any()
     def execute(query_fun, stream_state) do
       try do
         query_fun.(stream_state)
@@ -30,11 +30,11 @@ defmodule Equinox.Decider do
   end
 
   defmodule DecideFunction do
-    alias Equinox.Fold
+    alias Equinox.State
     alias Equinox.Events.DomainEvent
 
     @type t ::
-            (Fold.state() ->
+            (State.value() ->
                nil
                | DomainEvent.t()
                | list(DomainEvent.t())
@@ -47,7 +47,7 @@ defmodule Equinox.Decider do
       @type t :: %__MODULE__{message: String.t(), exception: Exception.t()}
     end
 
-    @spec execute(t(), Fold.state()) :: {:ok, list(DomainEvent.t())} | {:error, term()}
+    @spec execute(t(), State.value()) :: {:ok, list(DomainEvent.t())} | {:error, term()}
     def execute(decide_fun, stream_state) do
       try do
         case decide_fun.(stream_state) do
@@ -66,13 +66,12 @@ defmodule Equinox.Decider do
 
   defmodule Stateless do
     alias Equinox.Stream.StreamName
-    alias Equinox.{Store, Codec, Fold}
+    alias Equinox.{State, Store, Codec, Fold}
     alias Equinox.Decider.{QueryFunction, DecideFunction}
 
     @enforce_keys [:stream_name, :store, :codec, :fold]
     defstruct stream_name: nil,
-              stream_state: nil,
-              stream_position: -1,
+              state: nil,
               store: nil,
               codec: nil,
               fold: nil,
@@ -80,6 +79,7 @@ defmodule Equinox.Decider do
 
     @type t :: %__MODULE__{
             stream_name: StreamName.t(),
+            state: State.t(),
             store: Store.t(),
             codec: Codec.t(),
             fold: Fold.t(),
@@ -99,88 +99,82 @@ defmodule Equinox.Decider do
     def for_stream(%StreamName{} = stream_name, opts) do
       opts = Keyword.put(opts, :stream_name, stream_name)
       decider = struct!(__MODULE__, opts)
-      %{decider | stream_state: decider.fold.initial()}
+      %{decider | state: State.new(decider.fold.initial())}
     end
 
     @spec load(t()) :: t()
     def load(%__MODULE__{} = decider) do
-      load_stream_state_with_retry(decider)
+      load_state_with_retry(decider)
     end
 
     @spec query(t(), QueryFunction.t()) :: any()
     def query(%__MODULE__{} = decider, query_fun) do
-      QueryFunction.execute(query_fun, decider.stream_state)
+      QueryFunction.execute(query_fun, decider.state.value)
     end
 
-    @spec transact(t(), DecideFunction.t(), Codec.context()) :: {:ok, t()} | {:error, term()}
-    def transact(%__MODULE__{} = decider, decide, context \\ nil) do
-      transact_with_resync(decider, decide, context)
+    @spec transact(t(), DecideFunction.t(), Codec.ctx()) :: {:ok, t()} | {:error, term()}
+    def transact(%__MODULE__{} = decider, decide, ctx \\ nil) do
+      transact_with_resync(decider, decide, ctx)
     end
 
-    defp transact_with_resync(%__MODULE__{} = decider, decide, context, resync_attempt \\ 0) do
-      case DecideFunction.execute(decide, decider.stream_state) do
+    defp transact_with_resync(%__MODULE__{} = decider, decide, ctx, resync_attempt \\ 0) do
+      case DecideFunction.execute(decide, decider.state.value) do
         {:error, error} ->
           {:error, error}
 
         {:ok, []} ->
           {:ok, decider}
 
-        {:ok, domain_events} ->
-          case write_domain_events_with_retry(decider, domain_events, context) do
-            {:ok, written_position} ->
-              {new_state, new_version} =
-                domain_events
-                |> Enum.zip((decider.stream_position + 1)..written_position)
-                |> then(&Fold.fold_versioned(decider.fold, decider.stream_state, &1))
-
-              {:ok, %{decider | stream_state: new_state, stream_position: new_version}}
-
-            {:conflict, %Store.StreamVersionConflict{} = exception} ->
+        {:ok, events} ->
+          try do
+            {:ok, sync_state_with_retry(decider, ctx, events)}
+          rescue
+            exception in [Store.StreamVersionConflict] ->
               if(resync_attempt >= max_resync_attempts(decider), do: raise(exception))
 
               decider
-              |> load_stream_state_with_retry(1)
-              |> transact_with_resync(decide, context, resync_attempt + 1)
+              |> load_state_with_retry(1)
+              |> transact_with_resync(decide, ctx, resync_attempt + 1)
           end
       end
     end
 
-    defp write_domain_events_with_retry(%__MODULE__{} = decider, events, context, attempt \\ 1) do
+    defp sync_state_with_retry(%__MODULE__{} = decider, ctx, events, attempt \\ 1) do
       try do
-        events
-        |> then(&Codec.encode_domain_events!(decider.codec, context, &1))
-        |> then(&decider.store.write_event_data(decider.stream_name, &1, decider.stream_position))
-        |> case do
-          {:error, %Store.StreamVersionConflict{} = exception} -> {:conflict, exception}
-          {:error, exception} -> raise exception
-          {:ok, value} -> {:ok, value}
-        end
+        new_state =
+          State.sync(decider.state, ctx, decider.codec, decider.fold, events, fn data ->
+            case decider.store.write_event_data(decider.stream_name, data, decider.state.version) do
+              {:ok, new_version} -> new_version
+              {:error, exception} -> raise exception
+            end
+          end)
+
+        %{decider | state: new_state}
       rescue
-        exception in [Codec.CodecError] ->
+        exception in [Store.StreamVersionConflict, Codec.CodecError, Fold.FoldError] ->
           reraise exception, __STACKTRACE__
 
         exception ->
           if(attempt >= max_write_attempts(decider), do: reraise(exception, __STACKTRACE__))
-          write_domain_events_with_retry(decider, events, context, attempt + 1)
+          sync_state_with_retry(decider, ctx, events, attempt + 1)
       end
     end
 
-    defp load_stream_state_with_retry(%__MODULE__{} = decider, attempt \\ 1) do
+    defp load_state_with_retry(%__MODULE__{} = decider, attempt \\ 1) do
       try do
-        {new_state, new_version} =
-          decider.stream_name
-          |> decider.store.fetch_timeline_events(decider.stream_position)
-          |> then(&Codec.decode_timeline_events_with_indexes!(decider.codec, &1))
-          |> then(&Fold.fold_versioned(decider.fold, decider.stream_state, &1))
+        new_state =
+          State.load(decider.state, decider.codec, decider.fold, fn ->
+            decider.store.fetch_timeline_events(decider.stream_name, decider.state.version)
+          end)
 
-        %{decider | stream_state: new_state, stream_position: new_version}
+        %{decider | state: new_state}
       rescue
         exception in [Codec.CodecError, Fold.FoldError] ->
           reraise exception, __STACKTRACE__
 
         exception ->
           if(attempt >= max_load_attempts(decider), do: reraise(exception, __STACKTRACE__))
-          load_stream_state_with_retry(decider, attempt + 1)
+          load_state_with_retry(decider, attempt + 1)
       end
     end
 
@@ -274,13 +268,11 @@ defmodule Equinox.Decider do
       end)
     end
 
-    @spec transact(t(), DecideFunction.t(), Codec.context()) ::
-            {:ok, t()} | {:error, term()}
-    @spec transact(pid(), DecideFunction.t(), Codec.context()) ::
-            {:ok, pid()} | {:error, term()}
-    def transact(decider_or_pid, decide, context \\ nil) do
+    @spec transact(t(), DecideFunction.t(), Codec.ctx()) :: {:ok, t()} | {:error, term()}
+    @spec transact(pid(), DecideFunction.t(), Codec.ctx()) :: {:ok, pid()} | {:error, term()}
+    def transact(decider_or_pid, decide, ctx \\ nil) do
       ensure_process_alive!(decider_or_pid, fn pid ->
-        case GenServer.call(pid, {:transact, decide, context}) do
+        case GenServer.call(pid, {:transact, decide, ctx}) do
           :ok -> {:ok, decider_or_pid}
           {:error, error} -> {:error, error}
         end
@@ -321,33 +313,35 @@ defmodule Equinox.Decider do
     end
 
     @impl GenServer
-    def handle_continue(:load, state) do
-      decider = Stateless.load(state.decider)
-      {:noreply, %{state | decider: decider}, state.lifetime.after_init(decider.stream_state)}
+    def handle_continue(:load, server) do
+      decider = Stateless.load(server.decider)
+
+      {:noreply, %{server | decider: decider},
+       server.lifetime.after_init(server.decider.state.value)}
     end
 
     @impl GenServer
-    def handle_call({:query, query}, _from, state) do
-      {:reply, Stateless.query(state.decider, query), state,
-       state.lifetime.after_query(state.decider.stream_state)}
+    def handle_call({:query, query}, _from, server) do
+      {:reply, Stateless.query(server.decider, query), server,
+       server.lifetime.after_query(server.decider.state.value)}
     end
 
     @impl GenServer
-    def handle_call({:transact, decide, context}, _from, state) do
-      case Stateless.transact(state.decider, decide, context) do
+    def handle_call({:transact, decide, ctx}, _from, server) do
+      case Stateless.transact(server.decider, decide, ctx) do
         {:ok, decider} ->
-          {:reply, :ok, %{state | decider: decider},
-           state.lifetime.after_transact(decider.stream_state)}
+          {:reply, :ok, %{server | decider: decider},
+           server.lifetime.after_transact(server.decider.state.value)}
 
         {:error, error} ->
-          {:reply, {:error, error}, state,
-           state.lifetime.after_transact(state.decider.stream_state)}
+          {:reply, {:error, error}, server,
+           server.lifetime.after_transact(server.decider.state.value)}
       end
     end
 
     @impl GenServer
-    def handle_info(:timeout, state) do
-      {:stop, :normal, state}
+    def handle_info(:timeout, server) do
+      {:stop, :normal, server}
     end
   end
 
@@ -362,17 +356,17 @@ defmodule Equinox.Decider do
     end
   end
 
-  @spec transact(pid(), DecideFunction.t(), Codec.context()) ::
+  @spec transact(pid(), DecideFunction.t(), Codec.ctx()) ::
           {:ok, pid()} | {:error, term()}
-  @spec transact(Stateful.t(), DecideFunction.t(), Codec.context()) ::
+  @spec transact(Stateful.t(), DecideFunction.t(), Codec.ctx()) ::
           {:ok, Stateful.t()} | {:error, term()}
-  @spec transact(Stateless.t(), DecideFunction.t(), Codec.context()) ::
+  @spec transact(Stateless.t(), DecideFunction.t(), Codec.ctx()) ::
           {:ok, Stateless.t()} | {:error, term()}
-  def transact(decider, decide, context \\ nil) do
+  def transact(decider, decide, ctx \\ nil) do
     case decider do
-      pid when is_pid(pid) -> Stateful.transact(pid, decide, context)
-      %Stateful{} = decider -> Stateful.transact(decider, decide, context)
-      %Stateless{} = decider -> Stateless.transact(decider, decide, context)
+      pid when is_pid(pid) -> Stateful.transact(pid, decide, ctx)
+      %Stateful{} = decider -> Stateful.transact(decider, decide, ctx)
+      %Stateless{} = decider -> Stateless.transact(decider, decide, ctx)
     end
   end
 end
