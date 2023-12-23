@@ -33,14 +33,13 @@ defmodule Equinox.Decider do
     alias Equinox.Fold
     alias Equinox.Events.DomainEvent
 
-    @type t :: (Fold.state() -> result())
-    @type result ::
-            nil
-            | DomainEvent.t()
-            | list(DomainEvent.t())
-            | {:ok, list(DomainEvent.t())}
-            | {:error, term()}
-    @type normalized_result :: {:ok, list(DomainEvent.t())} | {:error, term()}
+    @type t ::
+            (Fold.state() ->
+               nil
+               | DomainEvent.t()
+               | list(DomainEvent.t())
+               | {:ok, DomainEvent.t() | list(DomainEvent.t())}
+               | {:error, term()})
 
     defmodule DecisionError do
       @enforce_keys [:message, :exception]
@@ -48,13 +47,13 @@ defmodule Equinox.Decider do
       @type t :: %__MODULE__{message: String.t(), exception: Exception.t()}
     end
 
-    @spec execute(t(), Fold.state()) :: normalized_result()
+    @spec execute(t(), Fold.state()) :: {:ok, list(DomainEvent.t())} | {:error, term()}
     def execute(decide_fun, stream_state) do
       try do
         case decide_fun.(stream_state) do
-          {:ok, events} -> {:ok, List.wrap(events)}
           {:error, error} -> {:error, error}
-          event_or_events -> {:ok, List.wrap(event_or_events)}
+          {:ok, event_or_events} -> {:ok, List.wrap(event_or_events)}
+          nil_or_event_or_events -> {:ok, List.wrap(nil_or_event_or_events)}
         end
       rescue
         exception ->
