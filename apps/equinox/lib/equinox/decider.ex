@@ -101,17 +101,19 @@ defmodule Equinox.Decider do
           try do
             {:ok, sync_state_with_retry(decider, ctx, events)}
           rescue
-            exception in [Store.StreamVersionConflict] ->
-              if(resync_attempt >= max_resync_attempts(decider), do: raise(exception))
-
-              decider
-              |> load_state_with_retry()
-              |> transact_with_resync(decision, ctx, resync_attempt + 1)
+            version_conflict in [Store.StreamVersionConflict] ->
+              if resync_attempt < max_resync_attempts(decider) do
+                decider
+                |> load_state_with_retry()
+                |> transact_with_resync(decision, ctx, resync_attempt + 1)
+              else
+                reraise version_conflict, __STACKTRACE__
+              end
           end
       end
     end
 
-    defp sync_state_with_retry(%__MODULE__{} = decider, ctx, events, attempt \\ 1) do
+    defp sync_state_with_retry(%__MODULE__{} = decider, ctx, events, sync_attempt \\ 1) do
       try do
         new_state =
           decider.stream_name
@@ -119,16 +121,19 @@ defmodule Equinox.Decider do
 
         %{decider | state: new_state}
       rescue
-        exception in [Store.StreamVersionConflict, Codec.CodecError, Fold.FoldError] ->
-          reraise exception, __STACKTRACE__
+        unrecoverable in [Store.StreamVersionConflict, Codec.CodecError, Fold.FoldError] ->
+          reraise unrecoverable, __STACKTRACE__
 
-        exception ->
-          if(attempt >= max_sync_attempts(decider), do: reraise(exception, __STACKTRACE__))
-          sync_state_with_retry(decider, ctx, events, attempt + 1)
+        recoverable ->
+          if sync_attempt < max_sync_attempts(decider) do
+            sync_state_with_retry(decider, ctx, events, sync_attempt + 1)
+          else
+            reraise recoverable, __STACKTRACE__
+          end
       end
     end
 
-    defp load_state_with_retry(%__MODULE__{} = decider, attempt \\ 1) do
+    defp load_state_with_retry(%__MODULE__{} = decider, load_attempt \\ 1) do
       try do
         new_state =
           decider.stream_name
@@ -136,12 +141,15 @@ defmodule Equinox.Decider do
 
         %{decider | state: new_state}
       rescue
-        exception in [Codec.CodecError, Fold.FoldError] ->
-          reraise exception, __STACKTRACE__
+        unrecoverable in [Codec.CodecError, Fold.FoldError] ->
+          reraise unrecoverable, __STACKTRACE__
 
-        exception ->
-          if(attempt >= max_load_attempts(decider), do: reraise(exception, __STACKTRACE__))
-          load_state_with_retry(decider, attempt + 1)
+        recoverable ->
+          if load_attempt < max_load_attempts(decider) do
+            load_state_with_retry(decider, load_attempt + 1)
+          else
+            reraise recoverable, __STACKTRACE__
+          end
       end
     end
 
@@ -249,7 +257,7 @@ defmodule Equinox.Decider do
 
     defp ensure_process_alive!(pid, fun) when is_pid(pid) do
       if not Process.alive?(pid) do
-        raise ArgumentError, message: "Decider: Given process #{inspect(pid)} is not alive"
+        raise RuntimeError, message: "Decider: Given process #{inspect(pid)} is not alive"
       else
         fun.(pid)
       end
@@ -258,7 +266,7 @@ defmodule Equinox.Decider do
     defp ensure_process_alive!(%__MODULE__{} = decider, fun) do
       case decider.server_name do
         nil ->
-          raise ArgumentError, message: "Decider: On-demand decider spawning requires registry"
+          raise RuntimeError, message: "Decider: On-demand deciders require name (and registry)"
 
         server_name ->
           try do
