@@ -1,6 +1,7 @@
-defmodule MessageDb.Store do
+defmodule Equinox.MessageDb.Store do
   alias Equinox.Events.DomainEvent
   alias Equinox.{State, Codec, Fold}
+  alias Equinox.MessageDb.{Reader, Writer}
 
   @callback load!(GenServer.server(), String.t(), State.t(), Codec.t(), Fold.t()) :: State.t()
   @callback sync!(
@@ -14,18 +15,18 @@ defmodule MessageDb.Store do
             ) :: State.t()
 
   defmodule Unoptimized do
-    @behaviour MessageDb.Store
+    @behaviour Equinox.MessageDb.Store
     @batch_size 500
 
     def load!(conn, stream_name, state, codec, fold) do
       State.load!(state, codec, fold, fn ->
-        MessageDb.Reader.stream_stream_messages(conn, stream_name, state.version + 1, @batch_size)
+        Reader.stream_stream_messages(conn, stream_name, state.version + 1, @batch_size)
       end)
     end
 
     def sync!(conn, stream_name, state, events, ctx, codec, fold) do
       State.sync!(state, events, ctx, codec, fold, fn event_data ->
-        case MessageDb.Writer.write_messages(conn, stream_name, event_data, state.version) do
+        case Writer.write_messages(conn, stream_name, event_data, state.version) do
           {:ok, new_version} -> new_version
           {:error, exception} -> raise exception
         end
@@ -34,11 +35,11 @@ defmodule MessageDb.Store do
   end
 
   defmodule LatestKnownEvent do
-    @behaviour MessageDb.Store
+    @behaviour Equinox.MessageDb.Store
 
     def load!(conn, stream_name, state, codec, fold) do
       State.load!(state, codec, fold, fn ->
-        case MessageDb.Reader.get_last_stream_message(conn, String.Chars.to_string(stream_name)) do
+        case Reader.get_last_stream_message(conn, String.Chars.to_string(stream_name)) do
           {:ok, message} -> [message]
           {:error, exception} -> raise exception
         end

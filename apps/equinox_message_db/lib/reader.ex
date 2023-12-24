@@ -1,4 +1,4 @@
-defmodule MessageDb.Reader do
+defmodule Equinox.MessageDb.Reader do
   alias Equinox.Events.TimelineEvent
 
   @type category_name :: String.t()

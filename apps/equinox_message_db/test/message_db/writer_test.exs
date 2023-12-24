@@ -1,10 +1,9 @@
-defmodule MessageDb.WriterTest do
-  use MessageDb.ConnCase
+defmodule Equinox.MessageDb.WriterTest do
+  use Equinox.MessageDb.ConnCase
+
   alias Equinox.Store.{DuplicateMessageId, StreamVersionConflict}
   alias Equinox.Events.EventData
-  alias MessageDb.Writer
-
-  doctest Writer
+  alias Equinox.MessageDb.Writer
 
   describe "write_messages/4" do
     @stream "testStream-42"

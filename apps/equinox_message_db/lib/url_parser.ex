@@ -1,4 +1,4 @@
-defmodule MessageDb.UrlParser do
+defmodule Equinox.MessageDb.UrlParser do
   @moduledoc "Borrowed from Ecto"
 
   @integer_url_query_params ["timeout", "pool_size", "idle_interval"]

@@ -1,9 +1,9 @@
-defmodule MessageDb.MixProject do
+defmodule Equinox.MessageDb.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :message_db,
+      app: :equinox_message_db,
       version: "0.1.0",
       build_path: "../../_build",
       config_path: "../../config/config.exs",

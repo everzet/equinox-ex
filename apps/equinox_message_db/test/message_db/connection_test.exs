@@ -1,6 +1,5 @@
-defmodule MessageDb.ConnectionTest do
-  use MessageDb.ConnCase
-  doctest MessageDb
+defmodule Equinox.MessageDb.ConnectionTest do
+  use Equinox.MessageDb.ConnCase
 
   @tag sql_condition: true
   test_in_isolation "sql_condition can be enabled per connection", %{conn: conn} do

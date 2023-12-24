@@ -1,9 +1,8 @@
-defmodule MessageDb.ReaderTest do
-  use MessageDb.ConnCase
-  alias MessageDb.{Reader, Writer}
-  alias Equinox.Events.{EventData, TimelineEvent}
+defmodule Equinox.MessageDb.ReaderTest do
+  use Equinox.MessageDb.ConnCase
 
-  doctest Reader
+  alias Equinox.Events.{EventData, TimelineEvent}
+  alias Equinox.MessageDb.{Reader, Writer}
 
   describe "get_category_messages/5" do
     @category "testStream"

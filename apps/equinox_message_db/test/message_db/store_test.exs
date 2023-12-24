@@ -1,10 +1,9 @@
-defmodule MessageDb.StoreTest do
-  use MessageDb.ConnCase
+defmodule Equinox.MessageDb.StoreTest do
+  use Equinox.MessageDb.ConnCase
 
   alias Equinox.State
   alias Equinox.Events.EventData
-
-  alias MessageDb.Store.{Unoptimized, LatestKnownEvent}
+  alias Equinox.MessageDb.Store.{Unoptimized, LatestKnownEvent}
 
   defmodule NumberCodec do
     @behaviour Equinox.Codec

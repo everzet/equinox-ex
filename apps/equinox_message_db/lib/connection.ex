@@ -1,4 +1,6 @@
-defmodule MessageDb.Connection do
+defmodule Equinox.MessageDb.Connection do
+  alias Equinox.MessageDb.UrlParser
+
   def start_link(opts \\ []) do
     opts
     |> default_opts()
@@ -12,8 +14,13 @@ defmodule MessageDb.Connection do
   end
 
   defp default_opts(opts) do
-    opts
-    |> Keyword.put_new(:after_connect, fn conn ->
+    opts =
+      case Keyword.get(opts, :url) do
+        nil -> opts
+        url -> url |> UrlParser.parse_url() |> Keyword.merge(opts)
+      end
+
+    Keyword.put_new(opts, :after_connect, fn conn ->
       if Keyword.get(opts, :sql_condition, false) do
         Postgrex.query!(conn, "SET message_store.sql_condition TO on;", [])
       end

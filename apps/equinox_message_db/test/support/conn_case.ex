@@ -1,4 +1,4 @@
-defmodule MessageDb.ConnCase do
+defmodule Equinox.MessageDb.ConnCase do
   use ExUnit.CaseTemplate, async: true
 
   using do
@@ -8,7 +8,7 @@ defmodule MessageDb.ConnCase do
   end
 
   setup tags do
-    {:ok, conn: start_supervised!({MessageDb.Connection, Enum.to_list(tags)})}
+    {:ok, conn: start_supervised!({Equinox.MessageDb.Connection, Enum.to_list(tags)})}
   end
 
   defmacro test_in_isolation(message, var, do: block) do

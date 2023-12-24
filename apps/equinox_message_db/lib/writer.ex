@@ -1,6 +1,6 @@
-defmodule MessageDb.Writer do
-  alias Equinox.Store.{DuplicateMessageId, StreamVersionConflict}
+defmodule Equinox.MessageDb.Writer do
   alias Equinox.Events.EventData
+  alias Equinox.Store.{DuplicateMessageId, StreamVersionConflict}
 
   @type stream_name :: String.t()
   @type expected_version :: -1 | non_neg_integer()
