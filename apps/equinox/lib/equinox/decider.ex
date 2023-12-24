@@ -4,8 +4,8 @@ defmodule Equinox.Decider do
 
     @type t :: (State.value() -> any())
 
-    @spec execute(t(), State.value()) :: any()
-    def execute(query_fun, state_value), do: query_fun.(state_value)
+    @spec execute(t(), State.t()) :: any()
+    def execute(query, %State{value: value}), do: query.(value)
   end
 
   defmodule Decision do
@@ -20,9 +20,9 @@ defmodule Equinox.Decider do
                | {:ok, DomainEvent.t() | list(DomainEvent.t())}
                | {:error, term()})
 
-    @spec execute(t(), State.value()) :: {:ok, list(DomainEvent.t())} | {:error, term()}
-    def execute(decide_fun, state_value) do
-      case decide_fun.(state_value) do
+    @spec execute(t(), State.t()) :: {:ok, list(DomainEvent.t())} | {:error, term()}
+    def execute(decision, %State{value: value}) do
+      case decision.(value) do
         {:error, error} -> {:error, error}
         {:ok, event_or_events} -> {:ok, List.wrap(event_or_events)}
         nil_or_event_or_events -> {:ok, List.wrap(nil_or_event_or_events)}
@@ -35,8 +35,8 @@ defmodule Equinox.Decider do
     alias Equinox.{State, Store, Codec, Fold}
     alias Equinox.Decider.{Query, Decision}
 
-    @enforce_keys [:stream_name, :store, :codec, :fold]
-    defstruct stream_name: nil,
+    @enforce_keys [:stream, :store, :codec, :fold]
+    defstruct stream: nil,
               state: nil,
               store: nil,
               codec: nil,
@@ -44,7 +44,7 @@ defmodule Equinox.Decider do
               opts: []
 
     @type t :: %__MODULE__{
-            stream_name: String.t(),
+            stream: String.t(),
             state: State.t(),
             store: Store.t(),
             codec: Codec.t(),
@@ -67,7 +67,7 @@ defmodule Equinox.Decider do
     def for_stream(%StreamName{} = stream_name, opts) do
       decider =
         opts
-        |> Keyword.put(:stream_name, String.Chars.to_string(stream_name))
+        |> Keyword.put(:stream, String.Chars.to_string(stream_name))
         |> Keyword.update(:opts, @default_opts, &Keyword.merge(@default_opts, &1))
         |> then(&struct!(__MODULE__, &1))
 
@@ -81,7 +81,7 @@ defmodule Equinox.Decider do
 
     @spec query(t(), Query.t()) :: any()
     def query(%__MODULE__{} = decider, query_fun) do
-      Query.execute(query_fun, decider.state.value)
+      Query.execute(query_fun, decider.state)
     end
 
     @spec transact(t(), Decision.t(), Codec.ctx()) :: {:ok, t()} | {:error, term()}
@@ -90,7 +90,7 @@ defmodule Equinox.Decider do
     end
 
     defp transact_with_resync(%__MODULE__{} = decider, decision, ctx, resync_attempt \\ 0) do
-      case Decision.execute(decision, decider.state.value) do
+      case Decision.execute(decision, decider.state) do
         {:error, error} ->
           {:error, error}
 
@@ -116,7 +116,7 @@ defmodule Equinox.Decider do
     defp sync_state_with_retry(%__MODULE__{} = decider, ctx, events, sync_attempt \\ 1) do
       try do
         new_state =
-          decider.stream_name
+          decider.stream
           |> decider.store.sync!(decider.state, events, ctx, decider.codec, decider.fold)
 
         %{decider | state: new_state}
@@ -136,7 +136,7 @@ defmodule Equinox.Decider do
     defp load_state_with_retry(%__MODULE__{} = decider, load_attempt \\ 1) do
       try do
         new_state =
-          decider.stream_name
+          decider.stream
           |> decider.store.load!(decider.state, decider.codec, decider.fold)
 
         %{decider | state: new_state}
