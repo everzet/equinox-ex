@@ -316,8 +316,10 @@ defmodule Equinox.Decider do
 
     @impl GenServer
     def handle_continue(:load, server) do
-      {:noreply, %{server | decider: Stateless.load(server.decider)},
-       server.lifetime.after_init(server.decider.state.value)}
+      loaded_decider = Stateless.load(server.decider)
+
+      {:noreply, %{server | decider: loaded_decider},
+       server.lifetime.after_init(loaded_decider.state.value)}
     end
 
     @impl GenServer
@@ -329,9 +331,9 @@ defmodule Equinox.Decider do
     @impl GenServer
     def handle_call({:transact, decide, ctx}, _from, server) do
       case Stateless.transact(server.decider, decide, ctx) do
-        {:ok, decider} ->
-          {:reply, :ok, %{server | decider: decider},
-           server.lifetime.after_transact(server.decider.state.value)}
+        {:ok, updated_decider} ->
+          {:reply, :ok, %{server | decider: updated_decider},
+           server.lifetime.after_transact(updated_decider.state.value)}
 
         {:error, error} ->
           {:reply, {:error, error}, server,
