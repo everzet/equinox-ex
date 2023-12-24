@@ -1,11 +1,5 @@
 defmodule Equinox.Decider do
-  defmodule DeciderError do
-    @enforce_keys [:message]
-    defexception [:message]
-    @type t :: %__MODULE__{message: String.t()}
-  end
-
-  defmodule QueryFunction do
+  defmodule Query do
     alias Equinox.State
 
     @type t :: (State.value() -> any())
@@ -14,7 +8,7 @@ defmodule Equinox.Decider do
     def execute(query_fun, state_value), do: query_fun.(state_value)
   end
 
-  defmodule DecideFunction do
+  defmodule Decision do
     alias Equinox.State
     alias Equinox.Events.DomainEvent
 
@@ -39,7 +33,7 @@ defmodule Equinox.Decider do
   defmodule Stateless do
     alias Equinox.Stream.StreamName
     alias Equinox.{State, Store, Codec, Fold}
-    alias Equinox.Decider.{QueryFunction, DecideFunction}
+    alias Equinox.Decider.{Query, Decision}
 
     @enforce_keys [:stream_name, :store, :codec, :fold]
     defstruct stream_name: nil,
@@ -85,18 +79,18 @@ defmodule Equinox.Decider do
       load_state_with_retry(decider)
     end
 
-    @spec query(t(), QueryFunction.t()) :: any()
+    @spec query(t(), Query.t()) :: any()
     def query(%__MODULE__{} = decider, query_fun) do
-      QueryFunction.execute(query_fun, decider.state.value)
+      Query.execute(query_fun, decider.state.value)
     end
 
-    @spec transact(t(), DecideFunction.t(), Codec.ctx()) :: {:ok, t()} | {:error, term()}
-    def transact(%__MODULE__{} = decider, decide, ctx \\ nil) do
-      transact_with_resync(decider, decide, ctx)
+    @spec transact(t(), Decision.t(), Codec.ctx()) :: {:ok, t()} | {:error, term()}
+    def transact(%__MODULE__{} = decider, decision, ctx \\ nil) do
+      transact_with_resync(decider, decision, ctx)
     end
 
-    defp transact_with_resync(%__MODULE__{} = decider, decide, ctx, resync_attempt \\ 0) do
-      case DecideFunction.execute(decide, decider.state.value) do
+    defp transact_with_resync(%__MODULE__{} = decider, decision, ctx, resync_attempt \\ 0) do
+      case Decision.execute(decision, decider.state.value) do
         {:error, error} ->
           {:error, error}
 
@@ -112,7 +106,7 @@ defmodule Equinox.Decider do
 
               decider
               |> load_state_with_retry()
-              |> transact_with_resync(decide, ctx, resync_attempt + 1)
+              |> transact_with_resync(decision, ctx, resync_attempt + 1)
           end
       end
     end
@@ -161,7 +155,7 @@ defmodule Equinox.Decider do
 
     alias Equinox.Stream.StreamName
     alias Equinox.Decider.Stateless
-    alias Equinox.{Decider, Lifetime, Store, Codec, Fold}
+    alias Equinox.{Store, Codec, Fold, Lifetime}
 
     @enforce_keys [:stream_name, :supervisor, :registry, :lifetime, :store, :codec, :fold]
     defstruct stream_name: nil,
@@ -235,18 +229,18 @@ defmodule Equinox.Decider do
       DynamicSupervisor.start_child(supervisor, {__MODULE__, decider})
     end
 
-    @spec query(t() | pid(), QueryFunction.t()) :: any()
+    @spec query(t() | pid(), Query.t()) :: any()
     def query(decider_or_pid, query) do
       ensure_process_alive!(decider_or_pid, fn pid ->
         GenServer.call(pid, {:query, query})
       end)
     end
 
-    @spec transact(t(), DecideFunction.t(), Codec.ctx()) :: {:ok, t()} | {:error, term()}
-    @spec transact(pid(), DecideFunction.t(), Codec.ctx()) :: {:ok, pid()} | {:error, term()}
-    def transact(decider_or_pid, decide, ctx \\ nil) do
+    @spec transact(t(), Decision.t(), Codec.ctx()) :: {:ok, t()} | {:error, term()}
+    @spec transact(pid(), Decision.t(), Codec.ctx()) :: {:ok, pid()} | {:error, term()}
+    def transact(decider_or_pid, decision, ctx \\ nil) do
       ensure_process_alive!(decider_or_pid, fn pid ->
-        case GenServer.call(pid, {:transact, decide, ctx}) do
+        case GenServer.call(pid, {:transact, decision, ctx}) do
           :ok -> {:ok, decider_or_pid}
           {:error, error} -> {:error, error}
         end
@@ -254,19 +248,17 @@ defmodule Equinox.Decider do
     end
 
     defp ensure_process_alive!(pid, fun) when is_pid(pid) do
-      if Process.alive?(pid) do
-        fun.(pid)
+      if not Process.alive?(pid) do
+        raise ArgumentError, message: "Decider: Given process #{inspect(pid)} is not alive"
       else
-        raise Decider.DeciderError,
-          message: "ensure_process_alive!: Given process #{inspect(pid)} is not alive"
+        fun.(pid)
       end
     end
 
     defp ensure_process_alive!(%__MODULE__{} = decider, fun) do
       case decider.server_name do
         nil ->
-          raise Decider.DeciderError,
-            message: "ensure_process_alive!: On-demand spawning requires registry"
+          raise ArgumentError, message: "Decider: On-demand decider spawning requires registry"
 
         server_name ->
           try do
@@ -276,8 +268,6 @@ defmodule Equinox.Decider do
           end
       end
     end
-
-    # Server (callbacks)
 
     @impl GenServer
     def init(%__MODULE__{} = decider) do
@@ -301,8 +291,8 @@ defmodule Equinox.Decider do
     end
 
     @impl GenServer
-    def handle_call({:transact, decide, ctx}, _from, server) do
-      case Stateless.transact(server.decider, decide, ctx) do
+    def handle_call({:transact, decision, ctx}, _from, server) do
+      case Stateless.transact(server.decider, decision, ctx) do
         {:ok, updated_decider} ->
           {:reply, :ok, %{server | decider: updated_decider},
            server.lifetime.after_transact(updated_decider.state.value)}
@@ -319,9 +309,9 @@ defmodule Equinox.Decider do
     end
   end
 
-  @spec query(pid(), QueryFunction.t()) :: any()
-  @spec query(Stateful.t(), QueryFunction.t()) :: any()
-  @spec query(Stateless.t(), QueryFunction.t()) :: any()
+  @spec query(pid(), Query.t()) :: any()
+  @spec query(Stateful.t(), Query.t()) :: any()
+  @spec query(Stateless.t(), Query.t()) :: any()
   def query(decider, query) do
     case decider do
       pid when is_pid(pid) -> Stateful.query(pid, query)
@@ -330,17 +320,17 @@ defmodule Equinox.Decider do
     end
   end
 
-  @spec transact(pid(), DecideFunction.t(), Codec.ctx()) ::
+  @spec transact(pid(), Decision.t(), Codec.ctx()) ::
           {:ok, pid()} | {:error, term()}
-  @spec transact(Stateful.t(), DecideFunction.t(), Codec.ctx()) ::
+  @spec transact(Stateful.t(), Decision.t(), Codec.ctx()) ::
           {:ok, Stateful.t()} | {:error, term()}
-  @spec transact(Stateless.t(), DecideFunction.t(), Codec.ctx()) ::
+  @spec transact(Stateless.t(), Decision.t(), Codec.ctx()) ::
           {:ok, Stateless.t()} | {:error, term()}
-  def transact(decider, decide, ctx \\ nil) do
+  def transact(decider, decision, ctx \\ nil) do
     case decider do
-      pid when is_pid(pid) -> Stateful.transact(pid, decide, ctx)
-      %Stateful{} = decider -> Stateful.transact(decider, decide, ctx)
-      %Stateless{} = decider -> Stateless.transact(decider, decide, ctx)
+      pid when is_pid(pid) -> Stateful.transact(pid, decision, ctx)
+      %Stateful{} = decider -> Stateful.transact(decider, decision, ctx)
+      %Stateless{} = decider -> Stateless.transact(decider, decision, ctx)
     end
   end
 end
