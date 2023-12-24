@@ -72,7 +72,7 @@ defmodule Equinox.Codec do
     end
   end
 
-  @spec encode_all!(Enumerable.t(DomainEvent.t()), ctx(), t()) :: Enumerable.t(EventData.t())
+  @spec encode_all!(list(DomainEvent.t()), ctx(), t()) :: list(EventData.t())
   def encode_all!(domain_events, ctx, codec) do
     Enum.map(domain_events, fn domain_event ->
       try do

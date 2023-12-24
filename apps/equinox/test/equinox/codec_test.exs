@@ -16,12 +16,12 @@ defmodule Equinox.CodecTest do
       assert Codec.encode_all!([1, 2], :ctx, CodecMock) == [:one, :two]
     end
 
-    test "raises exception if codec returns {:error, exception}" do
+    test "raises exception if Codec returns {:error, exception}" do
       expect(CodecMock, :encode, fn _, _ -> {:error, %Codec.CodecError{message: "bang"}} end)
       assert_raise Codec.CodecError, ~r/bang/, fn -> Codec.encode_all!([1], :ctx, CodecMock) end
     end
 
-    test "raises exception if codec returns {:error, term}" do
+    test "raises exception if Codec returns {:error, term}" do
       expect(CodecMock, :encode, fn _, _ -> {:error, :bang} end)
       assert_raise Codec.CodecError, ~r/:bang/, fn -> Codec.encode_all!([1], :ctx, CodecMock) end
     end
@@ -43,7 +43,7 @@ defmodule Equinox.CodecTest do
       assert Enum.to_list(result) == [{1, 3}, {2, 4}]
     end
 
-    test "raises exception if codec returns {:error, exception}" do
+    test "raises exception if Codec returns {:error, exception}" do
       expect(CodecMock, :decode, fn _ -> {:error, %Codec.CodecError{message: "bang"}} end)
 
       assert_raise Codec.CodecError, ~r/bang/, fn ->
@@ -51,7 +51,7 @@ defmodule Equinox.CodecTest do
       end
     end
 
-    test "raises exception if codec returns {:error, term}" do
+    test "raises exception if Codec returns {:error, term}" do
       expect(CodecMock, :decode, fn _ -> {:error, :bang} end)
 
       assert_raise Codec.CodecError, ~r/:bang/, fn ->
