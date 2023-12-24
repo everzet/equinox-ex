@@ -148,14 +148,8 @@ defmodule Equinox.Decider do
     defp sync_state_with_retry(%__MODULE__{} = decider, ctx, events, attempt \\ 1) do
       try do
         new_state =
-          decider.store.sync!(
-            decider.stream_name,
-            decider.state,
-            events,
-            ctx,
-            decider.codec,
-            decider.fold
-          )
+          decider.stream_name
+          |> decider.store.sync!(decider.state, events, ctx, decider.codec, decider.fold)
 
         %{decider | state: new_state}
       rescue
@@ -171,7 +165,8 @@ defmodule Equinox.Decider do
     defp load_state_with_retry(%__MODULE__{} = decider, attempt \\ 1) do
       try do
         new_state =
-          decider.store.load!(decider.stream_name, decider.state, decider.codec, decider.fold)
+          decider.stream_name
+          |> decider.store.load!(decider.state, decider.codec, decider.fold)
 
         %{decider | state: new_state}
       rescue
