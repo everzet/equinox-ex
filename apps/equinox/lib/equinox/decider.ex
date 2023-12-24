@@ -78,7 +78,7 @@ defmodule Equinox.Decider do
               opts: []
 
     @type t :: %__MODULE__{
-            stream_name: StreamName.t(),
+            stream_name: String.t(),
             state: State.t(),
             store: Store.t(),
             codec: Codec.t(),
@@ -101,7 +101,7 @@ defmodule Equinox.Decider do
     def for_stream(%StreamName{} = stream_name, opts) do
       decider =
         opts
-        |> Keyword.put(:stream_name, stream_name)
+        |> Keyword.put(:stream_name, String.Chars.to_string(stream_name))
         |> Keyword.update(:opts, @default_opts, &Keyword.merge(@default_opts, &1))
         |> then(&struct!(__MODULE__, &1))
 

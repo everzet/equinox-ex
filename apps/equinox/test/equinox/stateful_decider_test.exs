@@ -59,8 +59,10 @@ defmodule Equinox.StatefulDeciderTest do
     test "allows interacting with process without carrying pid around" do
       start_supervised!({Registry, keys: :unique, name: DeciderTestRegistry})
 
-      stream = StreamName.parse!("Invoice-1")
-      decider = build_decider(stream_name: stream, registry: DeciderTestRegistry)
+      stream = "Invoice-1"
+
+      decider =
+        build_decider(stream_name: StreamName.parse!(stream), registry: DeciderTestRegistry)
 
       stub(FoldMock, :initial, fn -> 0 end)
 
@@ -78,17 +80,21 @@ defmodule Equinox.StatefulDeciderTest do
 
       stub(FoldMock, :initial, fn -> 0 end)
 
-      stream_1 = StreamName.parse!("Invoice-1")
-      stream_2 = StreamName.parse!("Invoice-2")
+      stream_1 = "Invoice-1"
+      stream_2 = "Invoice-2"
 
       expect(StoreMock, :load!, 2, fn _, %{version: -1}, _, _ -> State.new(0, -1) end)
       expect(StoreMock, :sync!, fn ^stream_1, %{version: -1}, [2], _, _, _ -> State.new(2, 0) end)
       expect(StoreMock, :sync!, fn ^stream_2, %{version: -1}, [3], _, _, _ -> State.new(3, 0) end)
 
-      decider_1 = build_decider(stream_name: stream_1, registry: DeciderTestRegistry)
+      decider_1 =
+        build_decider(stream_name: StreamName.parse!(stream_1), registry: DeciderTestRegistry)
+
       assert {:ok, ^decider_1} = Decider.transact(decider_1, fn 0 -> [2] end)
 
-      decider_2 = build_decider(stream_name: stream_2, registry: DeciderTestRegistry)
+      decider_2 =
+        build_decider(stream_name: StreamName.parse!(stream_2), registry: DeciderTestRegistry)
+
       assert {:ok, ^decider_2} = Decider.transact(decider_2, fn 0 -> [3] end)
 
       assert 2 = Decider.query(decider_1, & &1)
@@ -98,8 +104,7 @@ defmodule Equinox.StatefulDeciderTest do
 
   describe "lifetime" do
     test "after_init lifetime controls how long process will wait for query or transact until shutting down" do
-      stream = StreamName.parse!("Invoice-1")
-      decider = build_decider(stream_name: stream, lifetime: LifetimeMock)
+      decider = build_decider(lifetime: LifetimeMock)
 
       stub(FoldMock, :initial, fn -> 0 end)
       stub(StoreMock, :load!, fn _, %{version: -1}, _, _ -> State.new(0, -1) end)
@@ -116,8 +121,7 @@ defmodule Equinox.StatefulDeciderTest do
     end
 
     test "after_query lifetime controls how long process will wait for another query or transact until shutting down" do
-      stream = StreamName.parse!("Invoice-1")
-      decider = build_decider(stream_name: stream, lifetime: LifetimeMock)
+      decider = build_decider(lifetime: LifetimeMock)
 
       stub(FoldMock, :initial, fn -> 0 end)
       stub(StoreMock, :load!, fn _, %{version: -1}, _, _ -> State.new(0, -1) end)
@@ -137,8 +141,7 @@ defmodule Equinox.StatefulDeciderTest do
     end
 
     test "after_transact lifetime controls how long process will wait for another query or transact until shutting down" do
-      stream = StreamName.parse!("Invoice-1")
-      decider = build_decider(stream_name: stream, lifetime: LifetimeMock)
+      decider = build_decider(lifetime: LifetimeMock)
 
       stub(FoldMock, :initial, fn -> 0 end)
       stub(StoreMock, :load!, fn _, %{version: -1}, _, _ -> State.new(0, -1) end)

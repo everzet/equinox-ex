@@ -1,4 +1,5 @@
 defmodule Equinox.Fold do
+  alias Equinox.Events.DomainEvent
   alias Equinox.State
 
   @type t :: module()

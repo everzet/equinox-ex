@@ -13,14 +13,14 @@ defmodule Equinox.DeciderTest do
   # We test both Stateful and Stateless versions of decider with same test suite
   Enum.each([Decider.Stateful, Decider.Stateless], fn decider_mod ->
     describe "#{inspect(decider_mod)} initialization" do
-      @stream StreamName.parse!("Invoice-1")
+      @stream "Invoice-1"
 
       test "loads stream state" do
         stub(FoldMock, :initial, fn -> 1 end)
 
         expect(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(7, 2) end)
 
-        decider = init(unquote(decider_mod), stream_name: @stream)
+        decider = init(unquote(decider_mod), stream_name: StreamName.parse!(@stream))
         assert 7 = Decider.query(decider, & &1)
       end
 
@@ -30,7 +30,12 @@ defmodule Equinox.DeciderTest do
         expect(StoreMock, :load!, fn @stream, _, _, _ -> raise RuntimeError end)
         expect(StoreMock, :load!, fn @stream, _, _, _ -> State.new(:initial, -1) end)
 
-        decider = init(unquote(decider_mod), stream_name: @stream, max_load_attempts: 2)
+        decider =
+          init(unquote(decider_mod),
+            stream_name: StreamName.parse!(@stream),
+            max_load_attempts: 2
+          )
+
         assert :initial = Decider.query(decider, & &1)
       end
 
@@ -40,7 +45,10 @@ defmodule Equinox.DeciderTest do
         expect(StoreMock, :load!, 2, fn @stream, %{version: -1}, _, _ -> raise RuntimeError end)
 
         assert capture_crash(fn ->
-                 init(unquote(decider_mod), stream_name: @stream, max_load_attempts: 2)
+                 init(unquote(decider_mod),
+                   stream_name: StreamName.parse!(@stream),
+                   max_load_attempts: 2
+                 )
                end) =~ "RuntimeError"
       end
 
@@ -52,7 +60,10 @@ defmodule Equinox.DeciderTest do
         end)
 
         assert capture_crash(fn ->
-                 init(unquote(decider_mod), stream_name: @stream, max_load_attempts: 2)
+                 init(unquote(decider_mod),
+                   stream_name: StreamName.parse!(@stream),
+                   max_load_attempts: 2
+                 )
                end) =~ "CodecError"
       end
 
@@ -64,7 +75,10 @@ defmodule Equinox.DeciderTest do
         end)
 
         assert capture_crash(fn ->
-                 init(unquote(decider_mod), stream_name: @stream, max_load_attempts: 2)
+                 init(unquote(decider_mod),
+                   stream_name: StreamName.parse!(@stream),
+                   max_load_attempts: 2
+                 )
                end) =~ "FoldError"
       end
     end
@@ -72,7 +86,7 @@ defmodule Equinox.DeciderTest do
     describe "#{inspect(decider_mod)}.query/2" do
       test "executes query callback with current decider state and returns whatever it returns" do
         stub(FoldMock, :initial, fn -> :value end)
-        stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(:value, -1) end)
+        stub(StoreMock, :load!, fn _, %{version: -1}, _, _ -> State.new(:value, -1) end)
 
         decider = init(unquote(decider_mod))
 
@@ -81,7 +95,7 @@ defmodule Equinox.DeciderTest do
 
       test "query callback exceptions are reraised as QueryError" do
         stub(FoldMock, :initial, fn -> :initial end)
-        stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(:initial, -1) end)
+        stub(StoreMock, :load!, fn _, %{version: -1}, _, _ -> State.new(:initial, -1) end)
 
         decider = init(unquote(decider_mod))
 
@@ -91,7 +105,7 @@ defmodule Equinox.DeciderTest do
     end
 
     describe "#{inspect(decider_mod)}.transact/3" do
-      @stream StreamName.parse!("Invoice-1")
+      @stream "Invoice-1"
 
       test "executes decision callback and syncs the resulting events" do
         stub(FoldMock, :initial, fn -> 0 end)
@@ -101,7 +115,7 @@ defmodule Equinox.DeciderTest do
           State.new(5, 1)
         end)
 
-        decider = init(unquote(decider_mod), stream_name: @stream)
+        decider = init(unquote(decider_mod), stream_name: StreamName.parse!(@stream))
 
         assert {:ok, decider} = Decider.transact(decider, fn 0 -> [2, 3] end, :ctx)
         assert 5 = Decider.query(decider, & &1)
@@ -115,7 +129,7 @@ defmodule Equinox.DeciderTest do
           State.new(5, 1)
         end)
 
-        decider = init(unquote(decider_mod), stream_name: @stream)
+        decider = init(unquote(decider_mod), stream_name: StreamName.parse!(@stream))
 
         assert {:ok, decider} = Decider.transact(decider, fn 2 -> 3 end)
         assert 5 = Decider.query(decider, & &1)
@@ -128,7 +142,12 @@ defmodule Equinox.DeciderTest do
 
         # 1. Initial load has no events, so state is `0` and its version is -1
         expect(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
-        decider = init(unquote(decider_mod), stream_name: @stream, max_resync_attempts: 1)
+
+        decider =
+          init(unquote(decider_mod),
+            stream_name: StreamName.parse!(@stream),
+            max_resync_attempts: 1
+          )
 
         # 2. In the meantime, someone else writes event `2` to the stream, its version is now 0
 
@@ -168,7 +187,11 @@ defmodule Equinox.DeciderTest do
           raise Store.StreamVersionConflict
         end)
 
-        decider = init(unquote(decider_mod), stream_name: @stream, max_resync_attempts: 0)
+        decider =
+          init(unquote(decider_mod),
+            stream_name: StreamName.parse!(@stream),
+            max_resync_attempts: 0
+          )
 
         assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "StreamVersionConflict"
       end
@@ -185,7 +208,11 @@ defmodule Equinox.DeciderTest do
           State.new(3, 1)
         end)
 
-        decider = init(unquote(decider_mod), stream_name: @stream, max_sync_attempts: 2)
+        decider =
+          init(unquote(decider_mod),
+            stream_name: StreamName.parse!(@stream),
+            max_sync_attempts: 2
+          )
 
         assert {:ok, decider} = Decider.transact(decider, fn _ -> 3 end)
         assert 3 = Decider.query(decider, & &1)
@@ -199,7 +226,11 @@ defmodule Equinox.DeciderTest do
           raise RuntimeError
         end)
 
-        decider = init(unquote(decider_mod), stream_name: @stream, max_sync_attempts: 1)
+        decider =
+          init(unquote(decider_mod),
+            stream_name: StreamName.parse!(@stream),
+            max_sync_attempts: 1
+          )
 
         assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "RuntimeError"
       end
@@ -212,7 +243,11 @@ defmodule Equinox.DeciderTest do
           raise Codec.CodecError, message: "codec error"
         end)
 
-        decider = init(unquote(decider_mod), stream_name: @stream, max_sync_attempts: 2)
+        decider =
+          init(unquote(decider_mod),
+            stream_name: StreamName.parse!(@stream),
+            max_sync_attempts: 2
+          )
 
         assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "CodecError"
       end
@@ -225,7 +260,11 @@ defmodule Equinox.DeciderTest do
           raise Fold.FoldError, message: "fold error"
         end)
 
-        decider = init(unquote(decider_mod), stream_name: @stream, max_sync_attempts: 2)
+        decider =
+          init(unquote(decider_mod),
+            stream_name: StreamName.parse!(@stream),
+            max_sync_attempts: 2
+          )
 
         assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "FoldError"
       end
@@ -236,7 +275,7 @@ defmodule Equinox.DeciderTest do
 
         expect(StoreMock, :sync!, 0, fn @stream, _, _, _, CodecMock, FoldMock -> nil end)
 
-        decider = init(unquote(decider_mod), stream_name: @stream)
+        decider = init(unquote(decider_mod), stream_name: StreamName.parse!(@stream))
 
         assert {:ok, decider} = Decider.transact(decider, fn 0 -> nil end)
         assert {:ok, _decider} = Decider.transact(decider, fn 0 -> [] end)
@@ -248,7 +287,7 @@ defmodule Equinox.DeciderTest do
 
         expect(StoreMock, :sync!, 0, fn @stream, _, _, _, CodecMock, FoldMock -> nil end)
 
-        decider = init(unquote(decider_mod), stream_name: @stream)
+        decider = init(unquote(decider_mod), stream_name: StreamName.parse!(@stream))
 
         assert {:error, :custom_error} =
                  Decider.transact(decider, fn 0 -> {:error, :custom_error} end)
@@ -260,7 +299,7 @@ defmodule Equinox.DeciderTest do
 
         expect(StoreMock, :sync!, 0, fn @stream, _, _, _, CodecMock, FoldMock -> nil end)
 
-        decider = init(unquote(decider_mod), stream_name: @stream)
+        decider = init(unquote(decider_mod), stream_name: StreamName.parse!(@stream))
 
         assert capture_crash(fn -> Decider.transact(decider, fn _ -> raise RuntimeError end) end) =~
                  "DecisionError"
