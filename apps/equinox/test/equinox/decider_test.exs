@@ -93,14 +93,14 @@ defmodule Equinox.DeciderTest do
         assert :value = Decider.query(decider, & &1)
       end
 
-      test "query callback exceptions are reraised as QueryError" do
+      test "query callback exceptions are not captured" do
         stub(FoldMock, :initial, fn -> :initial end)
         stub(StoreMock, :load!, fn _, %{version: -1}, _, _ -> State.new(:initial, -1) end)
 
         decider = init(unquote(decider_mod))
 
         assert capture_crash(fn -> Decider.query(decider, fn _state -> raise RuntimeError end) end) =~
-                 "QueryError"
+                 "RuntimeError"
       end
     end
 
@@ -293,7 +293,7 @@ defmodule Equinox.DeciderTest do
                  Decider.transact(decider, fn 0 -> {:error, :custom_error} end)
       end
 
-      test "decision callback exceptions are reraised as DecisionError" do
+      test "decision callback exceptions are not captured" do
         stub(FoldMock, :initial, fn -> 0 end)
         stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
 
@@ -302,7 +302,7 @@ defmodule Equinox.DeciderTest do
         decider = init(unquote(decider_mod), stream_name: StreamName.parse!(@stream))
 
         assert capture_crash(fn -> Decider.transact(decider, fn _ -> raise RuntimeError end) end) =~
-                 "DecisionError"
+                 "RuntimeError"
       end
     end
   end)

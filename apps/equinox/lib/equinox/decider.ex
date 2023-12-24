@@ -17,16 +17,7 @@ defmodule Equinox.Decider do
     end
 
     @spec execute(t(), State.value()) :: any()
-    def execute(query_fun, state_value) do
-      try do
-        query_fun.(state_value)
-      rescue
-        exception ->
-          reraise QueryError,
-                  [message: Exception.message(exception), exception: exception],
-                  __STACKTRACE__
-      end
-    end
+    def execute(query_fun, state_value), do: query_fun.(state_value)
   end
 
   defmodule DecideFunction do
@@ -49,17 +40,10 @@ defmodule Equinox.Decider do
 
     @spec execute(t(), State.value()) :: {:ok, list(DomainEvent.t())} | {:error, term()}
     def execute(decide_fun, state_value) do
-      try do
-        case decide_fun.(state_value) do
-          {:error, error} -> {:error, error}
-          {:ok, event_or_events} -> {:ok, List.wrap(event_or_events)}
-          nil_or_event_or_events -> {:ok, List.wrap(nil_or_event_or_events)}
-        end
-      rescue
-        exception ->
-          reraise DecisionError,
-                  [message: Exception.message(exception), exception: exception],
-                  __STACKTRACE__
+      case decide_fun.(state_value) do
+        {:error, error} -> {:error, error}
+        {:ok, event_or_events} -> {:ok, List.wrap(event_or_events)}
+        nil_or_event_or_events -> {:ok, List.wrap(nil_or_event_or_events)}
       end
     end
   end
