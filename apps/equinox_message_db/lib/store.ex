@@ -48,4 +48,37 @@ defmodule Equinox.MessageDb.Store do
 
     defdelegate sync!(conn, stream_name, state, events, ctx, codec, fold), to: Unoptimized
   end
+
+  defmacro __using__(opts) do
+    w_conn = Keyword.fetch!(opts, :write_connection)
+    r_conn = Keyword.fetch!(opts, :read_connection)
+
+    quote do
+      alias Equinox.MessageDb.Store
+
+      defmodule Unoptimized do
+        @behaviour Equinox.Store
+
+        def sync!(stream, state, events, ctx, codec, fold) do
+          Store.Unoptimized.sync!(unquote(w_conn), stream, state, events, ctx, codec, fold)
+        end
+
+        def load!(stream, state, codec, fold) do
+          Store.Unoptimized.load!(unquote(r_conn), stream, state, codec, fold)
+        end
+      end
+
+      defmodule LatestKnownEvent do
+        @behaviour Equinox.Store
+
+        def sync!(stream, state, events, ctx, codec, fold) do
+          Store.LatestKnownEvent.sync!(unquote(w_conn), stream, state, events, ctx, codec, fold)
+        end
+
+        def load!(stream, state, codec, fold) do
+          Store.LatestKnownEvent.load!(unquote(r_conn), stream, state, codec, fold)
+        end
+      end
+    end
+  end
 end
