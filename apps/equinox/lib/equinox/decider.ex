@@ -89,11 +89,11 @@ defmodule Equinox.Decider do
     @type option ::
             {:max_load_attempts, pos_integer()}
             | {:max_sync_attempts, pos_integer()}
-            | {:max_resync_attempts, pos_integer()}
+            | {:max_resync_attempts, non_neg_integer()}
 
     @default_opts [
-      max_load_attempts: 3,
-      max_sync_attempts: 3,
+      max_load_attempts: 2,
+      max_sync_attempts: 2,
       max_resync_attempts: 1
     ]
 

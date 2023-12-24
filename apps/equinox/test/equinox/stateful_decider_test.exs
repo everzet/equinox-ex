@@ -188,8 +188,8 @@ defmodule Equinox.StatefulDeciderTest do
       codec: CodecMock,
       fold: FoldMock,
       opts: [
-        max_load_attempts: Keyword.get(attrs, :max_load_attempts, 3),
-        max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 3),
+        max_load_attempts: Keyword.get(attrs, :max_load_attempts, 2),
+        max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 2),
         max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 1),
         on_init: fn ->
           allow(LifetimeMock, test_pid, self())

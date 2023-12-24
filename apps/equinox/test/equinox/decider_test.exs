@@ -45,13 +45,13 @@ defmodule Equinox.DeciderTest do
       test "gracefully handles event fetch exceptions by retrying" do
         stub(FoldMock, :initial, fn -> :initial end)
 
-        expect(StoreMock, :fetch_timeline_events, 2, fn @stream, -1 ->
+        expect(StoreMock, :fetch_timeline_events, fn @stream, -1 ->
           Stream.repeatedly(fn -> raise RuntimeError end)
         end)
 
         expect(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
 
-        decider = init(unquote(decider_mod), stream_name: @stream)
+        decider = init(unquote(decider_mod), stream_name: @stream, max_load_attempts: 2)
         assert :initial = Decider.query(decider, & &1)
       end
 
@@ -169,7 +169,7 @@ defmodule Equinox.DeciderTest do
 
         # no events on initial load, so state is `0`
         expect(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
-        decider = init(unquote(decider_mod), stream_name: @stream)
+        decider = init(unquote(decider_mod), stream_name: @stream, max_resync_attempts: 1)
 
         # failing to write result of `0 + 3 = 3` decision due to stream version conflict
         expect(StoreMock, :write_event_data, fn @stream, [%{data: 3}], -1 ->
@@ -216,12 +216,10 @@ defmodule Equinox.DeciderTest do
         stub(CodecMock, :decode, &{:ok, &1.data})
 
         expect(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
-
-        expect(StoreMock, :write_event_data, 2, fn @stream, _, -1 -> {:error, %RuntimeError{}} end)
-
+        expect(StoreMock, :write_event_data, fn @stream, _, -1 -> {:error, %RuntimeError{}} end)
         expect(StoreMock, :write_event_data, fn @stream, events, -1 -> {:ok, length(events)} end)
 
-        decider = init(unquote(decider_mod), stream_name: @stream)
+        decider = init(unquote(decider_mod), stream_name: @stream, max_sync_attempts: 2)
 
         assert {:ok, decider} = Decider.transact(decider, fn _ -> 3 end)
         assert 3 = Decider.query(decider, & &1)
@@ -234,10 +232,10 @@ defmodule Equinox.DeciderTest do
         stub(CodecMock, :decode, &{:ok, &1.data})
 
         expect(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
-        expect(StoreMock, :write_event_data, 2, fn @stream, _, -1 -> raise RuntimeError end)
+        expect(StoreMock, :write_event_data, fn @stream, _, -1 -> raise RuntimeError end)
         expect(StoreMock, :write_event_data, fn @stream, events, -1 -> {:ok, length(events)} end)
 
-        decider = init(unquote(decider_mod), stream_name: @stream)
+        decider = init(unquote(decider_mod), stream_name: @stream, max_sync_attempts: 2)
 
         assert {:ok, decider} = Decider.transact(decider, fn _ -> 3 end)
         assert 3 = Decider.query(decider, & &1)
@@ -340,8 +338,8 @@ defmodule Equinox.DeciderTest do
       codec: CodecMock,
       fold: FoldMock,
       opts: [
-        max_load_attempts: Keyword.get(attrs, :max_load_attempts, 3),
-        max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 3),
+        max_load_attempts: Keyword.get(attrs, :max_load_attempts, 2),
+        max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 2),
         max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 1)
       ]
     )
@@ -361,8 +359,8 @@ defmodule Equinox.DeciderTest do
       codec: CodecMock,
       fold: FoldMock,
       opts: [
-        max_load_attempts: Keyword.get(attrs, :max_load_attempts, 3),
-        max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 3),
+        max_load_attempts: Keyword.get(attrs, :max_load_attempts, 2),
+        max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 2),
         max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 1),
         on_init: fn ->
           allow(StoreMock, test_pid, self())
