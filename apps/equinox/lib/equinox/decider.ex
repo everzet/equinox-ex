@@ -191,12 +191,12 @@ defmodule Equinox.Decider do
     alias Equinox.Decider.Stateless
     alias Equinox.{Decider, Lifetime, Store, Codec, Fold}
 
-    @enforce_keys [:stream_name, :supervisor, :registry, :store, :codec, :fold]
+    @enforce_keys [:stream_name, :supervisor, :registry, :lifetime, :store, :codec, :fold]
     defstruct stream_name: nil,
               server_name: nil,
               supervisor: nil,
               registry: nil,
-              lifetime: Lifetime.StayAliveFor30Seconds,
+              lifetime: nil,
               store: nil,
               codec: nil,
               fold: nil,
