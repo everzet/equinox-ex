@@ -12,8 +12,11 @@ defmodule Equinox.State do
   @type fetch_function! :: (-> Enumerable.t(TimelineEvent.t()))
   @type write_function! :: (Enumerable.t(EventData.t()) -> Store.written_position())
 
+  @spec new(value(), version()) :: t()
+  def new(value, version), do: %__MODULE__{value: value, version: version}
+
   @spec init(Fold.t()) :: t()
-  def init(fold), do: %__MODULE__{value: fold.initial(), version: -1}
+  def init(fold), do: new(fold.initial(), -1)
 
   @spec fold(t(), Enumerable.t(DomainEvent.indexed()), Fold.t()) :: State.t()
   def fold(%__MODULE__{} = state, domain_events, fold) do
