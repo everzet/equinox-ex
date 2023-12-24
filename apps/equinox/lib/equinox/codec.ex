@@ -66,7 +66,7 @@ defmodule Equinox.Codec do
         exception in [ArgumentError] ->
           {:error,
            %CodecError{
-             message: "#{inspect(__MODULE__)}.decode: #{inspect(exception)}"
+             message: "#{inspect(__MODULE__)}.decode: #{Exception.message(exception)}"
            }}
       end
     end
@@ -78,7 +78,8 @@ defmodule Equinox.Codec do
       try do
         case codec.encode(domain_event, ctx) do
           {:ok, timeline_event} -> timeline_event
-          {:error, exception} -> raise exception
+          {:error, exception} when is_exception(exception) -> raise exception
+          {:error, term} -> raise RuntimeError, message: inspect(term)
         end
       rescue
         exception in [CodecError] ->
@@ -87,7 +88,7 @@ defmodule Equinox.Codec do
         exception ->
           reraise CodecError,
                   [
-                    message: "#{inspect(codec)}.encode: #{inspect(exception)}",
+                    message: "#{inspect(codec)}.encode: #{Exception.message(exception)}",
                     exception: exception
                   ],
                   __STACKTRACE__
@@ -101,7 +102,8 @@ defmodule Equinox.Codec do
       try do
         case codec.decode(timeline_event) do
           {:ok, domain_event} -> {domain_event, timeline_event.position}
-          {:error, exception} -> raise exception
+          {:error, exception} when is_exception(exception) -> raise exception
+          {:error, term} -> raise RuntimeError, message: inspect(term)
         end
       rescue
         exception in [CodecError] ->
@@ -110,7 +112,7 @@ defmodule Equinox.Codec do
         exception ->
           reraise CodecError,
                   [
-                    message: "#{inspect(codec)}.decode: #{inspect(exception)}",
+                    message: "#{inspect(codec)}.decode: #{Exception.message(exception)}",
                     exception: exception
                   ],
                   __STACKTRACE__
