@@ -22,12 +22,12 @@ defmodule Equinox.StatefulDeciderTest do
       expect(StoreMock, :fetch_timeline_events, 2, fn _, -1 -> [] end)
 
       {:ok, initial_pid} = Decider.Stateful.start_server(decider)
-      assert initial_pid == GenServer.whereis(decider.process_name)
+      assert initial_pid == GenServer.whereis(decider.server_name)
 
       capture_exit(fn -> Decider.transact(initial_pid, fn _ -> raise RuntimeError end) end)
       refute Process.alive?(initial_pid)
 
-      new_pid = GenServer.whereis(decider.process_name)
+      new_pid = GenServer.whereis(decider.server_name)
       assert Process.alive?(new_pid)
       assert new_pid != initial_pid
     end
@@ -52,7 +52,7 @@ defmodule Equinox.StatefulDeciderTest do
       Process.sleep(100)
 
       refute Process.alive?(pid)
-      assert GenServer.whereis(decider.process_name) == nil
+      assert GenServer.whereis(decider.server_name) == nil
     end
   end
 
@@ -189,7 +189,7 @@ defmodule Equinox.StatefulDeciderTest do
       fold: FoldMock,
       opts: [
         max_load_attempts: Keyword.get(attrs, :max_load_attempts, 3),
-        max_write_attempts: Keyword.get(attrs, :max_write_attempts, 3),
+        max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 3),
         max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 1),
         on_init: fn ->
           allow(LifetimeMock, test_pid, self())

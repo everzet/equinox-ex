@@ -126,7 +126,7 @@ defmodule Equinox.DeciderTest do
       test "executes decision callback, writes events it produces and folds them back into the state" do
         stub(FoldMock, :initial, fn -> 0 end)
         stub(FoldMock, :evolve, &(&1 + &2))
-        stub(CodecMock, :encode, fn e, :context -> {:ok, build(:event_data, data: e)} end)
+        stub(CodecMock, :encode, fn e, :ctx -> {:ok, build(:event_data, data: e)} end)
         stub(CodecMock, :decode, &{:ok, &1.data})
         stub(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
 
@@ -137,7 +137,7 @@ defmodule Equinox.DeciderTest do
 
         decider = init(unquote(decider_mod), stream_name: @stream)
 
-        assert {:ok, decider} = Decider.transact(decider, fn 0 = _state -> [2, 3] end, :context)
+        assert {:ok, decider} = Decider.transact(decider, fn 0 = _state -> [2, 3] end, :ctx)
         assert 5 = Decider.query(decider, & &1)
       end
 
@@ -243,7 +243,7 @@ defmodule Equinox.DeciderTest do
         assert 3 = Decider.query(decider, & &1)
       end
 
-      test "does not retry writes past max_write_attempts option" do
+      test "does not retry writes past max_sync_attempts option" do
         stub(FoldMock, :initial, fn -> 0 end)
         stub(FoldMock, :evolve, &(&1 + &2))
         stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
@@ -252,7 +252,7 @@ defmodule Equinox.DeciderTest do
         expect(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
         expect(StoreMock, :write_event_data, fn @stream, _, -1 -> raise RuntimeError end)
 
-        decider = init(unquote(decider_mod), stream_name: @stream, max_write_attempts: 1)
+        decider = init(unquote(decider_mod), stream_name: @stream, max_sync_attempts: 1)
 
         assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "RuntimeError"
       end
@@ -341,7 +341,7 @@ defmodule Equinox.DeciderTest do
       fold: FoldMock,
       opts: [
         max_load_attempts: Keyword.get(attrs, :max_load_attempts, 3),
-        max_write_attempts: Keyword.get(attrs, :max_write_attempts, 3),
+        max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 3),
         max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 1)
       ]
     )
@@ -362,7 +362,7 @@ defmodule Equinox.DeciderTest do
       fold: FoldMock,
       opts: [
         max_load_attempts: Keyword.get(attrs, :max_load_attempts, 3),
-        max_write_attempts: Keyword.get(attrs, :max_write_attempts, 3),
+        max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 3),
         max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 1),
         on_init: fn ->
           allow(StoreMock, test_pid, self())

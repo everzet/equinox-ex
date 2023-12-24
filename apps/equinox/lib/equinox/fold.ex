@@ -13,8 +13,8 @@ defmodule Equinox.Fold do
     @type t :: %__MODULE__{message: String.t(), exception: nil | Exception.t()}
   end
 
-  @spec fold(t(), State.t(), Enumerable.t(DomainEvent.indexed())) :: State.t()
-  def fold(fold, state, domain_events) do
+  @spec fold(Enumerable.t(DomainEvent.indexed()), State.t(), t()) :: State.t()
+  def fold(domain_events, state, fold) do
     Enum.reduce(domain_events, state, fn {event, position}, state ->
       try do
         %State{value: fold.evolve(state.value, event), version: position}

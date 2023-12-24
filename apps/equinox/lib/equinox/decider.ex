@@ -17,9 +17,9 @@ defmodule Equinox.Decider do
     end
 
     @spec execute(t(), State.value()) :: any()
-    def execute(query_fun, stream_state) do
+    def execute(query_fun, state_value) do
       try do
-        query_fun.(stream_state)
+        query_fun.(state_value)
       rescue
         exception ->
           reraise QueryError,
@@ -48,9 +48,9 @@ defmodule Equinox.Decider do
     end
 
     @spec execute(t(), State.value()) :: {:ok, list(DomainEvent.t())} | {:error, term()}
-    def execute(decide_fun, stream_state) do
+    def execute(decide_fun, state_value) do
       try do
-        case decide_fun.(stream_state) do
+        case decide_fun.(state_value) do
           {:error, error} -> {:error, error}
           {:ok, event_or_events} -> {:ok, List.wrap(event_or_events)}
           nil_or_event_or_events -> {:ok, List.wrap(nil_or_event_or_events)}
@@ -86,20 +86,26 @@ defmodule Equinox.Decider do
             opts: list(option())
           }
 
-    @default_max_load_attempts 3
-    @default_max_write_attempts 3
-    @default_max_resync_attempts 1
-
     @type option ::
             {:max_load_attempts, pos_integer()}
-            | {:max_write_attempts, pos_integer()}
+            | {:max_sync_attempts, pos_integer()}
             | {:max_resync_attempts, pos_integer()}
+
+    @default_opts [
+      max_load_attempts: 3,
+      max_sync_attempts: 3,
+      max_resync_attempts: 1
+    ]
 
     @spec for_stream(StreamName.t(), Enumerable.t()) :: t()
     def for_stream(%StreamName{} = stream_name, opts) do
-      opts = Keyword.put(opts, :stream_name, stream_name)
-      decider = struct!(__MODULE__, opts)
-      %{decider | state: State.new(decider.fold.initial())}
+      decider =
+        opts
+        |> Keyword.put(:stream_name, stream_name)
+        |> Keyword.update(:opts, @default_opts, &Keyword.merge(@default_opts, &1))
+        |> then(&struct!(__MODULE__, &1))
+
+      %{decider | state: State.init(decider.fold)}
     end
 
     @spec load(t()) :: t()
@@ -133,7 +139,7 @@ defmodule Equinox.Decider do
               if(resync_attempt >= max_resync_attempts(decider), do: raise(exception))
 
               decider
-              |> load_state_with_retry(1)
+              |> load_state_with_retry()
               |> transact_with_resync(decide, ctx, resync_attempt + 1)
           end
       end
@@ -142,7 +148,7 @@ defmodule Equinox.Decider do
     defp sync_state_with_retry(%__MODULE__{} = decider, ctx, events, attempt \\ 1) do
       try do
         new_state =
-          State.sync(decider.state, ctx, decider.codec, decider.fold, events, fn data ->
+          State.sync!(decider.state, events, ctx, decider.codec, decider.fold, fn data ->
             case decider.store.write_event_data(decider.stream_name, data, decider.state.version) do
               {:ok, new_version} -> new_version
               {:error, exception} -> raise exception
@@ -155,7 +161,7 @@ defmodule Equinox.Decider do
           reraise exception, __STACKTRACE__
 
         exception ->
-          if(attempt >= max_write_attempts(decider), do: reraise(exception, __STACKTRACE__))
+          if(attempt >= max_sync_attempts(decider), do: reraise(exception, __STACKTRACE__))
           sync_state_with_retry(decider, ctx, events, attempt + 1)
       end
     end
@@ -163,7 +169,7 @@ defmodule Equinox.Decider do
     defp load_state_with_retry(%__MODULE__{} = decider, attempt \\ 1) do
       try do
         new_state =
-          State.load(decider.state, decider.codec, decider.fold, fn ->
+          State.load!(decider.state, decider.codec, decider.fold, fn ->
             decider.store.fetch_timeline_events(decider.stream_name, decider.state.version)
           end)
 
@@ -178,14 +184,9 @@ defmodule Equinox.Decider do
       end
     end
 
-    defp max_load_attempts(%__MODULE__{} = decider),
-      do: Keyword.get(decider.opts, :max_load_attempts, @default_max_load_attempts)
-
-    defp max_write_attempts(%__MODULE__{} = decider),
-      do: Keyword.get(decider.opts, :max_write_attempts, @default_max_write_attempts)
-
-    defp max_resync_attempts(%__MODULE__{} = decider),
-      do: Keyword.get(decider.opts, :max_resync_attempts, @default_max_resync_attempts)
+    defp max_load_attempts(%__MODULE__{opts: o}), do: Keyword.fetch!(o, :max_load_attempts)
+    defp max_sync_attempts(%__MODULE__{opts: o}), do: Keyword.fetch!(o, :max_sync_attempts)
+    defp max_resync_attempts(%__MODULE__{opts: o}), do: Keyword.fetch!(o, :max_resync_attempts)
   end
 
   defmodule Stateful do
@@ -197,7 +198,7 @@ defmodule Equinox.Decider do
 
     @enforce_keys [:stream_name, :supervisor, :registry, :store, :codec, :fold]
     defstruct stream_name: nil,
-              process_name: nil,
+              server_name: nil,
               supervisor: nil,
               registry: nil,
               lifetime: Lifetime.StayAliveFor30Seconds,
@@ -212,7 +213,7 @@ defmodule Equinox.Decider do
 
     @type t :: %__MODULE__{
             stream_name: StreamName.t(),
-            process_name: GenServer.server(),
+            server_name: GenServer.server(),
             supervisor: :disabled | GenServer.server(),
             registry: :disabled | :global | GenServer.server(),
             lifetime: Lifetime.t(),
@@ -224,23 +225,29 @@ defmodule Equinox.Decider do
 
     @spec for_stream(StreamName.t(), Enumerable.t()) :: t()
     def for_stream(%StreamName{} = stream_name, opts) do
-      decider = struct!(__MODULE__, Keyword.put(opts, :stream_name, stream_name))
+      decider =
+        opts
+        |> Keyword.put(:stream_name, stream_name)
+        |> then(&struct!(__MODULE__, &1))
 
-      process_name =
+      server_name =
         case decider.registry do
           :disabled -> nil
           :global -> {:global, String.Chars.to_string(decider.stream_name)}
           module -> {:via, Registry, {module, String.Chars.to_string(decider.stream_name)}}
         end
 
-      %{decider | process_name: process_name}
+      %{decider | server_name: server_name}
     end
 
     @spec to_stateless(t()) :: Stateless.t()
     def to_stateless(%__MODULE__{} = decider) do
-      stream_name = decider.stream_name
-      opts = decider |> Map.take([:store, :codec, :fold, :opts]) |> Map.to_list()
-      Stateless.for_stream(stream_name, opts)
+      Stateless.for_stream(decider.stream_name,
+        store: decider.store,
+        codec: decider.codec,
+        fold: decider.fold,
+        opts: decider.opts
+      )
     end
 
     @spec start_server(t()) :: GenServer.on_start() | DynamicSupervisor.on_start_child()
@@ -253,10 +260,10 @@ defmodule Equinox.Decider do
 
     @spec start_link(t()) :: GenServer.on_start()
     def start_link(%__MODULE__{} = decider) do
-      GenServer.start_link(__MODULE__, decider, name: decider.process_name)
+      GenServer.start_link(__MODULE__, decider, name: decider.server_name)
     end
 
-    @spec start_supervised(t(), module()) :: DynamicSupervisor.on_start_child()
+    @spec start_supervised(t(), sup :: GenServer.server()) :: DynamicSupervisor.on_start_child()
     def start_supervised(%__MODULE__{} = decider, supervisor) do
       DynamicSupervisor.start_child(supervisor, {__MODULE__, decider})
     end
@@ -289,14 +296,14 @@ defmodule Equinox.Decider do
     end
 
     defp ensure_process_alive!(%__MODULE__{} = decider, fun) do
-      case decider.process_name do
+      case decider.server_name do
         nil ->
           raise Decider.DeciderError,
             message: "ensure_process_alive!: On-demand spawning requires registry"
 
-        via_registry ->
+        server_name ->
           try do
-            fun.(via_registry)
+            fun.(server_name)
           catch
             :exit, {:noproc, _} -> with({:ok, pid} <- start_server(decider), do: fun.(pid))
           end
@@ -308,15 +315,13 @@ defmodule Equinox.Decider do
     @impl GenServer
     def init(%__MODULE__{} = decider) do
       Keyword.get(decider.opts, :on_init, fn -> nil end).()
-      state = %{decider: to_stateless(decider), lifetime: decider.lifetime}
-      {:ok, state, {:continue, :load}}
+      server = %{decider: to_stateless(decider), lifetime: decider.lifetime}
+      {:ok, server, {:continue, :load}}
     end
 
     @impl GenServer
     def handle_continue(:load, server) do
-      decider = Stateless.load(server.decider)
-
-      {:noreply, %{server | decider: decider},
+      {:noreply, %{server | decider: Stateless.load(server.decider)},
        server.lifetime.after_init(server.decider.state.value)}
     end
 

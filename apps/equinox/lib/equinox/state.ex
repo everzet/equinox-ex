@@ -8,25 +8,29 @@ defmodule Equinox.State do
   @type value :: any()
   @type version :: Store.stream_version()
 
-  @spec new(value()) :: t()
-  def new(value), do: %__MODULE__{value: value, version: -1}
+  @type fetch_function! :: (-> Enumerable.t(TimelineEvent.t()))
+  @type write_function! :: (Enumerable.t(EventData.t()) -> Store.written_position())
 
-  @spec load(t(), Codec.t(), Fold.t(), Store.read()) :: t()
-  def load(%__MODULE__{} = state, codec, fold, read_fun) do
-    read_fun.()
-    |> then(&Codec.decode_timeline_events_with_indexes(codec, &1))
-    |> then(&Fold.fold(fold, state, &1))
+  @spec init(Fold.t()) :: t()
+  def init(fold), do: %__MODULE__{value: fold.initial(), version: -1}
+
+  @spec load!(t(), Codec.t(), Fold.t(), fetch_function!()) :: t()
+  def load!(%__MODULE__{} = state, codec, fold, fetch_fun) do
+    fetch_fun.()
+    |> Codec.decode_all!(codec)
+    |> Fold.fold(state, fold)
   end
 
-  @spec sync(t(), Codec.ctx(), Codec.t(), Fold.t(), list(DomainEvent.t()), Store.write()) :: t()
-  def sync(%__MODULE__{} = state, context, codec, fold, domain_events, write_fun) do
+  @spec sync!(t(), list(DomainEvent.t()), Codec.ctx(), Codec.t(), Fold.t(), write_function!()) ::
+          t()
+  def sync!(%__MODULE__{} = state, domain_events, ctx, codec, fold, write_fun) do
     new_version =
       domain_events
-      |> then(&Codec.encode_domain_events(codec, context, &1))
+      |> Codec.encode_all!(ctx, codec)
       |> write_fun.()
 
     domain_events
     |> Enum.zip((state.version + 1)..new_version)
-    |> then(&Fold.fold(fold, state, &1))
+    |> Fold.fold(state, fold)
   end
 end

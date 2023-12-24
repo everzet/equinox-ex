@@ -6,9 +6,6 @@ defmodule Equinox.Store do
   @type stream_version :: -1 | non_neg_integer()
   @type written_position :: non_neg_integer()
 
-  @type read :: (-> Enumerable.t(TimelineEvent.t()))
-  @type write :: (Enumerable.t(EventData.t()) -> written_position())
-
   @callback fetch_timeline_events(StreamName.t(), from_version :: stream_version()) ::
               Enumerable.t(TimelineEvent.t())
   @callback write_event_data(StreamName.t(), nonempty_list(EventData.t()), stream_version()) ::

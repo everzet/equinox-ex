@@ -2,9 +2,9 @@ defmodule Equinox.Codec do
   alias Equinox.Events.{DomainEvent, EventData, TimelineEvent}
 
   @type t :: module()
-  @type context :: any()
+  @type ctx :: any()
 
-  @callback encode(DomainEvent.t(), context()) :: {:ok, EventData.t()} | {:error, CodecError.t()}
+  @callback encode(DomainEvent.t(), ctx()) :: {:ok, EventData.t()} | {:error, CodecError.t()}
   @callback decode(TimelineEvent.t()) :: {:ok, DomainEvent.t()} | {:error, CodecError.t()}
 
   defmodule CodecError do
@@ -20,7 +20,7 @@ defmodule Equinox.Codec do
         @structs_module unquote(structs_mod)
 
         @impl Equinox.Codec
-        def encode(%{__struct__: struct} = event, _context) do
+        def encode(%{__struct__: struct} = event, _ctx) do
           Equinox.Codec.EventStructs.struct_to_event_data(event, @structs_module)
         end
 
@@ -72,12 +72,11 @@ defmodule Equinox.Codec do
     end
   end
 
-  @spec encode_domain_events(t(), context(), Enumerable.t(DomainEvent.t())) ::
-          Enumerable.t(EventData.t())
-  def encode_domain_events(codec, context, domain_events) do
+  @spec encode_all!(Enumerable.t(DomainEvent.t()), ctx(), t()) :: Enumerable.t(EventData.t())
+  def encode_all!(domain_events, ctx, codec) do
     Enum.map(domain_events, fn domain_event ->
       try do
-        case codec.encode(domain_event, context) do
+        case codec.encode(domain_event, ctx) do
           {:ok, timeline_event} -> timeline_event
           {:error, exception} -> raise exception
         end
@@ -96,9 +95,8 @@ defmodule Equinox.Codec do
     end)
   end
 
-  @spec decode_timeline_events_with_indexes(t(), Enumerable.t(TimelineEvent.t())) ::
-          Enumerable.t(DomainEvent.indexed())
-  def decode_timeline_events_with_indexes(codec, timeline_events) do
+  @spec decode_all!(Enumerable.t(TimelineEvent.t()), t()) :: Enumerable.t(DomainEvent.indexed())
+  def decode_all!(timeline_events, codec) do
     Stream.map(timeline_events, fn timeline_event ->
       try do
         case codec.decode(timeline_event) do
