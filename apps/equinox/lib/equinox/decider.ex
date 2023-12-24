@@ -10,12 +10,6 @@ defmodule Equinox.Decider do
 
     @type t :: (State.value() -> any())
 
-    defmodule QueryError do
-      @enforce_keys [:message, :exception]
-      defexception [:message, :exception]
-      @type t :: %__MODULE__{message: String.t(), exception: Exception.t()}
-    end
-
     @spec execute(t(), State.value()) :: any()
     def execute(query_fun, state_value), do: query_fun.(state_value)
   end
@@ -31,12 +25,6 @@ defmodule Equinox.Decider do
                | list(DomainEvent.t())
                | {:ok, DomainEvent.t() | list(DomainEvent.t())}
                | {:error, term()})
-
-    defmodule DecisionError do
-      @enforce_keys [:message, :exception]
-      defexception [:message, :exception]
-      @type t :: %__MODULE__{message: String.t(), exception: Exception.t()}
-    end
 
     @spec execute(t(), State.value()) :: {:ok, list(DomainEvent.t())} | {:error, term()}
     def execute(decide_fun, state_value) do
