@@ -23,7 +23,7 @@ defmodule Equinox.Decider do
       rescue
         exception ->
           reraise QueryError,
-                  [message: inspect(exception), exception: exception],
+                  [message: Exception.message(exception), exception: exception],
                   __STACKTRACE__
       end
     end
@@ -58,7 +58,7 @@ defmodule Equinox.Decider do
       rescue
         exception ->
           reraise DecisionError,
-                  [message: inspect(exception), exception: exception],
+                  [message: Exception.message(exception), exception: exception],
                   __STACKTRACE__
       end
     end
