@@ -36,7 +36,7 @@ defmodule Equinox.CodecTest do
   end
 
   describe "decode_all!/2" do
-    test "performs Codec.decode/1 on every given indexed event" do
+    test "performs Codec.decode/1 on every given event with position" do
       expect(CodecMock, :decode, fn %{v: :one, position: 3} -> {:ok, 1} end)
       expect(CodecMock, :decode, fn %{v: :two, position: 4} -> {:ok, 2} end)
       result = Codec.decode_all!([%{v: :one, position: 3}, %{v: :two, position: 4}], CodecMock)

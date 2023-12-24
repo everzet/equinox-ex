@@ -96,7 +96,8 @@ defmodule Equinox.Codec do
     end)
   end
 
-  @spec decode_all!(Enumerable.t(TimelineEvent.t()), t()) :: Enumerable.t(DomainEvent.indexed())
+  @spec decode_all!(Enumerable.t(TimelineEvent.t()), t()) ::
+          Enumerable.t(DomainEvent.with_position())
   def decode_all!(timeline_events, codec) do
     Stream.map(timeline_events, fn timeline_event ->
       try do

@@ -19,28 +19,14 @@ defmodule Equinox.State do
   @spec init(Fold.t()) :: t()
   def init(fold), do: new(fold.initial(), -1)
 
-  @spec fold(t(), Enumerable.t(DomainEvent.indexed()), Fold.t()) :: State.t()
-  def fold(%__MODULE__{} = state, domain_events, fold) do
-    Enum.reduce(domain_events, state, fn {event, index}, %{value: value} ->
-      try do
-        %__MODULE__{value: fold.evolve(value, event), version: index}
-      rescue
-        exception ->
-          reraise Fold.FoldError,
-                  [
-                    message: "#{inspect(fold)}.evolve: #{Exception.message(exception)}",
-                    exception: exception
-                  ],
-                  __STACKTRACE__
-      end
-    end)
-  end
+  @spec update(t(), (value() -> value()), version()) :: t()
+  def update(%__MODULE__{value: value}, fun, new_version), do: new(fun.(value), new_version)
 
   @spec load!(t(), Codec.t(), Fold.t(), fetch_function!()) :: t()
   def load!(%__MODULE__{} = state, codec, fold, fetch_fun) do
     fetch_fun.()
     |> Codec.decode_all!(codec)
-    |> then(&fold(state, &1, fold))
+    |> Fold.fold(state, fold)
   end
 
   @spec sync!(t(), list(DomainEvent.t()), Codec.ctx(), Codec.t(), Fold.t(), write_function!()) ::
@@ -53,6 +39,6 @@ defmodule Equinox.State do
 
     domain_events
     |> Enum.zip((state.version + 1)..new_version)
-    |> then(&fold(state, &1, fold))
+    |> Fold.fold(state, fold)
   end
 end
