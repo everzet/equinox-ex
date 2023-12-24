@@ -4,10 +4,9 @@ defmodule Equinox.StatefulDeciderTest do
   import Mox
   import ExUnit.CaptureLog
 
-  alias Equinox.TestMocks.{StoreMock, CodecMock, FoldMock, LifetimeMock}
-  alias Equinox.Events.{TimelineEvent, EventData}
   alias Equinox.Stream.StreamName
-  alias Equinox.{Decider, Lifetime, UUID}
+  alias Equinox.{Decider, State, Lifetime}
+  alias Equinox.TestMocks.{StoreMock, CodecMock, FoldMock, LifetimeMock}
 
   setup :verify_on_exit!
 
@@ -19,7 +18,7 @@ defmodule Equinox.StatefulDeciderTest do
       decider = build_decider(supervisor: DeciderTestSupervisor, registry: DeciderTestRegistry)
 
       expect(FoldMock, :initial, 2, fn -> :initial end)
-      expect(StoreMock, :fetch_timeline_events, 2, fn _, -1 -> [] end)
+      expect(StoreMock, :load!, 2, fn _, _, _, _ -> State.new(0, -1) end)
 
       {:ok, initial_pid} = Decider.Stateful.start_server(decider)
       assert initial_pid == GenServer.whereis(decider.server_name)
@@ -44,7 +43,7 @@ defmodule Equinox.StatefulDeciderTest do
         )
 
       expect(FoldMock, :initial, fn -> :initial end)
-      expect(StoreMock, :fetch_timeline_events, fn _, -1 -> [] end)
+      expect(StoreMock, :load!, 1, fn _, %{version: -1}, _, _ -> State.new(0, -1) end)
       expect(LifetimeMock, :after_init, fn _ -> 0 end)
 
       assert {:ok, pid} = Decider.Stateful.start_server(decider)
@@ -64,17 +63,13 @@ defmodule Equinox.StatefulDeciderTest do
       decider = build_decider(stream_name: stream, registry: DeciderTestRegistry)
 
       stub(FoldMock, :initial, fn -> 0 end)
-      stub(FoldMock, :evolve, &(&1 + &2))
-      stub(CodecMock, :encode, fn e, nil -> {:ok, build(:event_data, data: e)} end)
-      stub(CodecMock, :decode, &{:ok, &1.data})
-      stub(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
 
-      stub(StoreMock, :write_event_data, fn ^stream, events, idx ->
-        {:ok, idx + length(events)}
-      end)
+      expect(StoreMock, :load!, fn ^stream, %{version: -1}, _, _ -> State.new(0, -1) end)
+      expect(StoreMock, :sync!, fn ^stream, %{version: -1}, [2], _, _, _ -> State.new(2, 0) end)
+      expect(StoreMock, :sync!, fn ^stream, %{version: 0}, [3], _, _, _ -> State.new(5, 1) end)
 
-      assert {:ok, ^decider} = Decider.transact(decider, fn 0 -> [2] end)
-      assert {:ok, ^decider} = Decider.transact(decider, fn 2 -> [3] end)
+      assert {:ok, ^decider} = Decider.transact(decider, fn 0 -> 2 end)
+      assert {:ok, ^decider} = Decider.transact(decider, fn 2 -> 3 end)
       assert 5 = Decider.query(decider, & &1)
     end
 
@@ -82,17 +77,17 @@ defmodule Equinox.StatefulDeciderTest do
       start_supervised!({Registry, keys: :unique, name: DeciderTestRegistry})
 
       stub(FoldMock, :initial, fn -> 0 end)
-      stub(FoldMock, :evolve, &(&1 + &2))
-      stub(CodecMock, :encode, fn e, nil -> {:ok, build(:event_data, data: e)} end)
-      stub(CodecMock, :decode, &{:ok, &1.data})
-      stub(StoreMock, :fetch_timeline_events, fn _, -1 -> [] end)
-      stub(StoreMock, :write_event_data, fn _, events, idx -> {:ok, idx + length(events)} end)
 
       stream_1 = StreamName.parse!("Invoice-1")
+      stream_2 = StreamName.parse!("Invoice-2")
+
+      expect(StoreMock, :load!, 2, fn _, %{version: -1}, _, _ -> State.new(0, -1) end)
+      expect(StoreMock, :sync!, fn ^stream_1, %{version: -1}, [2], _, _, _ -> State.new(2, 0) end)
+      expect(StoreMock, :sync!, fn ^stream_2, %{version: -1}, [3], _, _, _ -> State.new(3, 0) end)
+
       decider_1 = build_decider(stream_name: stream_1, registry: DeciderTestRegistry)
       assert {:ok, ^decider_1} = Decider.transact(decider_1, fn 0 -> [2] end)
 
-      stream_2 = StreamName.parse!("Invoice-2")
       decider_2 = build_decider(stream_name: stream_2, registry: DeciderTestRegistry)
       assert {:ok, ^decider_2} = Decider.transact(decider_2, fn 0 -> [3] end)
 
@@ -107,7 +102,7 @@ defmodule Equinox.StatefulDeciderTest do
       decider = build_decider(stream_name: stream, lifetime: LifetimeMock)
 
       stub(FoldMock, :initial, fn -> 0 end)
-      stub(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
+      stub(StoreMock, :load!, fn _, %{version: -1}, _, _ -> State.new(0, -1) end)
 
       expect(LifetimeMock, :after_init, fn _ -> 0 end)
       {:ok, pid} = Decider.Stateful.start_server(decider)
@@ -125,7 +120,7 @@ defmodule Equinox.StatefulDeciderTest do
       decider = build_decider(stream_name: stream, lifetime: LifetimeMock)
 
       stub(FoldMock, :initial, fn -> 0 end)
-      stub(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
+      stub(StoreMock, :load!, fn _, %{version: -1}, _, _ -> State.new(0, -1) end)
       stub(LifetimeMock, :after_init, fn _ -> :timer.seconds(10) end)
 
       expect(LifetimeMock, :after_query, fn _ -> 0 end)
@@ -146,7 +141,7 @@ defmodule Equinox.StatefulDeciderTest do
       decider = build_decider(stream_name: stream, lifetime: LifetimeMock)
 
       stub(FoldMock, :initial, fn -> 0 end)
-      stub(StoreMock, :fetch_timeline_events, fn ^stream, -1 -> [] end)
+      stub(StoreMock, :load!, fn _, %{version: -1}, _, _ -> State.new(0, -1) end)
       stub(LifetimeMock, :after_init, fn _ -> :timer.seconds(10) end)
 
       expect(LifetimeMock, :after_transact, fn _ -> 0 end)
@@ -198,28 +193,6 @@ defmodule Equinox.StatefulDeciderTest do
           allow(FoldMock, test_pid, self())
         end
       ]
-    )
-  end
-
-  defp build(:event_data, attrs) do
-    EventData.new(
-      id: Keyword.get(attrs, :id, UUID.generate()),
-      type: Keyword.get(attrs, :type, "TestEvent"),
-      data: Keyword.get(attrs, :data),
-      metadata: Keyword.get(attrs, :metadata)
-    )
-  end
-
-  defp build(:timeline_event, attrs) do
-    TimelineEvent.new(
-      id: Keyword.get(attrs, :id, UUID.generate()),
-      type: Keyword.get(attrs, :type, "TestEvent"),
-      stream_name: Keyword.get(attrs, :stream_name, "TestStream"),
-      position: Keyword.get(attrs, :position, 0),
-      global_position: Keyword.get(attrs, :global_position, 0),
-      data: Keyword.get(attrs, :data),
-      metadata: Keyword.get(attrs, :metadata),
-      time: NaiveDateTime.utc_now()
     )
   end
 end

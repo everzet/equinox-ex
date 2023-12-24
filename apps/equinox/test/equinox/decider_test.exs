@@ -4,11 +4,9 @@ defmodule Equinox.DeciderTest do
   import Mox
   import ExUnit.CaptureLog
 
-  alias Equinox.TestMocks.{StoreMock, CodecMock, FoldMock}
-  alias Equinox.Events.{TimelineEvent, EventData}
-  alias Equinox.Store.StreamVersionConflict
   alias Equinox.Stream.StreamName
-  alias Equinox.{Decider, Lifetime, UUID}
+  alias Equinox.{State, Store, Codec, Fold, Decider, Lifetime}
+  alias Equinox.TestMocks.{StoreMock, CodecMock, FoldMock}
 
   setup :verify_on_exit!
 
@@ -17,39 +15,20 @@ defmodule Equinox.DeciderTest do
     describe "#{inspect(decider_mod)} initialization" do
       @stream StreamName.parse!("Invoice-1")
 
-      test "sets state to initial if stream is empty" do
-        stub(FoldMock, :initial, fn -> :initial end)
-        stub(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
-
-        decider = init(unquote(decider_mod), stream_name: @stream)
-        assert :initial = Decider.query(decider, & &1)
-      end
-
-      test "folds events into initial state if stream has some" do
-        stub(CodecMock, :decode, &{:ok, &1.data})
+      test "loads stream state" do
         stub(FoldMock, :initial, fn -> 1 end)
-        stub(FoldMock, :evolve, &(&1 + &2))
 
-        expect(StoreMock, :fetch_timeline_events, fn @stream, -1 ->
-          [
-            build(:timeline_event, data: 1),
-            build(:timeline_event, data: 2),
-            build(:timeline_event, data: 3)
-          ]
-        end)
+        expect(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(7, 2) end)
 
         decider = init(unquote(decider_mod), stream_name: @stream)
         assert 7 = Decider.query(decider, & &1)
       end
 
-      test "gracefully handles event fetch exceptions by retrying" do
+      test "gracefully handles load exceptions by retrying" do
         stub(FoldMock, :initial, fn -> :initial end)
 
-        expect(StoreMock, :fetch_timeline_events, fn @stream, -1 ->
-          Stream.repeatedly(fn -> raise RuntimeError end)
-        end)
-
-        expect(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
+        expect(StoreMock, :load!, fn @stream, _, _, _ -> raise RuntimeError end)
+        expect(StoreMock, :load!, fn @stream, _, _, _ -> State.new(:initial, -1) end)
 
         decider = init(unquote(decider_mod), stream_name: @stream, max_load_attempts: 2)
         assert :initial = Decider.query(decider, & &1)
@@ -58,60 +37,51 @@ defmodule Equinox.DeciderTest do
       test "does not retry past max_load_attempts option" do
         stub(FoldMock, :initial, fn -> :initial end)
 
-        expect(StoreMock, :fetch_timeline_events, 2, fn @stream, -1 ->
-          Stream.repeatedly(fn -> raise RuntimeError end)
-        end)
+        expect(StoreMock, :load!, 2, fn @stream, %{version: -1}, _, _ -> raise RuntimeError end)
 
         assert capture_crash(fn ->
                  init(unquote(decider_mod), stream_name: @stream, max_load_attempts: 2)
                end) =~ "RuntimeError"
       end
 
-      test "codec errors never trigger fetch retries as they should be unrecoverable" do
+      test "codec errors never trigger load retries as they should be unrecoverable" do
         stub(FoldMock, :initial, fn -> :initial end)
-        stub(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [build(:timeline_event)] end)
 
-        expect(CodecMock, :decode, fn _ -> {:error, %RuntimeError{}} end)
+        expect(StoreMock, :load!, 1, fn @stream, %{version: -1}, _, _ ->
+          raise Codec.CodecError, message: "codec error"
+        end)
 
-        assert capture_crash(fn -> init(unquote(decider_mod), stream_name: @stream) end) =~
-                 "RuntimeError"
-      end
-
-      test "codec exceptions never trigger fetch retries as they should be unrecoverable" do
-        stub(FoldMock, :initial, fn -> :initial end)
-        stub(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [build(:timeline_event)] end)
-
-        expect(CodecMock, :decode, fn _ -> raise RuntimeError end)
-
-        assert capture_crash(fn -> init(unquote(decider_mod), stream_name: @stream) end) =~
-                 "RuntimeError"
+        assert capture_crash(fn ->
+                 init(unquote(decider_mod), stream_name: @stream, max_load_attempts: 2)
+               end) =~ "CodecError"
       end
 
       test "fold exceptions never trigger fetch retries as they should be unrecoberable" do
         stub(FoldMock, :initial, fn -> :initial end)
-        stub(CodecMock, :decode, &{:ok, &1.data})
-        stub(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [build(:timeline_event)] end)
 
-        expect(FoldMock, :evolve, fn _, _ -> raise RuntimeError end)
+        expect(StoreMock, :load!, 1, fn @stream, %{version: -1}, _, _ ->
+          raise Fold.FoldError, message: "fold error"
+        end)
 
-        assert capture_crash(fn -> init(unquote(decider_mod), stream_name: @stream) end) =~
-                 "FoldError"
+        assert capture_crash(fn ->
+                 init(unquote(decider_mod), stream_name: @stream, max_load_attempts: 2)
+               end) =~ "FoldError"
       end
     end
 
     describe "#{inspect(decider_mod)}.query/2" do
       test "executes query callback with current decider state and returns whatever it returns" do
-        stub(FoldMock, :initial, fn -> :some_value end)
-        stub(StoreMock, :fetch_timeline_events, fn _stream, _pos -> [] end)
+        stub(FoldMock, :initial, fn -> :value end)
+        stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(:value, -1) end)
 
         decider = init(unquote(decider_mod))
 
-        assert :some_value = Decider.query(decider, & &1)
+        assert :value = Decider.query(decider, & &1)
       end
 
       test "query callback exceptions are reraised as QueryError" do
         stub(FoldMock, :initial, fn -> :initial end)
-        stub(StoreMock, :fetch_timeline_events, fn _stream, _pos -> [] end)
+        stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(:initial, -1) end)
 
         decider = init(unquote(decider_mod))
 
@@ -123,85 +93,79 @@ defmodule Equinox.DeciderTest do
     describe "#{inspect(decider_mod)}.transact/3" do
       @stream StreamName.parse!("Invoice-1")
 
-      test "executes decision callback, writes events it produces and folds them back into the state" do
+      test "executes decision callback and syncs the resulting events" do
         stub(FoldMock, :initial, fn -> 0 end)
-        stub(FoldMock, :evolve, &(&1 + &2))
-        stub(CodecMock, :encode, fn e, :ctx -> {:ok, build(:event_data, data: e)} end)
-        stub(CodecMock, :decode, &{:ok, &1.data})
-        stub(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
+        stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
 
-        expect(StoreMock, :write_event_data, fn @stream, events, -1 ->
-          assert [%EventData{data: 2}, %EventData{data: 3}] = events
-          {:ok, 1}
+        expect(StoreMock, :sync!, fn @stream, %{version: -1}, [2, 3], :ctx, CodecMock, FoldMock ->
+          State.new(5, 1)
         end)
 
         decider = init(unquote(decider_mod), stream_name: @stream)
 
-        assert {:ok, decider} = Decider.transact(decider, fn 0 = _state -> [2, 3] end, :ctx)
+        assert {:ok, decider} = Decider.transact(decider, fn 0 -> [2, 3] end, :ctx)
         assert 5 = Decider.query(decider, & &1)
       end
 
       test "fully incorporates previously written events into the process" do
         stub(FoldMock, :initial, fn -> 0 end)
-        stub(FoldMock, :evolve, &(&1 + &2))
-        stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
-        stub(CodecMock, :decode, &{:ok, &1.data})
+        stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(2, 0) end)
 
-        expect(StoreMock, :fetch_timeline_events, fn @stream, -1 ->
-          [build(:timeline_event, data: 2, position: 0)]
-        end)
-
-        expect(StoreMock, :write_event_data, fn @stream, [%{data: 3}], 0 ->
-          {:ok, 1}
+        expect(StoreMock, :sync!, fn @stream, %{version: 0}, [3], _, CodecMock, FoldMock ->
+          State.new(5, 1)
         end)
 
         decider = init(unquote(decider_mod), stream_name: @stream)
 
-        assert {:ok, decider} = Decider.transact(decider, fn 2 = _state -> 3 end)
+        assert {:ok, decider} = Decider.transact(decider, fn 2 -> 3 end)
         assert 5 = Decider.query(decider, & &1)
       end
 
-      test "gracefully handles version conflict by resyncing the state and redoing the decision" do
+      test "gracefully handles version conflicts by resyncing the state and redoing the decision" do
         stub(FoldMock, :initial, fn -> 0 end)
-        stub(FoldMock, :evolve, &(&1 + &2))
-        stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
-        stub(CodecMock, :decode, &{:ok, &1.data})
 
-        # no events on initial load, so state is `0`
-        expect(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
+        # Expectation:
+
+        # 1. Initial load has no events, so state is `0` and its version is -1
+        expect(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
         decider = init(unquote(decider_mod), stream_name: @stream, max_resync_attempts: 1)
 
-        # failing to write result of `0 + 3 = 3` decision due to stream version conflict
-        expect(StoreMock, :write_event_data, fn @stream, [%{data: 3}], -1 ->
-          {:error, %StreamVersionConflict{}}
+        # 2. In the meantime, someone else writes event `2` to the stream, its version is now 0
+
+        # 3. We make the `+ 3` decision based on state `0`, producing `0 + 3 = 3` event
+
+        # 4. We fail to sync the result of the decision due to stream version conflict
+        expect(StoreMock, :sync!, fn @stream, %{version: -1}, [3], :ctx, CodecMock, FoldMock ->
+          raise Store.StreamVersionConflict
         end)
 
-        # fetch new event `2` from the stream and fold it into new `0 + 2 = 2` state
-        expect(StoreMock, :fetch_timeline_events, fn @stream, -1 ->
-          [build(:timeline_event, data: 2, position: 0)]
+        # 5. We automatically resync the stream and arrive at the new state `2` of version 0
+        expect(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(2, 0) end)
+
+        # 6. We redo the `+ 3` decision based on the new state `2`, producing `2 + 3 = 5` event
+
+        # 7. We successfully sync the result of the updated decision to the stream and produce new state
+        expect(StoreMock, :sync!, fn @stream, %{version: 0}, [5], :ctx, CodecMock, FoldMock ->
+          State.new(7, 1)
         end)
 
-        # successfully write the result of redone `2 + 3 = 5` decision
-        expect(StoreMock, :write_event_data, fn @stream, [%{data: 5}], 0 ->
-          {:ok, 1}
-        end)
+        # 8. Final state should be sum of both events: `2 + 5 = 7`
 
-        assert {:ok, decider} = Decider.transact(decider, fn state -> state + 3 end)
+        # Execution:
 
-        # state is a simple addition of all event values, so `2 + 5 = 7`
+        # produce an event that is current state + 3
+        assert {:ok, decider} = Decider.transact(decider, fn state -> state + 3 end, :ctx)
+
+        # expect final state to be addition of both events: `2 + 5 = 7`
         assert 7 = Decider.query(decider, & &1)
       end
 
       test "does not try to resync past max_resync_attempts option" do
         stub(FoldMock, :initial, fn -> 0 end)
-        stub(FoldMock, :evolve, &(&1 + &2))
-        stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
-        stub(CodecMock, :decode, &{:ok, &1.data})
+        stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
 
-        expect(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
-
-        expect(StoreMock, :write_event_data, fn @stream, _, -1 ->
-          {:error, %StreamVersionConflict{}}
+        expect(StoreMock, :sync!, fn @stream, %{version: -1}, _, _, CodecMock, FoldMock ->
+          raise Store.StreamVersionConflict
         end)
 
         decider = init(unquote(decider_mod), stream_name: @stream, max_resync_attempts: 0)
@@ -209,15 +173,17 @@ defmodule Equinox.DeciderTest do
         assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "StreamVersionConflict"
       end
 
-      test "gracefully handles event write errors (non-conflicts) by retrying" do
+      test "gracefully handles sync errors (non-conflicts) by retrying" do
         stub(FoldMock, :initial, fn -> 0 end)
-        stub(FoldMock, :evolve, &(&1 + &2))
-        stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
-        stub(CodecMock, :decode, &{:ok, &1.data})
+        stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
 
-        expect(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
-        expect(StoreMock, :write_event_data, fn @stream, _, -1 -> {:error, %RuntimeError{}} end)
-        expect(StoreMock, :write_event_data, fn @stream, events, -1 -> {:ok, length(events)} end)
+        expect(StoreMock, :sync!, fn @stream, %{version: -1}, _, _, CodecMock, FoldMock ->
+          raise RuntimeError
+        end)
+
+        expect(StoreMock, :sync!, fn @stream, %{version: -1}, _, _, CodecMock, FoldMock ->
+          State.new(3, 1)
+        end)
 
         decider = init(unquote(decider_mod), stream_name: @stream, max_sync_attempts: 2)
 
@@ -225,55 +191,50 @@ defmodule Equinox.DeciderTest do
         assert 3 = Decider.query(decider, & &1)
       end
 
-      test "gracefully handles event write exceptions by retrying" do
+      test "does not retry sync past max_sync_attempts option" do
         stub(FoldMock, :initial, fn -> 0 end)
-        stub(FoldMock, :evolve, &(&1 + &2))
-        stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
-        stub(CodecMock, :decode, &{:ok, &1.data})
+        stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
 
-        expect(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
-        expect(StoreMock, :write_event_data, fn @stream, _, -1 -> raise RuntimeError end)
-        expect(StoreMock, :write_event_data, fn @stream, events, -1 -> {:ok, length(events)} end)
-
-        decider = init(unquote(decider_mod), stream_name: @stream, max_sync_attempts: 2)
-
-        assert {:ok, decider} = Decider.transact(decider, fn _ -> 3 end)
-        assert 3 = Decider.query(decider, & &1)
-      end
-
-      test "does not retry writes past max_sync_attempts option" do
-        stub(FoldMock, :initial, fn -> 0 end)
-        stub(FoldMock, :evolve, &(&1 + &2))
-        stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
-        stub(CodecMock, :decode, &{:ok, &1.data})
-
-        expect(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
-        expect(StoreMock, :write_event_data, fn @stream, _, -1 -> raise RuntimeError end)
+        expect(StoreMock, :sync!, fn @stream, %{version: -1}, _, _, CodecMock, FoldMock ->
+          raise RuntimeError
+        end)
 
         decider = init(unquote(decider_mod), stream_name: @stream, max_sync_attempts: 1)
 
         assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "RuntimeError"
       end
 
+      test "codec exceptions never trigger write retries as they should be unrecoverable" do
+        stub(FoldMock, :initial, fn -> 0 end)
+        stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
+
+        expect(StoreMock, :sync!, fn @stream, %{version: -1}, _, _, CodecMock, FoldMock ->
+          raise Codec.CodecError, message: "codec error"
+        end)
+
+        decider = init(unquote(decider_mod), stream_name: @stream, max_sync_attempts: 2)
+
+        assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "CodecError"
+      end
+
       test "fold exceptions never trigger write retries as they should be unrecoverable" do
         stub(FoldMock, :initial, fn -> 0 end)
-        stub(CodecMock, :encode, fn e, _ -> {:ok, build(:event_data, data: e)} end)
-        stub(CodecMock, :decode, &{:ok, &1.data})
+        stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
 
-        stub(FoldMock, :evolve, fn _, _ -> raise RuntimeError end)
-        expect(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
-        expect(StoreMock, :write_event_data, fn @stream, events, -1 -> {:ok, length(events)} end)
+        expect(StoreMock, :sync!, fn @stream, %{version: -1}, _, _, CodecMock, FoldMock ->
+          raise Fold.FoldError, message: "fold error"
+        end)
 
-        decider = init(unquote(decider_mod), stream_name: @stream)
+        decider = init(unquote(decider_mod), stream_name: @stream, max_sync_attempts: 2)
 
         assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "FoldError"
       end
 
       test "decision callbacks returning nil or empty list do not trigger sync" do
         stub(FoldMock, :initial, fn -> 0 end)
-        stub(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
+        stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
 
-        expect(StoreMock, :write_event_data, 0, fn @stream, _, _ -> {:ok, 0} end)
+        expect(StoreMock, :sync!, 0, fn @stream, _, _, _, CodecMock, FoldMock -> nil end)
 
         decider = init(unquote(decider_mod), stream_name: @stream)
 
@@ -283,9 +244,9 @@ defmodule Equinox.DeciderTest do
 
       test "decision callback errors are propagated back without triggering sync" do
         stub(FoldMock, :initial, fn -> 0 end)
-        stub(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
+        stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
 
-        expect(StoreMock, :write_event_data, 0, fn @stream, _, _ -> {:ok, 0} end)
+        expect(StoreMock, :sync!, 0, fn @stream, _, _, _, CodecMock, FoldMock -> nil end)
 
         decider = init(unquote(decider_mod), stream_name: @stream)
 
@@ -295,9 +256,9 @@ defmodule Equinox.DeciderTest do
 
       test "decision callback exceptions are reraised as DecisionError" do
         stub(FoldMock, :initial, fn -> 0 end)
-        stub(StoreMock, :fetch_timeline_events, fn @stream, -1 -> [] end)
+        stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
 
-        expect(StoreMock, :write_event_data, 0, fn @stream, _, _ -> {:ok, 0} end)
+        expect(StoreMock, :sync!, 0, fn @stream, _, _, _, CodecMock, FoldMock -> nil end)
 
         decider = init(unquote(decider_mod), stream_name: @stream)
 
@@ -371,29 +332,5 @@ defmodule Equinox.DeciderTest do
     )
     |> Decider.Stateful.start_server()
     |> then(&elem(&1, 1))
-  end
-
-  defp build(type, attrs \\ [])
-
-  defp build(:event_data, attrs) do
-    EventData.new(
-      id: Keyword.get(attrs, :id, UUID.generate()),
-      type: Keyword.get(attrs, :type, "TestEvent"),
-      data: Keyword.get(attrs, :data),
-      metadata: Keyword.get(attrs, :metadata)
-    )
-  end
-
-  defp build(:timeline_event, attrs) do
-    TimelineEvent.new(
-      id: Keyword.get(attrs, :id, UUID.generate()),
-      type: Keyword.get(attrs, :type, "TestEvent"),
-      stream_name: Keyword.get(attrs, :stream_name, "TestStream"),
-      position: Keyword.get(attrs, :position, 0),
-      global_position: Keyword.get(attrs, :global_position, 0),
-      data: Keyword.get(attrs, :data),
-      metadata: Keyword.get(attrs, :metadata),
-      time: NaiveDateTime.utc_now()
-    )
   end
 end
