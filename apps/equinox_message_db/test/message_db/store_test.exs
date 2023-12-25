@@ -24,81 +24,81 @@ defmodule Equinox.MessageDb.StoreTest do
   end
 
   describe "sync!/7" do
-    @state State.init(SumFold)
+    @fold SumFold
+    @codec NumberCodec
+    @state State.init(@fold)
 
     test_in_isolation "syncs from initial state", %{conn: conn} do
       assert %State{value: 9, version: 2} =
-               Store.sync!(conn, "num-1", @state, [2, 3, 4], :ctx, NumberCodec, SumFold)
+               Store.sync!(conn, "num-1", @state, [2, 3, 4], :ctx, @codec, @fold)
     end
 
     test_in_isolation "syncs from intermediate state", %{conn: conn} do
       assert %State{value: 5, version: 1} =
-               Store.sync!(conn, "num-1", @state, [2, 3], :ctx, NumberCodec, SumFold)
+               Store.sync!(conn, "num-1", @state, [2, 3], :ctx, @codec, @fold)
 
       assert %State{value: 9, version: 2} =
-               Store.sync!(conn, "num-1", State.new(5, 1), [4], :ctx, NumberCodec, SumFold)
+               Store.sync!(conn, "num-1", State.new(5, 1), [4], :ctx, @codec, @fold)
     end
   end
 
   describe "load_unoptimized!/6" do
-    @state State.init(SumFold)
+    @fold SumFold
+    @codec NumberCodec
+    @state State.init(@fold)
 
     test_in_isolation "loads from initial state", %{conn: conn} do
-      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], :ctx, NumberCodec, SumFold)
+      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], :ctx, @codec, @fold)
 
       assert %State{value: 9, version: 2} =
-               Store.load_unoptimized!(conn, "num-1", @state, NumberCodec, SumFold, 100)
+               Store.load_unoptimized!(conn, "num-1", @state, @codec, @fold, 100)
     end
 
     test_in_isolation "loads from intermediate state", %{conn: conn} do
-      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], :ctx, NumberCodec, SumFold)
+      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], :ctx, @codec, @fold)
 
       assert %State{value: 9, version: 2} =
-               Store.load_unoptimized!(conn, "num-1", State.new(5, 1), NumberCodec, SumFold, 100)
+               Store.load_unoptimized!(conn, "num-1", State.new(5, 1), @codec, @fold, 100)
     end
 
     test_in_isolation "handles empty streams", %{conn: conn} do
       assert %State{value: 0, version: -1} =
-               Store.load_unoptimized!(conn, "num-1", @state, NumberCodec, SumFold, 100)
+               Store.load_unoptimized!(conn, "num-1", @state, @codec, @fold, 100)
     end
 
     test_in_isolation "handles different batch sizes", %{conn: conn} do
-      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], :ctx, NumberCodec, SumFold)
+      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], :ctx, @codec, @fold)
 
       assert %State{value: 9, version: 2} =
-               Store.load_unoptimized!(conn, "num-1", @state, NumberCodec, SumFold, 1)
+               Store.load_unoptimized!(conn, "num-1", @state, @codec, @fold, 1)
 
       assert %State{value: 9, version: 2} =
-               Store.load_unoptimized!(conn, "num-1", @state, NumberCodec, SumFold, 100)
+               Store.load_unoptimized!(conn, "num-1", @state, @codec, @fold, 100)
     end
   end
 
   describe "load_latest_known_event!/5" do
-    @state State.init(InsFold)
+    @fold InsFold
+    @codec NumberCodec
+    @state State.init(@fold)
 
     test_in_isolation "loads from initial state", %{conn: conn} do
-      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], :ctx, NumberCodec, InsFold)
+      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], :ctx, @codec, @fold)
 
       assert %State{value: 4, version: 2} =
-               Store.load_latest_known_event!(conn, "num-1", @state, NumberCodec, InsFold)
+               Store.load_latest_known_event!(conn, "num-1", @state, @codec, @fold)
     end
 
     test_in_isolation "loads from intermediate state", %{conn: conn} do
-      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], :ctx, NumberCodec, InsFold)
+      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], :ctx, @codec, @fold)
 
       assert %State{value: 4, version: 2} =
-               Store.load_latest_known_event!(
-                 conn,
-                 "num-1",
-                 State.new(3, 1),
-                 NumberCodec,
-                 InsFold
-               )
+               Store.load_latest_known_event!(conn, "num-1", State.new(3, 1), @codec, @fold)
     end
 
     test_in_isolation "handles empty streams", %{conn: conn} do
       assert %State{value: nil, version: -1} =
-               Store.load_latest_known_event!(conn, "num-1", @state, NumberCodec, SumFold)
+               Store.load_latest_known_event!(conn, "num-1", @state, @codec, @fold)
     end
   end
 end
