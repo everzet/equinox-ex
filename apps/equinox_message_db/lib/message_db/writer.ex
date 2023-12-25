@@ -43,10 +43,29 @@ defmodule Equinox.MessageDb.Writer do
   defp handle_write_result({:error, %Postgrex.Error{postgres: postgres} = error}) do
     cond do
       is_map(postgres) and postgres.message =~ "Wrong expected version" ->
-        {:error, %StreamVersionConflict{}}
+        {stream_name, stream_version} =
+          case capture_stream_name_and_version(postgres.message) do
+            %{"stream" => stream, "version" => version} -> {stream, String.to_integer(version)}
+            nil -> {nil, nil}
+          end
+
+        exception = %StreamVersionConflict{
+          message: postgres.message,
+          stream_name: stream_name,
+          stream_version: stream_version
+        }
+
+        {:error, exception}
 
       is_map(postgres) and postgres.message =~ "constraint \"messages_id\"" ->
-        {:error, %DuplicateMessageId{}}
+        message_id =
+          case capture_duplicate_id(postgres.detail || "") do
+            %{"id" => id} -> id
+            nil -> nil
+          end
+
+        exception = %DuplicateMessageId{message: postgres.message, message_id: message_id}
+        {:error, exception}
 
       true ->
         {:error, error}
@@ -76,5 +95,16 @@ defmodule Equinox.MessageDb.Writer do
         anything_else -> {:halt, anything_else}
       end
     end)
+  end
+
+  defp capture_stream_name_and_version(message) do
+    Regex.named_captures(
+      ~r/\(Stream: (?<stream>[^,]+), Stream Version: (?<version>.+)\)/i,
+      message
+    )
+  end
+
+  defp capture_duplicate_id(detail) do
+    Regex.named_captures(~r/Key \(id\)=\((?<id>.*)\) already exists\./i, detail)
   end
 end

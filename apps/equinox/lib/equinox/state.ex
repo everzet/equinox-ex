@@ -1,25 +1,24 @@
 defmodule Equinox.State do
   alias Equinox.Events.{TimelineEvent, EventData, DomainEvent}
-  alias Equinox.{Codec, Fold}
+  alias Equinox.{Store, Codec, Fold}
 
   @enforce_keys [:value, :version]
   defstruct [:value, :version]
 
-  @type t :: %__MODULE__{value: value(), version: version()}
+  @type t :: %__MODULE__{value: value(), version: Store.stream_version()}
   @type value :: any()
-  @type version :: -1 | non_neg_integer()
   @type written_version :: non_neg_integer()
 
   @type fetch_function! :: (-> Enumerable.t(TimelineEvent.t()))
   @type write_function! :: (Enumerable.t(EventData.t()) -> written_version())
 
-  @spec new(value(), version()) :: t()
+  @spec new(value(), Store.stream_version()) :: t()
   def new(value, version), do: %__MODULE__{value: value, version: version}
 
   @spec init(Fold.t()) :: t()
   def init(fold), do: new(fold.initial(), -1)
 
-  @spec update(t(), (value() -> value()), version()) :: t()
+  @spec update(t(), (value() -> value()), written_version()) :: t()
   def update(%__MODULE__{value: value}, fun, new_version), do: new(fun.(value), new_version)
 
   @spec load!(t(), Codec.t(), Fold.t(), fetch_function!()) :: t()
