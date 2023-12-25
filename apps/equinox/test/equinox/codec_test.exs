@@ -9,37 +9,56 @@ defmodule Equinox.CodecTest do
 
   setup :verify_on_exit!
 
-  describe "encode_all!/3" do
+  describe "encode!/3" do
     test "performs Codec.encode/2 on every given event" do
       expect(CodecMock, :encode, fn 1, :ctx -> {:ok, :one} end)
       expect(CodecMock, :encode, fn 2, :ctx -> {:ok, :two} end)
-      assert Codec.encode_all!([1, 2], :ctx, CodecMock) == [:one, :two]
+      assert Codec.encode!([1, 2], :ctx, CodecMock) == [:one, :two]
     end
 
     test "raises exception if Codec returns {:error, exception}" do
       expect(CodecMock, :encode, fn _, _ -> {:error, %Codec.CodecError{message: "bang"}} end)
-      assert_raise Codec.CodecError, ~r/bang/, fn -> Codec.encode_all!([1], :ctx, CodecMock) end
+      assert_raise Codec.CodecError, ~r/bang/, fn -> Codec.encode!([1], :ctx, CodecMock) end
     end
 
     test "raises exception if Codec returns {:error, term}" do
       expect(CodecMock, :encode, fn _, _ -> {:error, :bang} end)
-      assert_raise Codec.CodecError, ~r/:bang/, fn -> Codec.encode_all!([1], :ctx, CodecMock) end
+      assert_raise Codec.CodecError, ~r/:bang/, fn -> Codec.encode!([1], :ctx, CodecMock) end
     end
 
     test "wraps all exceptions into CodecError" do
       expect(CodecMock, :encode, fn _, _ -> raise RuntimeError end)
 
       assert_raise Codec.CodecError, ~r/runtime error/, fn ->
-        Codec.encode_all!([1], :ctx, CodecMock)
+        Codec.encode!([1], :ctx, CodecMock)
       end
     end
   end
 
-  describe "decode_all!/2" do
+  describe "decode_with_position!/2" do
     test "performs Codec.decode/1 on every given event with position" do
       expect(CodecMock, :decode, fn %{v: :one, position: 3} -> {:ok, 1} end)
       expect(CodecMock, :decode, fn %{v: :two, position: 4} -> {:ok, 2} end)
-      result = Codec.decode_all!([%{v: :one, position: 3}, %{v: :two, position: 4}], CodecMock)
+
+      result =
+        Codec.decode_with_position!(
+          [%{v: :one, position: 3}, %{v: :two, position: 4}],
+          CodecMock
+        )
+
+      assert Enum.to_list(result) == [{1, 3}, {2, 4}]
+    end
+
+    test "works with streams" do
+      expect(CodecMock, :decode, fn %{v: :one, position: 3} -> {:ok, 1} end)
+      expect(CodecMock, :decode, fn %{v: :two, position: 4} -> {:ok, 2} end)
+
+      result =
+        Codec.decode_with_position!(
+          Stream.map([%{v: :one, position: 3}, %{v: :two, position: 4}], & &1),
+          CodecMock
+        )
+
       assert Enum.to_list(result) == [{1, 3}, {2, 4}]
     end
 
@@ -47,7 +66,7 @@ defmodule Equinox.CodecTest do
       expect(CodecMock, :decode, fn _ -> {:error, %Codec.CodecError{message: "bang"}} end)
 
       assert_raise Codec.CodecError, ~r/bang/, fn ->
-        Stream.run(Codec.decode_all!([%{v: :one, position: 0}], CodecMock))
+        Stream.run(Codec.decode_with_position!([%{v: :one, position: 0}], CodecMock))
       end
     end
 
@@ -55,7 +74,7 @@ defmodule Equinox.CodecTest do
       expect(CodecMock, :decode, fn _ -> {:error, :bang} end)
 
       assert_raise Codec.CodecError, ~r/:bang/, fn ->
-        Stream.run(Codec.decode_all!([%{v: :one, position: 0}], CodecMock))
+        Stream.run(Codec.decode_with_position!([%{v: :one, position: 0}], CodecMock))
       end
     end
 
@@ -63,7 +82,7 @@ defmodule Equinox.CodecTest do
       expect(CodecMock, :decode, fn _ -> raise RuntimeError end)
 
       assert_raise Codec.CodecError, ~r/runtime error/, fn ->
-        Stream.run(Codec.decode_all!([%{v: :one, position: 0}], CodecMock))
+        Stream.run(Codec.decode_with_position!([%{v: :one, position: 0}], CodecMock))
       end
     end
   end
