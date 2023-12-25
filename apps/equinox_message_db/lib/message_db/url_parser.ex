@@ -19,7 +19,7 @@ defmodule Equinox.MessageDb.UrlParser do
 
   The format must be:
 
-      "postgres://username:password@hostname:port/database?ssl=true&timeout=1000"
+      "postgres://username:password@hostname:port/database?ssl=true&timeout=1000&pool_size=10"
 
   """
   def parse_url(""), do: []
