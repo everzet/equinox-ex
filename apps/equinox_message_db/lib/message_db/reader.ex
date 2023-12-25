@@ -22,35 +22,13 @@ defmodule Equinox.MessageDb.Reader do
        FROM get_category_messages($1, $2, $3, null, $4, $5)",
       [category, position, batch_size, member, size],
       decode_mapper: fn row ->
+        # the order matters here and must match the order of SELECT in the query above:
         ~w(id type stream_name position global_position data metadata time)a
         |> Enum.zip(row)
         |> TimelineEvent.new()
       end
     )
-    |> case do
-      {:ok, result} -> {:ok, List.wrap(result.rows)}
-      anything_else -> anything_else
-    end
-  end
-
-  @spec get_last_stream_message(Postgrex.conn(), stream_name()) ::
-          {:ok, TimelineEvent.t() | nil} | {:error, Exception.t()}
-  def get_last_stream_message(conn, stream) do
-    conn
-    |> Postgrex.query(
-      "SELECT id, type, stream_name, position, global_position, data::jsonb, metadata::jsonb, time
-       FROM get_last_stream_message($1)",
-      [stream],
-      decode_mapper: fn row ->
-        ~w(id type stream_name position global_position data metadata time)a
-        |> Enum.zip(row)
-        |> TimelineEvent.new()
-      end
-    )
-    |> case do
-      {:ok, result} -> {:ok, result.rows |> List.wrap() |> List.first()}
-      anything_else -> anything_else
-    end
+    |> list_wrap_results()
   end
 
   @spec get_stream_messages(Postgrex.conn(), stream_name(), position(), batch_size()) ::
@@ -62,15 +40,32 @@ defmodule Equinox.MessageDb.Reader do
        FROM get_stream_messages($1, $2, $3)",
       [stream, position, batch_size],
       decode_mapper: fn row ->
+        # the order matters here and must match the order of SELECT in the query above:
         ~w(id type stream_name position global_position data metadata time)a
         |> Enum.zip(row)
         |> TimelineEvent.new()
       end
     )
-    |> case do
-      {:ok, result} -> {:ok, List.wrap(result.rows)}
-      anything_else -> anything_else
-    end
+    |> list_wrap_results()
+  end
+
+  @spec get_last_stream_message(Postgrex.conn(), stream_name()) ::
+          {:ok, TimelineEvent.t() | nil} | {:error, Exception.t()}
+  def get_last_stream_message(conn, stream) do
+    conn
+    |> Postgrex.query(
+      "SELECT id, type, stream_name, position, global_position, data::jsonb, metadata::jsonb, time
+       FROM get_last_stream_message($1)",
+      [stream],
+      decode_mapper: fn row ->
+        # the order matters here and must match the order of SELECT in the query above:
+        ~w(id type stream_name position global_position data metadata time)a
+        |> Enum.zip(row)
+        |> TimelineEvent.new()
+      end
+    )
+    |> list_wrap_results()
+    |> get_first_result()
   end
 
   @spec stream_stream_messages(Postgrex.conn(), stream_name(), position(), batch_size()) ::
@@ -86,4 +81,10 @@ defmodule Equinox.MessageDb.Reader do
     end)
     |> Stream.flat_map(& &1)
   end
+
+  defp list_wrap_results({:ok, result}), do: {:ok, List.wrap(result.rows)}
+  defp list_wrap_results(anything_else), do: anything_else
+
+  defp get_first_result({:ok, results}), do: {:ok, List.first(results)}
+  defp get_first_result(anything_else), do: anything_else
 end

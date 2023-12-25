@@ -1,6 +1,6 @@
 defmodule Equinox.MessageDb.Writer do
-  alias Equinox.Events.EventData
   alias Equinox.Store.{DuplicateMessageId, StreamVersionConflict}
+  alias Equinox.Events.EventData
 
   @type stream_name :: String.t()
   @type expected_version :: -1 | non_neg_integer()
@@ -10,44 +10,46 @@ defmodule Equinox.MessageDb.Writer do
           {:ok, new_version :: written_position()}
           | {:error, DuplicateMessageId.t() | StreamVersionConflict.t() | Postgrex.Error.t()}
   def write_messages(conn, stream, messages, version) do
-    messages
-    |> case do
-      [] ->
-        {:ok, version}
+    conn
+    |> do_write_messages(stream, messages, version)
+    |> handle_write_result()
+  end
 
-      [message] ->
-        with {:ok, _query, res} <- write_single_message(conn, stream, message, version) do
-          {:ok, res}
-        end
+  defp do_write_messages(_conn, _stream, [], version), do: {:ok, version}
 
-      [first | rest] ->
-        Postgrex.transaction(conn, fn conn ->
-          with {:ok, qry, _res} <- write_single_message(conn, stream, first, version),
-               {:ok, last_res} <- write_multiple_messages(conn, qry, stream, rest, version + 1) do
-            last_res
-          else
-            {:error, error} -> Postgrex.rollback(conn, error)
-          end
-        end)
+  defp do_write_messages(conn, stream, [message], version) do
+    with {:ok, _query, result} <- write_single_message(conn, stream, message, version) do
+      {:ok, result}
     end
-    |> case do
-      {:ok, %Postgrex.Result{rows: [[written_position]]}} ->
-        {:ok, written_position}
+  end
 
-      {:error, %Postgrex.Error{postgres: postgres} = error} when is_map(postgres) ->
-        cond do
-          postgres.message =~ "Wrong expected version" ->
-            {:error, %StreamVersionConflict{}}
+  defp do_write_messages(conn, stream, [first | rest], version) do
+    Postgrex.transaction(conn, fn conn ->
+      with {:ok, query, _res} <- write_single_message(conn, stream, first, version),
+           {:ok, last_result} <- write_multiple_messages(conn, query, stream, rest, version + 1) do
+        last_result
+      else
+        {:error, error} -> Postgrex.rollback(conn, error)
+      end
+    end)
+  end
 
-          postgres.message =~ "constraint \"messages_id\"" ->
-            {:error, %DuplicateMessageId{}}
+  defp handle_write_result({:ok, position}) when is_number(position), do: {:ok, position}
 
-          true ->
-            {:error, error}
-        end
+  defp handle_write_result({:ok, %Postgrex.Result{rows: [[written_position]]}}) do
+    {:ok, written_position}
+  end
 
-      anything_else ->
-        anything_else
+  defp handle_write_result({:error, %Postgrex.Error{postgres: postgres} = error}) do
+    cond do
+      is_map(postgres) and postgres.message =~ "Wrong expected version" ->
+        {:error, %StreamVersionConflict{}}
+
+      is_map(postgres) and postgres.message =~ "constraint \"messages_id\"" ->
+        {:error, %DuplicateMessageId{}}
+
+      true ->
+        {:error, error}
     end
   end
 
