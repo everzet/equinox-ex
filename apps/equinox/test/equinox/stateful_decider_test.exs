@@ -100,6 +100,32 @@ defmodule Equinox.StatefulDeciderTest do
       assert 2 = Decider.query(decider_1, & &1)
       assert 3 = Decider.query(decider_2, & &1)
     end
+
+    test ":global is supported" do
+      stream = "Invoice-1"
+      decider = build_decider(stream_name: StreamName.parse!(stream), registry: :global)
+
+      stub(FoldMock, :initial, fn -> 0 end)
+      stub(StoreMock, :load!, fn ^stream, %{version: -1}, _, _ -> State.new(5, -1) end)
+
+      assert 5 = Decider.query(decider, & &1)
+
+      assert pid = GenServer.whereis({:global, stream})
+      assert Process.alive?(pid)
+    end
+
+    test ":global can be prefixed" do
+      stream = "Invoice-1"
+      decider = build_decider(stream_name: StreamName.parse!(stream), registry: {:global, "p-"})
+
+      stub(FoldMock, :initial, fn -> 0 end)
+      stub(StoreMock, :load!, fn ^stream, %{version: -1}, _, _ -> State.new(5, -1) end)
+
+      assert 5 = Decider.query(decider, & &1)
+
+      assert pid = GenServer.whereis({:global, "p-" <> stream})
+      assert Process.alive?(pid)
+    end
   end
 
   describe "lifetime" do

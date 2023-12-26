@@ -184,7 +184,7 @@ defmodule Equinox.Decider do
             stream_name: StreamName.t(),
             server_name: GenServer.server(),
             supervisor: :disabled | GenServer.server(),
-            registry: :disabled | :global | GenServer.server(),
+            registry: :disabled | :global | {:global, prefix :: String.t()} | GenServer.server(),
             lifetime: Lifetime.t(),
             store: Store.t(),
             codec: Codec.t(),
@@ -203,6 +203,7 @@ defmodule Equinox.Decider do
         case decider.registry do
           :disabled -> nil
           :global -> {:global, String.Chars.to_string(decider.stream_name)}
+          {:global, prefix} -> {:global, prefix <> String.Chars.to_string(decider.stream_name)}
           module -> {:via, Registry, {module, String.Chars.to_string(decider.stream_name)}}
         end
 
