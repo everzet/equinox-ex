@@ -55,7 +55,7 @@ defmodule ExampleApp.Invoices do
       |> Invoice.pay_amount(paid.amount)
     end
 
-    def evolce(%Invoice{status: :raised} = invoice, %InvoiceFinalized{}) do
+    def evolve(%Invoice{status: :raised} = invoice, %InvoiceFinalized{}) do
       Invoice.finalize(invoice)
     end
   end
