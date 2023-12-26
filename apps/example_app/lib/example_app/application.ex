@@ -10,8 +10,7 @@ defmodule ExampleApp.Application do
     children = [
       {DynamicSupervisor, name: ExampleApp.InvoicesSupervisor, strategy: :one_for_one},
       {DynamicSupervisor, name: ExampleApp.PayersSupervisor, strategy: :one_for_one},
-      {Registry, name: ExampleApp.InvoicesRegistry, keys: :unique},
-      {Registry, name: ExampleApp.PayersRegistry, keys: :unique}
+      {Registry, name: ExampleApp.InvoicesRegistry, keys: :unique}
     ]
 
     children =

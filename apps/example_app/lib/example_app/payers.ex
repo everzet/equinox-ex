@@ -87,7 +87,7 @@ defmodule ExampleApp.Payers do
     |> Stream.name()
     |> Decider.Stateful.for_stream(
       supervisor: ExampleApp.PayersSupervisor,
-      registry: ExampleApp.PayersRegistry,
+      registry: :global,
       lifetime: Equinox.Lifetime.StayAliveFor30Seconds,
       store: ExampleApp.EventStore.LatestKnownEvent,
       codec: Events,
