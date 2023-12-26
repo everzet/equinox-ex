@@ -73,19 +73,21 @@ defmodule Equinox.Codec do
   end
 
   defmodule EventStructs do
-    defmacro __using__(structs_module: structs_mod) do
+    defmacro __using__(opts) do
+      structs_mod = Keyword.fetch!(opts, :structs_mod)
+
       quote do
         @behaviour Equinox.Codec
-        @structs_module unquote(structs_mod)
+        @structs_mod unquote(structs_mod)
 
         @impl Equinox.Codec
         def encode(%{__struct__: struct} = event, _ctx) do
-          Equinox.Codec.EventStructs.struct_to_event_data(event, @structs_module)
+          Equinox.Codec.EventStructs.struct_to_event_data(event, @structs_mod)
         end
 
         @impl Equinox.Codec
         def decode(event) do
-          Equinox.Codec.EventStructs.timeline_event_to_struct(event, @structs_module)
+          Equinox.Codec.EventStructs.timeline_event_to_struct(event, @structs_mod)
         end
 
         defoverridable encode: 2
