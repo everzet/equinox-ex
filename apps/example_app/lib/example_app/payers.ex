@@ -5,7 +5,7 @@ defmodule ExampleApp.Payers do
     alias Equinox.Stream.{Category, StreamId, StreamName}
 
     def category, do: Category.new("Payer")
-    def id(payer_id), do: StreamId.new([payer_id])
+    def id(payer_id), do: StreamId.new([String.downcase(payer_id)])
     def name(payer_id), do: StreamName.new(category(), id(payer_id))
   end
 
