@@ -26,7 +26,7 @@ defmodule ExampleApp.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:equinox, in_umbrella: true},
+      {:equinox_core, in_umbrella: true},
       {:equinox_message_db, in_umbrella: true},
       # Serving HTTP
       {:bandit, "~> 1.1"},

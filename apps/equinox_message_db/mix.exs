@@ -30,7 +30,7 @@ defmodule Equinox.MessageDb.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:equinox, in_umbrella: true},
+      {:equinox_core, in_umbrella: true},
       {:postgrex, "~> 0.17"},
       {:jason, "~> 1.0"},
       {:benchee, "~> 1.2", only: :dev}
