@@ -331,9 +331,8 @@ defmodule Equinox.DeciderTest do
   defp init(decider_mod, attrs \\ [])
 
   defp init(Decider.Stateless, attrs) do
-    Decider.new(
-      type: :stateless,
-      stream_name: Keyword.get(attrs, :stream_name, StreamName.parse!("Invoice-1")),
+    Decider.Stateless.for_stream(
+      Keyword.get(attrs, :stream_name, StreamName.parse!("Invoice-1")),
       store: StoreMock,
       codec: CodecMock,
       fold: FoldMock,
@@ -347,9 +346,8 @@ defmodule Equinox.DeciderTest do
   defp init(Decider.Stateful, attrs) do
     test_pid = self()
 
-    Decider.new(
-      type: :stateful,
-      stream_name: Keyword.get(attrs, :stream_name, StreamName.parse!("Invoice-1")),
+    Decider.Stateful.for_stream(
+      Keyword.get(attrs, :stream_name, StreamName.parse!("Invoice-1")),
       supervisor: :disabled,
       registry: :disabled,
       lifetime: Lifetime.StayAliveFor30Seconds,

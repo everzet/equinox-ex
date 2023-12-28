@@ -168,9 +168,9 @@ defmodule ExampleApp.Invoices do
   end
 
   defp resolve(invoice_id) do
-    Decider.new(
-      type: :stateful,
-      stream_name: Stream.name(invoice_id),
+    invoice_id
+    |> Stream.name()
+    |> Decider.Stateful.for_stream(
       supervisor: ExampleApp.InvoicesSupervisor,
       registry: ExampleApp.InvoicesRegistry,
       lifetime: Equinox.Lifetime.StayAliveFor30Seconds,

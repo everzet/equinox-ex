@@ -203,9 +203,8 @@ defmodule Equinox.StatefulDeciderTest do
   defp build_decider(attrs) do
     test_pid = self()
 
-    Decider.new(
-      type: :stateful,
-      stream_name: Keyword.get(attrs, :stream_name, StreamName.parse!("Invoice-1")),
+    Decider.Stateful.for_stream(
+      Keyword.get(attrs, :stream_name, StreamName.parse!("Invoice-1")),
       supervisor: Keyword.get(attrs, :supervisor, :disabled),
       registry: Keyword.get(attrs, :registry, :disabled),
       lifetime: Keyword.get(attrs, :lifetime, Lifetime.StayAliveFor30Seconds),

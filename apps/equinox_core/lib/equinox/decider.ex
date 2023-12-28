@@ -31,6 +31,7 @@ defmodule Equinox.Decider do
   end
 
   defmodule Stateless do
+    alias Equinox.Stream.StreamName
     alias Equinox.{State, Store, Codec, Fold}
     alias Equinox.Decider.{Query, Decision}
 
@@ -49,11 +50,6 @@ defmodule Equinox.Decider do
     @type t :: %__MODULE__{}
 
     @opts NimbleOptions.new!(
-            stream_name: [
-              type: :string,
-              required: true,
-              doc: "Fully-qualified stream name (e.g. `Invoice-1`)"
-            ],
             store: [
               type: :atom,
               required: true,
@@ -87,11 +83,15 @@ defmodule Equinox.Decider do
           )
 
     @type option :: unquote(NimbleOptions.option_typespec(@opts))
-    @spec new([option]) :: t()
-    def new(opts) do
+    @spec for_stream(StreamName.t() | String.t(), [option]) :: t()
+    def for_stream(stream_name, opts) do
       case NimbleOptions.validate(opts, @opts) do
         {:ok, opts} ->
-          decider = struct(__MODULE__, opts)
+          decider =
+            opts
+            |> Keyword.put(:stream_name, String.Chars.to_string(stream_name))
+            |> then(&struct(__MODULE__, &1))
+
           %{decider | state: State.init(decider.fold)}
 
         {:error, validation_error} ->
@@ -182,6 +182,7 @@ defmodule Equinox.Decider do
   defmodule Stateful do
     use GenServer, restart: :transient
 
+    alias Equinox.Stream.StreamName
     alias Equinox.Decider.Stateless
     alias Equinox.Codec
 
@@ -204,11 +205,6 @@ defmodule Equinox.Decider do
     @type t :: %__MODULE__{}
 
     @opts NimbleOptions.new!(
-            stream_name: [
-              type: :string,
-              required: true,
-              doc: "Fully-qualified stream name (e.g. `Invoice-1`)"
-            ],
             supervisor: [
               type: {:or, [:atom, {:in, [:disabled]}]},
               required: true,
@@ -268,11 +264,14 @@ defmodule Equinox.Decider do
           )
 
     @type option :: unquote(NimbleOptions.option_typespec(@opts))
-    @spec new([option()]) :: t()
-    def new(opts) do
+    @spec for_stream(StreamName.t() | String.t(), [option()]) :: t()
+    def for_stream(stream_name, opts) do
       case NimbleOptions.validate(opts, @opts) do
         {:ok, opts} ->
-          decider = struct(__MODULE__, opts)
+          decider =
+            opts
+            |> Keyword.put(:stream_name, String.Chars.to_string(stream_name))
+            |> then(&struct(__MODULE__, &1))
 
           server_name =
             case decider.registry do
@@ -352,8 +351,8 @@ defmodule Equinox.Decider do
       (decider.on_init || fn -> nil end).()
 
       stateless_decider =
-        Stateless.new(
-          stream_name: decider.stream_name,
+        Stateless.for_stream(
+          decider.stream_name,
           store: decider.store,
           codec: decider.codec,
           fold: decider.fold,
@@ -396,22 +395,6 @@ defmodule Equinox.Decider do
     @impl GenServer
     def handle_info(:timeout, server) do
       {:stop, :normal, server}
-    end
-  end
-
-  @spec new([{:type, :stateful} | Stateful.option()]) :: Stateful.t()
-  @spec new([{:type, :stateless} | Stateless.option()]) :: Stateless.t()
-  def new(opts) do
-    case Keyword.pop!(opts, :type) do
-      {:stateful, opts} ->
-        opts
-        |> Keyword.update!(:stream_name, &String.Chars.to_string/1)
-        |> Stateful.new()
-
-      {:stateless, opts} ->
-        opts
-        |> Keyword.update!(:stream_name, &String.Chars.to_string/1)
-        |> Stateless.new()
     end
   end
 
