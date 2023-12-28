@@ -31,47 +31,72 @@ defmodule Equinox.Decider do
   end
 
   defmodule Stateless do
-    alias Equinox.Stream.StreamName
     alias Equinox.{State, Store, Codec, Fold}
     alias Equinox.Decider.{Query, Decision}
 
-    @enforce_keys [:stream, :store, :codec, :fold]
-    defstruct stream: nil,
-              state: nil,
-              store: nil,
-              codec: nil,
-              fold: nil,
-              opts: []
-
-    @type t :: %__MODULE__{
-            stream: String.t(),
-            state: State.t(),
-            store: Store.t(),
-            codec: Codec.t(),
-            fold: Fold.t(),
-            opts: list(option())
-          }
-
-    @type option ::
-            {:max_load_attempts, pos_integer()}
-            | {:max_sync_attempts, pos_integer()}
-            | {:max_resync_attempts, non_neg_integer()}
-
-    @default_opts [
-      max_load_attempts: 2,
-      max_sync_attempts: 2,
-      max_resync_attempts: 1
+    @enforce_keys [:stream_name, :store, :codec, :fold]
+    defstruct [
+      :stream_name,
+      :state,
+      :store,
+      :codec,
+      :fold,
+      :max_load_attempts,
+      :max_sync_attempts,
+      :max_resync_attempts
     ]
 
-    @spec for_stream(StreamName.t(), Enumerable.t()) :: t()
-    def for_stream(%StreamName{} = stream_name, opts) do
-      decider =
-        opts
-        |> Keyword.put(:stream, String.Chars.to_string(stream_name))
-        |> Keyword.update(:opts, @default_opts, &Keyword.merge(@default_opts, &1))
-        |> then(&struct!(__MODULE__, &1))
+    @type t :: %__MODULE__{}
 
-      %{decider | state: State.init(decider.fold)}
+    @opts NimbleOptions.new!(
+            stream_name: [
+              type: :string,
+              required: true,
+              doc: "Fully-qualified stream name (e.g. `Invoice-1`)"
+            ],
+            store: [
+              type: :atom,
+              required: true,
+              doc: "Persistence module that implements `Equinox.Store` behaviour"
+            ],
+            codec: [
+              type: :atom,
+              required: true,
+              doc: "Event (en|de)coding module that implements `Equinox.Codec` behaviour"
+            ],
+            fold: [
+              type: :atom,
+              required: true,
+              doc: "State generation module that implements `Equinox.Fold` behaviour"
+            ],
+            max_load_attempts: [
+              type: :pos_integer,
+              default: 2,
+              doc: "How many times (in total) should we try to load the state on load errors"
+            ],
+            max_sync_attempts: [
+              type: :pos_integer,
+              default: 2,
+              doc: "How many times (in total) should we try to sync the state on write errors"
+            ],
+            max_resync_attempts: [
+              type: :non_neg_integer,
+              default: 1,
+              doc: "How many times should we try to resync the state on version conflict"
+            ]
+          )
+
+    @type option :: unquote(NimbleOptions.option_typespec(@opts))
+    @spec new([option]) :: t()
+    def new(opts) do
+      case NimbleOptions.validate(opts, @opts) do
+        {:ok, opts} ->
+          decider = struct(__MODULE__, opts)
+          %{decider | state: State.init(decider.fold)}
+
+        {:error, validation_error} ->
+          raise ArgumentError, message: Exception.message(validation_error)
+      end
     end
 
     @spec load(t()) :: t()
@@ -102,7 +127,7 @@ defmodule Equinox.Decider do
             {:ok, sync_state_with_retry(decider, ctx, events)}
           rescue
             version_conflict in [Store.StreamVersionConflict] ->
-              if resync_attempt < max_resync_attempts(decider) do
+              if resync_attempt < decider.max_resync_attempts do
                 decider
                 |> load_state_with_retry()
                 |> transact_with_resync(decision, ctx, resync_attempt + 1)
@@ -116,7 +141,7 @@ defmodule Equinox.Decider do
     defp sync_state_with_retry(%__MODULE__{} = decider, ctx, events, sync_attempt \\ 1) do
       try do
         new_state =
-          decider.stream
+          decider.stream_name
           |> decider.store.sync!(decider.state, events, ctx, decider.codec, decider.fold)
 
         %{decider | state: new_state}
@@ -125,7 +150,7 @@ defmodule Equinox.Decider do
           reraise unrecoverable, __STACKTRACE__
 
         recoverable ->
-          if sync_attempt < max_sync_attempts(decider) do
+          if sync_attempt < decider.max_sync_attempts do
             sync_state_with_retry(decider, ctx, events, sync_attempt + 1)
           else
             reraise recoverable, __STACKTRACE__
@@ -136,7 +161,7 @@ defmodule Equinox.Decider do
     defp load_state_with_retry(%__MODULE__{} = decider, load_attempt \\ 1) do
       try do
         new_state =
-          decider.stream
+          decider.stream_name
           |> decider.store.load!(decider.state, decider.codec, decider.fold)
 
         %{decider | state: new_state}
@@ -145,79 +170,123 @@ defmodule Equinox.Decider do
           reraise unrecoverable, __STACKTRACE__
 
         recoverable ->
-          if load_attempt < max_load_attempts(decider) do
+          if load_attempt < decider.max_load_attempts do
             load_state_with_retry(decider, load_attempt + 1)
           else
             reraise recoverable, __STACKTRACE__
           end
       end
     end
-
-    defp max_load_attempts(%__MODULE__{opts: o}), do: Keyword.fetch!(o, :max_load_attempts)
-    defp max_sync_attempts(%__MODULE__{opts: o}), do: Keyword.fetch!(o, :max_sync_attempts)
-    defp max_resync_attempts(%__MODULE__{opts: o}), do: Keyword.fetch!(o, :max_resync_attempts)
   end
 
   defmodule Stateful do
     use GenServer, restart: :transient
 
-    alias Equinox.Stream.StreamName
     alias Equinox.Decider.Stateless
-    alias Equinox.{Store, Codec, Fold, Lifetime}
+    alias Equinox.Codec
 
     @enforce_keys [:stream_name, :supervisor, :registry, :lifetime, :store, :codec, :fold]
-    defstruct stream_name: nil,
-              server_name: nil,
-              supervisor: nil,
-              registry: nil,
-              lifetime: nil,
-              store: nil,
-              codec: nil,
-              fold: nil,
-              opts: []
+    defstruct [
+      :stream_name,
+      :server_name,
+      :supervisor,
+      :registry,
+      :lifetime,
+      :store,
+      :codec,
+      :fold,
+      :on_init,
+      :max_load_attempts,
+      :max_sync_attempts,
+      :max_resync_attempts
+    ]
 
-    @type option ::
-            Stateless.option()
-            | {:on_init, (-> nil)}
+    @type t :: %__MODULE__{}
 
-    @type t :: %__MODULE__{
-            stream_name: StreamName.t(),
-            server_name: GenServer.server(),
-            supervisor: :disabled | GenServer.server(),
-            registry: :disabled | :global | {:global, prefix :: String.t()} | GenServer.server(),
-            lifetime: Lifetime.t(),
-            store: Store.t(),
-            codec: Codec.t(),
-            fold: Fold.t(),
-            opts: list(option())
-          }
+    @opts NimbleOptions.new!(
+            stream_name: [
+              type: :string,
+              required: true,
+              doc: "Fully-qualified stream name (e.g. `Invoice-1`)"
+            ],
+            supervisor: [
+              type: {:or, [:atom, {:in, [:disabled]}]},
+              required: true,
+              doc: "Name of the DynamicSupervisor to start decider under"
+            ],
+            registry: [
+              type:
+                {:or,
+                 [
+                   :atom,
+                   {:in, [:global]},
+                   {:tuple, [{:in, [:global]}, :string]},
+                   {:in, [:disabled]}
+                 ]},
+              required: true,
+              doc: "Name of the registry under which to register the decider"
+            ],
+            lifetime: [
+              type: :atom,
+              required: true,
+              doc: "Process lifetime defition module that implements `Equinox.Lifetime` behaviour"
+            ],
+            store: [
+              type: :atom,
+              required: true,
+              doc: "Persistence module that implements `Equinox.Store` behaviour"
+            ],
+            codec: [
+              type: :atom,
+              required: true,
+              doc: "Event (en|de)coding module that implements `Equinox.Codec` behaviour"
+            ],
+            fold: [
+              type: :atom,
+              required: true,
+              doc: "State generation module that implements `Equinox.Fold` behaviour"
+            ],
+            on_init: [
+              type: {:fun, 0},
+              doc: "Function to execute inside spawned process just before it is initialized"
+            ],
+            max_load_attempts: [
+              type: :pos_integer,
+              default: 2,
+              doc: "How many times (in total) should we try to load the state on load errors"
+            ],
+            max_sync_attempts: [
+              type: :pos_integer,
+              default: 2,
+              doc: "How many times (in total) should we try to sync the state on write errors"
+            ],
+            max_resync_attempts: [
+              type: :non_neg_integer,
+              default: 1,
+              doc: "How many times should we try to resync the state on version conflict"
+            ]
+          )
 
-    @spec for_stream(StreamName.t(), Enumerable.t()) :: t()
-    def for_stream(%StreamName{} = stream_name, opts) do
-      decider =
-        opts
-        |> Keyword.put(:stream_name, stream_name)
-        |> then(&struct!(__MODULE__, &1))
+    @type option :: unquote(NimbleOptions.option_typespec(@opts))
+    @spec new([option()]) :: t()
+    def new(opts) do
+      case NimbleOptions.validate(opts, @opts) do
+        {:ok, opts} ->
+          decider = struct(__MODULE__, opts)
 
-      server_name =
-        case decider.registry do
-          :disabled -> nil
-          :global -> {:global, String.Chars.to_string(decider.stream_name)}
-          {:global, prefix} -> {:global, prefix <> String.Chars.to_string(decider.stream_name)}
-          module -> {:via, Registry, {module, String.Chars.to_string(decider.stream_name)}}
-        end
+          server_name =
+            case decider.registry do
+              :disabled -> nil
+              :global -> {:global, decider.stream_name}
+              {:global, prefix} -> {:global, prefix <> decider.stream_name}
+              module -> {:via, Registry, {module, decider.stream_name}}
+            end
 
-      %{decider | server_name: server_name}
-    end
+          %{decider | server_name: server_name}
 
-    @spec to_stateless(t()) :: Stateless.t()
-    def to_stateless(%__MODULE__{} = decider) do
-      Stateless.for_stream(decider.stream_name,
-        store: decider.store,
-        codec: decider.codec,
-        fold: decider.fold,
-        opts: decider.opts
-      )
+        {:error, validation_error} ->
+          raise ArgumentError, message: Exception.message(validation_error)
+      end
     end
 
     @spec start_server(t()) :: GenServer.on_start() | DynamicSupervisor.on_start_child()
@@ -280,8 +349,20 @@ defmodule Equinox.Decider do
 
     @impl GenServer
     def init(%__MODULE__{} = decider) do
-      Keyword.get(decider.opts, :on_init, fn -> nil end).()
-      server = %{decider: to_stateless(decider), lifetime: decider.lifetime}
+      (decider.on_init || fn -> nil end).()
+
+      stateless_decider =
+        Stateless.new(
+          stream_name: decider.stream_name,
+          store: decider.store,
+          codec: decider.codec,
+          fold: decider.fold,
+          max_load_attempts: decider.max_load_attempts,
+          max_sync_attempts: decider.max_sync_attempts,
+          max_resync_attempts: decider.max_resync_attempts
+        )
+
+      server = %{decider: stateless_decider, lifetime: decider.lifetime}
       {:ok, server, {:continue, :load}}
     end
 
@@ -315,6 +396,40 @@ defmodule Equinox.Decider do
     @impl GenServer
     def handle_info(:timeout, server) do
       {:stop, :normal, server}
+    end
+  end
+
+  @spec new([{:type, :stateful} | Stateful.option()]) :: Stateful.t()
+  @spec new([{:type, :stateless} | Stateless.option()]) :: Stateless.t()
+  def new(opts) do
+    case Keyword.pop!(opts, :type) do
+      {:stateful, opts} ->
+        opts
+        |> Keyword.update!(:stream_name, &String.Chars.to_string/1)
+        |> Stateful.new()
+
+      {:stateless, opts} ->
+        opts
+        |> Keyword.update!(:stream_name, &String.Chars.to_string/1)
+        |> Stateless.new()
+    end
+  end
+
+  @spec load(Stateful.t()) :: Stateful.t()
+  @spec load(Stateless.t()) :: Stateless.t()
+  def load(decider) do
+    case decider do
+      %Stateful{} = decider ->
+        case Stateful.start_server(decider) do
+          {:ok, pid} ->
+            if(decider.server_name, do: decider, else: pid)
+
+          {:error, error_term} ->
+            raise RuntimeError, message: "Failed to start Decider process: #{inspect(error_term)}"
+        end
+
+      %Stateless{} = decider ->
+        Stateless.load(decider)
     end
   end
 
