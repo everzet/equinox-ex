@@ -47,6 +47,12 @@ defmodule Equinox.Stream do
 
     @spec generate(String.t(), String.t()) :: String.t()
     def generate(category, stream_id) when is_bitstring(category) and is_bitstring(stream_id) do
+      if String.contains?(category, @separator) do
+        raise ElementError,
+          message:
+            "StreamName: Expected category to not contain #{@separator}, but got: #{inspect(category)}"
+      end
+
       Enum.join([category, stream_id], @separator)
     end
 

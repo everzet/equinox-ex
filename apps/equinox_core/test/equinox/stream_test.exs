@@ -33,6 +33,11 @@ defmodule Equinox.StreamTest do
     test "combines category and stream id into a fully qualified stream name" do
       assert "a-b" = StreamName.generate("a", StreamId.generate(["b"]))
     end
+
+    test "does not allow category names with separators in them" do
+      assert_raise ElementError, fn -> StreamName.generate("a-", StreamId.generate(["b"])) end
+      assert_raise ElementError, fn -> StreamName.generate("-a", StreamId.generate(["b"])) end
+    end
   end
 
   describe "StreamName.parse/1" do
