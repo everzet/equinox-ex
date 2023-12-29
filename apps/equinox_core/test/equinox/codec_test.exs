@@ -1,7 +1,7 @@
 defmodule Equinox.CodecTest do
   use ExUnit.Case, async: true
   alias Equinox.TestMocks.CodecMock
-  alias Equinox.Events.TimelineEvent
+  alias Equinox.Events.{TimelineEvent, EventData}
   alias Equinox.Codec.{EventStructs, CodecError}
   alias Equinox.Codec
 
@@ -84,6 +84,34 @@ defmodule Equinox.CodecTest do
       assert_raise Codec.CodecError, ~r/runtime error/, fn ->
         Stream.run(Codec.decode_with_position!([%{v: :one, position: 0}], CodecMock))
       end
+    end
+  end
+
+  describe "PassThroughData" do
+    test "passes through TimelineEvent data on decode, unchanged" do
+      event =
+        TimelineEvent.new(
+          id: Equinox.UUID.generate(),
+          type: "TestStruct",
+          stream_name: "testStream-42",
+          position: 0,
+          global_position: 0,
+          data: %{"val1" => 1, "val2" => 2},
+          metadata: nil,
+          time: NaiveDateTime.utc_now()
+        )
+
+      assert {:ok, %{"val1" => 1, "val2" => 2}} = Codec.PassThroughData.decode(event)
+    end
+
+    test "passes through data on encode, unchanged" do
+      assert {:ok, %EventData{type: "unknown", data: %{"val1" => 1, "val2" => 2}}} =
+               Codec.PassThroughData.encode(%{"val1" => 1, "val2" => 2}, nil)
+    end
+
+    test "used type field on encode, if present" do
+      assert {:ok, %EventData{type: "my event"}} =
+               Codec.PassThroughData.encode(%{"type" => "my event"}, nil)
     end
   end
 

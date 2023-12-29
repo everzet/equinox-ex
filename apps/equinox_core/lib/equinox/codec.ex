@@ -77,6 +77,21 @@ defmodule Equinox.Codec do
     end
   end
 
+  defmodule PassThroughData do
+    @behaviour Equinox.Codec
+
+    @impl Equinox.Codec
+    def encode(data, _ctx) do
+      type = Map.get(data, "type", "unknown")
+      {:ok, EventData.new(type: type, data: data)}
+    end
+
+    @impl Equinox.Codec
+    def decode(timeline_event) do
+      {:ok, timeline_event.data}
+    end
+  end
+
   defmodule EventStructs do
     defmacro __using__(opts) do
       structs_mod = Keyword.fetch!(opts, :structs_mod)
