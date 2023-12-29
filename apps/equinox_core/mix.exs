@@ -26,6 +26,7 @@ defmodule EquinoxCore.MixProject do
   defp deps do
     [
       {:nimble_options, "~> 1.1"},
+      {:telemetry, "~> 1.2"},
       {:mox, "~> 1.1", only: :test}
     ]
   end

@@ -1,6 +1,6 @@
 defmodule Equinox.Fold do
+  alias Equinox.{State, Telemetry}
   alias Equinox.Events.DomainEvent
-  alias Equinox.State
 
   @type t :: module()
 
@@ -15,18 +15,20 @@ defmodule Equinox.Fold do
 
   @spec fold(Enumerable.t(DomainEvent.with_position()), State.t(), t()) :: State.t()
   def fold(domain_events, %State{} = state, fold) do
-    Enum.reduce(domain_events, state, fn {event, position}, state ->
-      try do
-        State.update(state, &fold.evolve(&1, event), position)
-      rescue
-        exception ->
-          reraise FoldError,
-                  [
-                    message: "#{inspect(fold)}.evolve: #{Exception.message(exception)}",
-                    exception: exception
-                  ],
-                  __STACKTRACE__
-      end
+    Telemetry.span_fold(fold, state, fn ->
+      Enum.reduce(domain_events, state, fn {event, position}, state ->
+        try do
+          State.update(state, &fold.evolve(&1, event), position)
+        rescue
+          exception ->
+            reraise FoldError,
+                    [
+                      message: "#{inspect(fold)}.evolve: #{Exception.message(exception)}",
+                      exception: exception
+                    ],
+                    __STACKTRACE__
+        end
+      end)
     end)
   end
 end

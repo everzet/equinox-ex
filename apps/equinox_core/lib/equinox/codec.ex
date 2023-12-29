@@ -1,4 +1,5 @@
 defmodule Equinox.Codec do
+  alias Equinox.Telemetry
   alias Equinox.Events.{DomainEvent, EventData, TimelineEvent}
 
   @type t :: module()
@@ -21,11 +22,13 @@ defmodule Equinox.Codec do
   @spec encode!(DomainEvent.t(), ctx(), t()) :: EventData.t()
   def encode!(domain_event, ctx, codec) do
     try do
-      case codec.encode(domain_event, ctx) do
-        {:ok, timeline_event} -> timeline_event
-        {:error, exception} when is_exception(exception) -> raise exception
-        {:error, term} -> raise RuntimeError, message: inspect(term)
-      end
+      Telemetry.span_codec_encode(codec, domain_event, ctx, fn ->
+        case codec.encode(domain_event, ctx) do
+          {:ok, timeline_event} -> timeline_event
+          {:error, exception} when is_exception(exception) -> raise exception
+          {:error, term} -> raise RuntimeError, message: inspect(term)
+        end
+      end)
     rescue
       exception in [CodecError] ->
         reraise exception, __STACKTRACE__
@@ -53,11 +56,13 @@ defmodule Equinox.Codec do
   @spec decode_with_position!(TimelineEvent.t(), t()) :: DomainEvent.with_position()
   def decode_with_position!(timeline_event, codec) do
     try do
-      case codec.decode(timeline_event) do
-        {:ok, domain_event} -> {domain_event, timeline_event.position}
-        {:error, exception} when is_exception(exception) -> raise exception
-        {:error, term} -> raise RuntimeError, message: inspect(term)
-      end
+      Telemetry.span_codec_decode(codec, timeline_event, fn ->
+        case codec.decode(timeline_event) do
+          {:ok, domain_event} -> {domain_event, timeline_event.position}
+          {:error, exception} when is_exception(exception) -> raise exception
+          {:error, term} -> raise RuntimeError, message: inspect(term)
+        end
+      end)
     rescue
       exception in [CodecError] ->
         reraise exception, __STACKTRACE__

@@ -112,7 +112,7 @@ defmodule Equinox.Decider do
   end
 
   defmodule Stateless do
-    alias Equinox.{State, Store, Codec, Fold}
+    alias Equinox.{Telemetry, State, Store, Codec, Fold}
     alias Equinox.Decider.{Query, Decision}
 
     @enforce_keys [:stream_name, :store, :codec, :fold]
@@ -182,16 +182,25 @@ defmodule Equinox.Decider do
 
     @spec query(t(), Query.t()) :: any()
     def query(%__MODULE__{} = decider, query_fun) do
-      Query.execute(query_fun, decider.state)
+      Telemetry.span_decider_query(decider, query_fun, fn ->
+        Query.execute(query_fun, decider.state)
+      end)
     end
 
     @spec transact(t(), Decision.t(), Codec.ctx()) :: {:ok, t()} | {:error, term()}
-    def transact(%__MODULE__{} = decider, decision, ctx \\ nil) do
-      transact_with_resync(decider, decision, ctx)
+    def transact(%__MODULE__{} = decider, decision_fun, ctx \\ nil) do
+      Telemetry.span_decider_transact(decider, decision_fun, fn ->
+        transact_with_resync(decider, decision_fun, ctx)
+      end)
     end
 
-    defp transact_with_resync(%__MODULE__{} = decider, decision, ctx, resync_attempt \\ 0) do
-      case Decision.execute(decision, decider.state) do
+    defp transact_with_resync(%__MODULE__{} = decider, decision_fun, ctx, resync_attempt \\ 0) do
+      decision_result =
+        Telemetry.span_decider_decision(decider, decision_fun, fn ->
+          Decision.execute(decision_fun, decider.state)
+        end)
+
+      case decision_result do
         {:error, error} ->
           {:error, error}
 
@@ -205,8 +214,10 @@ defmodule Equinox.Decider do
             version_conflict in [Store.StreamVersionConflict] ->
               if resync_attempt < decider.max_resync_attempts do
                 decider
-                |> load_state_with_retry()
-                |> transact_with_resync(decision, ctx, resync_attempt + 1)
+                |> Telemetry.span_decider_resync(resync_attempt, fn ->
+                  load_state_with_retry(decider)
+                end)
+                |> transact_with_resync(decision_fun, ctx, resync_attempt + 1)
               else
                 reraise ExhaustedResyncAttempts,
                         [
@@ -222,11 +233,13 @@ defmodule Equinox.Decider do
 
     defp sync_state_with_retry(%__MODULE__{} = decider, ctx, events, sync_attempt \\ 1) do
       try do
-        new_state =
-          decider.stream_name
-          |> decider.store.sync!(decider.state, events, ctx, decider.codec, decider.fold)
+        Telemetry.span_decider_sync(decider, events, sync_attempt, fn ->
+          new_state =
+            decider.stream_name
+            |> decider.store.sync!(decider.state, events, ctx, decider.codec, decider.fold)
 
-        %{decider | state: new_state}
+          %{decider | state: new_state}
+        end)
       rescue
         unrecoverable in [Store.StreamVersionConflict, Codec.CodecError, Fold.FoldError] ->
           reraise unrecoverable, __STACKTRACE__
@@ -248,11 +261,13 @@ defmodule Equinox.Decider do
 
     defp load_state_with_retry(%__MODULE__{} = decider, load_attempt \\ 1) do
       try do
-        new_state =
-          decider.stream_name
-          |> decider.store.load!(decider.state, decider.codec, decider.fold)
+        Telemetry.span_decider_load(decider, load_attempt, fn ->
+          new_state =
+            decider.stream_name
+            |> decider.store.load!(decider.state, decider.codec, decider.fold)
 
-        %{decider | state: new_state}
+          %{decider | state: new_state}
+        end)
       rescue
         unrecoverable in [Codec.CodecError, Fold.FoldError] ->
           reraise unrecoverable, __STACKTRACE__
