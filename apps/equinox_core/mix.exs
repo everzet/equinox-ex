@@ -1,4 +1,4 @@
-defmodule Equinox.MixProject do
+defmodule EquinoxCore.MixProject do
   use Mix.Project
 
   def project do
