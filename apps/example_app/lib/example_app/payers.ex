@@ -2,11 +2,11 @@ defmodule ExampleApp.Payers do
   alias ExampleApp.Payers.Events.PayerDeleted
 
   defmodule Stream do
-    alias Equinox.Stream.{Category, StreamId, StreamName}
+    alias Equinox.Stream.{StreamId, StreamName}
 
-    def category, do: Category.new("Payer")
-    def id(payer_id), do: StreamId.new([String.downcase(payer_id)])
-    def name(payer_id), do: StreamName.new(category(), id(payer_id))
+    def category, do: "Payer"
+    def id(payer_id), do: StreamId.generate([String.downcase(payer_id)])
+    def name(payer_id), do: StreamName.generate(category(), id(payer_id))
   end
 
   defmodule Events do

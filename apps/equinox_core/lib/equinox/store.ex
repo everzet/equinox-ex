@@ -1,11 +1,10 @@
 defmodule Equinox.Store do
   @type t :: module()
-  @type stream_name :: String.t()
   @type stream_version :: -1 | non_neg_integer()
 
-  @callback load!(stream_name(), State.t(), Codec.t(), Fold.t()) :: State.t()
+  @callback load!(stream_name :: String.t(), State.t(), Codec.t(), Fold.t()) :: State.t()
   @callback sync!(
-              stream_name(),
+              stream_name :: String.t(),
               State.t(),
               list(DomainEvent.t()),
               Codec.ctx(),
@@ -27,7 +26,7 @@ defmodule Equinox.Store do
 
     @type t :: %__MODULE__{
             message: String.t(),
-            stream_name: nil | Store.stream_name(),
+            stream_name: nil | String.t(),
             stream_version: nil | Store.stream_version()
           }
   end

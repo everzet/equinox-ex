@@ -6,25 +6,28 @@ defmodule Equinox.Stream do
   end
 
   defmodule StreamId do
-    @enforce_keys [:elements]
-    defstruct [:elements]
+    @separator "_"
 
-    @type t :: %__MODULE__{elements: nonempty_list(String.t())}
-
-    def separator, do: "_"
-
-    @spec new(nonempty_list(String.t())) :: t()
-    def new(elements) when is_list(elements) and length(elements) > 0 do
-      if Enum.any?(elements, &String.contains?(&1, separator())) do
+    @spec generate(nonempty_list(String.t())) :: String.t()
+    def generate(elements) when is_list(elements) and length(elements) > 0 do
+      if Enum.any?(elements, &String.contains?(&1, @separator)) do
         raise ElementError,
           message:
-            "StreamId: Expected elements to not contain #{separator()}, but got: #{inspect(elements)}"
+            "StreamId: Expected elements to not contain #{@separator}, but got: #{inspect(elements)}"
       end
 
-      %StreamId{elements: elements}
+      Enum.join(elements, @separator)
     end
 
-    @spec parse(String.t()) :: {:ok, t()} | {:error, ElementError.t()}
+    @spec parse!(String.t()) :: nonempty_list(String.t())
+    def parse!(val) do
+      case parse(val) do
+        {:ok, stream_id} -> stream_id
+        {:error, error} -> raise error
+      end
+    end
+
+    @spec parse(String.t()) :: {:ok, nonempty_list(String.t())} | {:error, ElementError.t()}
     def parse(string) do
       case string do
         "" ->
@@ -34,79 +37,34 @@ defmodule Equinox.Stream do
           {:error, %ElementError{message: "StreamId: Expected a string, but got #{inspect(val)}"}}
 
         _ ->
-          {:ok, %StreamId{elements: String.split(string, separator())}}
+          {:ok, String.split(string, @separator)}
       end
-    end
-
-    defimpl String.Chars do
-      def to_string(%StreamId{elements: e}), do: Enum.join(e, StreamId.separator())
-    end
-  end
-
-  defmodule Category do
-    @enforce_keys [:name]
-    defstruct [:name]
-
-    @type t :: %__MODULE__{name: String.t()}
-
-    def separator, do: "-"
-
-    @spec new(String.t()) :: t()
-    def new(name) do
-      if String.contains?(name, separator()) do
-        raise ElementError,
-          message:
-            "Category: Expected name to not contain #{separator()}, but got: #{inspect(name)}"
-      end
-
-      %Category{name: name}
-    end
-
-    @spec parse(String.t()) :: {:ok, t()} | {:error, ElementError.t()}
-    def parse(string) do
-      case string do
-        "" ->
-          {:error, %ElementError{message: "Category: Expected non-empty string, but got one"}}
-
-        val when not is_bitstring(val) ->
-          {:error, %ElementError{message: "Category: Expected a string, but got #{inspect(val)}"}}
-
-        _ ->
-          {:ok, %Category{name: string}}
-      end
-    end
-
-    defimpl String.Chars do
-      def to_string(%Category{name: n}), do: n
     end
   end
 
   defmodule StreamName do
-    @enforce_keys [:category, :stream_id]
-    defstruct [:category, :stream_id]
+    @separator "-"
 
-    @type t :: %__MODULE__{category: Category.t(), stream_id: StreamId.t()}
-
-    @spec new(Category.t(), StreamId.t()) :: t()
-    def new(%Category{} = category, %StreamId{} = stream_id) do
-      %StreamName{category: category, stream_id: stream_id}
+    @spec generate(String.t(), String.t()) :: String.t()
+    def generate(category, stream_id) when is_bitstring(category) and is_bitstring(stream_id) do
+      Enum.join([category, stream_id], @separator)
     end
 
-    @spec match(Category.t(), String.t()) :: {:ok, t()} | {:error, ElementError.t()}
-    def match(%Category{name: expected_name}, string) when is_bitstring(string) do
-      with {:ok, stream_name} when stream_name.category.name == expected_name <- parse(string) do
-        {:ok, stream_name}
+    @spec match(String.t(), String.t()) :: {:ok, StreamId.parsed()} | {:error, ElementError.t()}
+    def match(expected_category, string) when is_bitstring(string) do
+      with {:ok, {category, stream_id}} when category == expected_category <- parse(string) do
+        {:ok, stream_id}
       else
         {:ok, _not_matching_stream_name} ->
           {:error,
            %ElementError{
              message:
-               "StreamName: Expected a stream under category of #{expected_name}, but got '#{string}'"
+               "StreamName: Expected a stream under category of #{expected_category}, but got '#{string}'"
            }}
       end
     end
 
-    @spec parse!(String.t()) :: t()
+    @spec parse!(String.t()) :: {category :: String.t(), stream_id :: nonempty_list(String.t())}
     def parse!(val) do
       case parse(val) do
         {:ok, stream_name} -> stream_name
@@ -114,29 +72,26 @@ defmodule Equinox.Stream do
       end
     end
 
-    @spec parse(String.t()) :: {:ok, t()} | {:error, ElementError.t()}
+    @spec parse(String.t()) ::
+            {:ok, {category :: String.t(), stream_id :: nonempty_list(String.t())}}
+            | {:error, ElementError.t()}
 
     def parse(val) when not is_bitstring(val) do
       {:error, %ElementError{message: "StreamName: Expected a string, but got: #{inspect(val)}"}}
     end
 
     def parse(string) do
-      with [category_str, stream_id_str] <- String.split(string, Category.separator(), parts: 2),
-           {:ok, category} <- Category.parse(category_str),
+      with [category, stream_id_str] <- String.split(string, @separator, parts: 2),
            {:ok, stream_id} <- StreamId.parse(stream_id_str) do
-        {:ok, new(category, stream_id)}
+        {:ok, {category, stream_id}}
       else
         list when is_list(list) ->
           {:error,
            %ElementError{
              message:
-               "StreamName: Expected a string with 2 elements separated by #{Category.separator()}, but got: #{inspect(string)}"
+               "StreamName: Expected a string with 2 elements separated by #{@separator}, but got: #{inspect(string)}"
            }}
       end
-    end
-
-    defimpl String.Chars do
-      def to_string(%StreamName{category: c, stream_id: s}), do: "#{c}#{Category.separator()}#{s}"
     end
   end
 end

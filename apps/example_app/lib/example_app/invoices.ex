@@ -1,10 +1,10 @@
 defmodule ExampleApp.Invoices do
   defmodule Stream do
-    alias Equinox.Stream.{Category, StreamId, StreamName}
+    alias Equinox.Stream.{StreamId, StreamName}
 
-    def category, do: Category.new("Invoice")
-    def id(invoice_id), do: StreamId.new([String.downcase(invoice_id)])
-    def name(invoice_id), do: StreamName.new(category(), id(invoice_id))
+    def category, do: "Invoice"
+    def id(invoice_id), do: StreamId.generate([String.downcase(invoice_id)])
+    def name(invoice_id), do: StreamName.generate(category(), id(invoice_id))
   end
 
   defmodule Events do

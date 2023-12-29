@@ -4,7 +4,6 @@ defmodule Equinox.StatefulDeciderTest do
   import Mox
   import ExUnit.CaptureLog
 
-  alias Equinox.Stream.StreamName
   alias Equinox.{Decider, State, Lifetime}
   alias Equinox.TestMocks.{StoreMock, CodecMock, FoldMock, LifetimeMock}
 
@@ -61,8 +60,7 @@ defmodule Equinox.StatefulDeciderTest do
 
       stream = "Invoice-1"
 
-      decider =
-        build_decider(stream_name: StreamName.parse!(stream), registry: DeciderTestRegistry)
+      decider = build_decider(stream_name: stream, registry: DeciderTestRegistry)
 
       stub(FoldMock, :initial, fn -> 0 end)
 
@@ -87,13 +85,11 @@ defmodule Equinox.StatefulDeciderTest do
       expect(StoreMock, :sync!, fn ^stream_1, %{version: -1}, [2], _, _, _ -> State.new(2, 0) end)
       expect(StoreMock, :sync!, fn ^stream_2, %{version: -1}, [3], _, _, _ -> State.new(3, 0) end)
 
-      decider_1 =
-        build_decider(stream_name: StreamName.parse!(stream_1), registry: DeciderTestRegistry)
+      decider_1 = build_decider(stream_name: stream_1, registry: DeciderTestRegistry)
 
       assert {:ok, ^decider_1} = Decider.transact(decider_1, fn 0 -> [2] end)
 
-      decider_2 =
-        build_decider(stream_name: StreamName.parse!(stream_2), registry: DeciderTestRegistry)
+      decider_2 = build_decider(stream_name: stream_2, registry: DeciderTestRegistry)
 
       assert {:ok, ^decider_2} = Decider.transact(decider_2, fn 0 -> [3] end)
 
@@ -103,7 +99,7 @@ defmodule Equinox.StatefulDeciderTest do
 
     test ":global is supported" do
       stream = "Invoice-1"
-      decider = build_decider(stream_name: StreamName.parse!(stream), registry: :global)
+      decider = build_decider(stream_name: stream, registry: :global)
 
       stub(FoldMock, :initial, fn -> 0 end)
       stub(StoreMock, :load!, fn ^stream, %{version: -1}, _, _ -> State.new(5, -1) end)
@@ -116,7 +112,7 @@ defmodule Equinox.StatefulDeciderTest do
 
     test ":global can be prefixed" do
       stream = "Invoice-1"
-      decider = build_decider(stream_name: StreamName.parse!(stream), registry: {:global, "p-"})
+      decider = build_decider(stream_name: stream, registry: {:global, "p-"})
 
       stub(FoldMock, :initial, fn -> 0 end)
       stub(StoreMock, :load!, fn ^stream, %{version: -1}, _, _ -> State.new(5, -1) end)
@@ -204,7 +200,7 @@ defmodule Equinox.StatefulDeciderTest do
     test_pid = self()
 
     Decider.Stateful.for_stream(
-      Keyword.get(attrs, :stream_name, StreamName.parse!("Invoice-1")),
+      Keyword.get(attrs, :stream_name, "Invoice-1"),
       supervisor: Keyword.get(attrs, :supervisor, :disabled),
       registry: Keyword.get(attrs, :registry, :disabled),
       lifetime: Keyword.get(attrs, :lifetime, Lifetime.StayAliveFor30Seconds),
