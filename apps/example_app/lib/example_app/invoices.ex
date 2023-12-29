@@ -3,7 +3,7 @@ defmodule ExampleApp.Invoices do
     alias Equinox.Stream.{StreamId, StreamName}
 
     def category, do: "Invoice"
-    def id(invoice_id), do: StreamId.generate([String.downcase(invoice_id)])
+    def id(invoice_id), do: StreamId.generate([invoice_id])
     def name(invoice_id), do: StreamName.generate(category(), id(invoice_id))
   end
 
@@ -117,12 +117,13 @@ defmodule ExampleApp.Invoices do
     end
   end
 
-  alias Ecto.Changeset
-  alias Equinox.Decider
+  alias Equinox.{UUID, Decider}
   alias ExampleApp.Validator
+  alias Ecto.Changeset
 
   def raise(invoice_id, params) do
-    with {:ok, data} <- Validator.validate(params, &invoice_changeset/1) do
+    with {:ok, invoice_id} <- UUID.parse(invoice_id),
+         {:ok, data} <- Validator.validate(params, &invoice_changeset/1) do
       invoice_id
       |> resolve()
       |> Decider.transact(&Decide.raise_invoice(&1, data))
@@ -130,7 +131,8 @@ defmodule ExampleApp.Invoices do
   end
 
   def record_payment(invoice_id, params) do
-    with {:ok, data} <- Validator.validate(params, &payment_changeset/1) do
+    with {:ok, invoice_id} <- UUID.parse(invoice_id),
+         {:ok, data} <- Validator.validate(params, &payment_changeset/1) do
       invoice_id
       |> resolve()
       |> Decider.transact(&Decide.record_payment(&1, data))
@@ -138,15 +140,19 @@ defmodule ExampleApp.Invoices do
   end
 
   def finalize(invoice_id) do
-    invoice_id
-    |> resolve()
-    |> Decider.transact(&Decide.finalize_invoice/1)
+    with {:ok, invoice_id} <- UUID.parse(invoice_id) do
+      invoice_id
+      |> resolve()
+      |> Decider.transact(&Decide.finalize_invoice/1)
+    end
   end
 
   def read_invoice(invoice_id) do
-    invoice_id
-    |> resolve()
-    |> Decider.query(&Query.summary/1)
+    with {:ok, invoice_id} <- UUID.parse(invoice_id) do
+      invoice_id
+      |> resolve()
+      |> Decider.query(&Query.summary/1)
+    end
   end
 
   defp invoice_changeset(params) do

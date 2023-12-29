@@ -10,7 +10,7 @@ defmodule Equinox.UUID do
   At the time of copying, the original Ecto code is licensed under Apache 2.0.
   This implementation removes some of Ecto-specific casting, but keeps the original
   UUID generation logic. It also adds very basic UUID validation functions via
-  validate/1.
+  parse/1.
 
   Copyright (c) 2013 Plataformatec \
   Copyright (c) 2020 Dashbit
@@ -37,6 +37,21 @@ defmodule Equinox.UUID do
   A raw binary representation of a UUID.
   """
   @type raw :: <<_::128>>
+
+  @doc """
+  Parses given string as UUID by validating and downcasting it.
+  """
+  @spec parse(String.t()) :: {:ok, String.t()} | {:error, ArgumentError.t()}
+  def parse(str) when is_bitstring(str) do
+    if String.match?(
+         str,
+         ~r/^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$/
+       ) do
+      {:ok, String.downcase(str)}
+    else
+      {:error, %ArgumentError{message: "UUID: Expected a valid UUID, but got: #{inspect(str)}"}}
+    end
+  end
 
   @doc """
   Generates a random, version 4 UUID.

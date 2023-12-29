@@ -5,7 +5,7 @@ defmodule ExampleApp.Payers do
     alias Equinox.Stream.{StreamId, StreamName}
 
     def category, do: "Payer"
-    def id(payer_id), do: StreamId.generate([String.downcase(payer_id)])
+    def id(payer_id), do: StreamId.generate([payer_id])
     def name(payer_id), do: StreamName.generate(category(), id(payer_id))
   end
 
@@ -49,12 +49,13 @@ defmodule ExampleApp.Payers do
     def delete_payer(_), do: %PayerDeleted{}
   end
 
-  alias Ecto.Changeset
-  alias Equinox.Decider
+  alias Equinox.{UUID, Decider}
   alias ExampleApp.Validator
+  alias Ecto.Changeset
 
   def update_profile(payer_id, params) do
-    with {:ok, data} <- Validator.validate(params, &payer_changeset/1) do
+    with {:ok, payer_id} <- UUID.parse(payer_id),
+         {:ok, data} <- Validator.validate(params, &payer_changeset/1) do
       payer_id
       |> resolve()
       |> Decider.transact(&Decide.update_profile(&1, data))
@@ -62,15 +63,19 @@ defmodule ExampleApp.Payers do
   end
 
   def delete_payer(payer_id) do
-    payer_id
-    |> resolve()
-    |> Decider.transact(&Decide.delete_payer/1)
+    with {:ok, payer_id} <- UUID.parse(payer_id) do
+      payer_id
+      |> resolve()
+      |> Decider.transact(&Decide.delete_payer/1)
+    end
   end
 
   def read_profile(payer_id) do
-    payer_id
-    |> resolve()
-    |> Decider.query(& &1)
+    with {:ok, payer_id} <- UUID.parse(payer_id) do
+      payer_id
+      |> resolve()
+      |> Decider.query(& &1)
+    end
   end
 
   defp payer_changeset(params) do
