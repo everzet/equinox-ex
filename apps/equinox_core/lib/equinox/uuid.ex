@@ -7,6 +7,7 @@ defmodule Equinox.UUID do
 
   ## License
 
+  At the time of copying, the original Ecto code is licensed under Apache 2.0.
   This implementation removes some of Ecto-specific casting, but keeps the original
   UUID generation logic. It also adds very basic UUID validation functions via
   validate/1.

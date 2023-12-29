@@ -7,7 +7,7 @@ defmodule Equinox.MessageDb.UrlParser do
 
   ## License
 
-  At the time of copying, the original code is licensed under Apache 2.0.
+  At the time of copying, the original Ecto code is licensed under Apache 2.0.
   No modifications were made to this code outside of grouping it under this
   module.
 
