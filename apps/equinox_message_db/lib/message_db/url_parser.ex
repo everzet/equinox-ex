@@ -1,5 +1,31 @@
 defmodule Equinox.MessageDb.UrlParser do
-  @moduledoc "Borrowed from Ecto"
+  @moduledoc """
+  Parses connection URLs into Postgrex connection params.
+
+  This is just a copy-paste from [Ecto](https://github.com/elixir-ecto/ecto).
+  Mad respect to original creators and contributors!
+
+  ## License
+
+  At the time of copying, the original code is licensed under Apache 2.0.
+  No modifications were made to this code outside of grouping it under this
+  module.
+
+  Copyright (c) 2013 Plataformatec \
+  Copyright (c) 2020 Dashbit
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  [https://www.apache.org/licenses/LICENSE-2.0](https://www.apache.org/licenses/LICENSE-2.0)
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+  """
 
   @integer_url_query_params ["timeout", "pool_size", "idle_interval"]
 
