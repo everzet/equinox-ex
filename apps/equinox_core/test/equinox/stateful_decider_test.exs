@@ -25,6 +25,8 @@ defmodule Equinox.StatefulDeciderTest do
       capture_exit(fn -> Decider.transact(initial_pid, fn _ -> raise RuntimeError end) end)
       refute Process.alive?(initial_pid)
 
+      Process.sleep(100)
+
       new_pid = GenServer.whereis(decider.server_name)
       assert Process.alive?(new_pid)
       assert new_pid != initial_pid
