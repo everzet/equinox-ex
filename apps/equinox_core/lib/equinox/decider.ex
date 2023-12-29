@@ -393,6 +393,11 @@ defmodule Equinox.Decider do
       end
     end
 
+    @spec load(pid() | t()) :: pid() | t()
+    def load(decider_or_pid) do
+      ensure_process_alive!(decider_or_pid, fn _pid -> decider_or_pid end)
+    end
+
     @spec start_server(t()) :: GenServer.on_start() | DynamicSupervisor.on_start_child()
     def start_server(%__MODULE__{} = decider) do
       case decider.supervisor do
@@ -507,17 +512,8 @@ defmodule Equinox.Decider do
   @spec load(Stateless.t()) :: Stateless.t()
   def load(decider) do
     case decider do
-      %Stateful{} = decider ->
-        case Stateful.start_server(decider) do
-          {:ok, pid} ->
-            if(decider.server_name, do: decider, else: pid)
-
-          {:error, error_term} ->
-            raise RuntimeError, message: "Failed to start Decider process: #{inspect(error_term)}"
-        end
-
-      %Stateless{} = decider ->
-        Stateless.load(decider)
+      %Stateful{} = decider -> Stateful.load(decider)
+      %Stateless{} = decider -> Stateless.load(decider)
     end
   end
 
