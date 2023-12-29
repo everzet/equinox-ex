@@ -115,6 +115,15 @@ defmodule Equinox.Codec do
       end
     end
 
+    defprotocol Upcast do
+      @fallback_to_any true
+      def upcast(struct)
+    end
+
+    defimpl Upcast, for: Any do
+      def upcast(struct), do: struct
+    end
+
     def struct_to_event_data(%{__struct__: module} = event, parent_module) do
       parent_type = Atom.to_string(parent_module)
       full_type = Atom.to_string(module)
@@ -142,7 +151,13 @@ defmodule Equinox.Codec do
     def timeline_event_to_struct(%{type: type, data: data}, parent_module) do
       try do
         module = String.to_existing_atom("#{Atom.to_string(parent_module)}.#{type}")
-        {:ok, struct!(module, for({k, v} <- data, do: {String.to_existing_atom(k), v}))}
+
+        struct =
+          module
+          |> struct!(for({k, v} <- data, do: {String.to_existing_atom(k), v}))
+          |> Upcast.upcast()
+
+        {:ok, struct}
       rescue
         exception in [ArgumentError] ->
           {:error,

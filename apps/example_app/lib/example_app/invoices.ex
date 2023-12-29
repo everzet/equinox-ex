@@ -8,10 +8,15 @@ defmodule ExampleApp.Invoices do
   end
 
   defmodule Events do
-    use Equinox.Codec.EventStructs, structs_mod: __MODULE__
+    alias Equinox.Codec.EventStructs
+    use EventStructs, structs_mod: __MODULE__
 
     defmodule InvoiceRaised do
       defstruct [:payer_id, :amount, :due_date]
+
+      defimpl EventStructs.Upcast do
+        def upcast(raised), do: Map.update!(raised, :due_date, &Date.from_iso8601!/1)
+      end
     end
 
     defmodule PaymentReceived do

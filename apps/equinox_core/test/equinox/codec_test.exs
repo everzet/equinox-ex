@@ -116,15 +116,12 @@ defmodule Equinox.CodecTest do
   end
 
   describe "EventStructs" do
-    defmodule TestStruct do
-      @enforce_keys [:val1]
-      defstruct [:val1, :val2]
-    end
+    alias Equinox.CodecStubs.{TestStruct}
 
     test "struct_to_event_data/1 converts structs into string maps" do
       struct = %TestStruct{val1: 1, val2: 2}
 
-      assert {:ok, event_data} = EventStructs.struct_to_event_data(struct, __MODULE__)
+      assert {:ok, event_data} = EventStructs.struct_to_event_data(struct, Equinox.CodecStubs)
       assert event_data.type == "TestStruct"
       assert event_data.data == %{"val1" => 1, "val2" => 2}
     end
@@ -135,10 +132,15 @@ defmodule Equinox.CodecTest do
     end
 
     test "struct_to_event_data/1 errors if given anything but struct" do
-      assert {:error, %CodecError{}} = EventStructs.struct_to_event_data(nil, __MODULE__)
-      assert {:error, %CodecError{}} = EventStructs.struct_to_event_data(false, __MODULE__)
-      assert {:error, %CodecError{}} = EventStructs.struct_to_event_data("str", __MODULE__)
-      assert {:error, %CodecError{}} = EventStructs.struct_to_event_data(%{}, __MODULE__)
+      assert {:error, %CodecError{}} = EventStructs.struct_to_event_data(nil, Equinox.CodecStubs)
+
+      assert {:error, %CodecError{}} =
+               EventStructs.struct_to_event_data(false, Equinox.CodecStubs)
+
+      assert {:error, %CodecError{}} =
+               EventStructs.struct_to_event_data("str", Equinox.CodecStubs)
+
+      assert {:error, %CodecError{}} = EventStructs.struct_to_event_data(%{}, Equinox.CodecStubs)
     end
 
     test "timeline_event_to_struct/1 converts timeline event into existing struct under specified module" do
@@ -155,7 +157,24 @@ defmodule Equinox.CodecTest do
         )
 
       assert {:ok, %TestStruct{val1: 1, val2: 2}} =
-               EventStructs.timeline_event_to_struct(event, __MODULE__)
+               EventStructs.timeline_event_to_struct(event, Equinox.CodecStubs)
+    end
+
+    test "timeline_event_to_struct/1 upcasts resulting struct if it implements Upcast protocol" do
+      event =
+        TimelineEvent.new(
+          id: Equinox.UUID.generate(),
+          type: "UpcastableTestStruct",
+          stream_name: "testStream-42",
+          position: 0,
+          global_position: 0,
+          data: %{"val1" => 1, "val2" => 2},
+          metadata: nil,
+          time: NaiveDateTime.utc_now()
+        )
+
+      assert {:ok, %TestStruct{val1: 1, val2: 3}} =
+               EventStructs.timeline_event_to_struct(event, Equinox.CodecStubs)
     end
 
     test "timeline_event_to_struct/1 errors if struct with given type does not exist" do
@@ -171,7 +190,8 @@ defmodule Equinox.CodecTest do
           time: NaiveDateTime.utc_now()
         )
 
-      assert {:error, %CodecError{}} = EventStructs.timeline_event_to_struct(event, __MODULE__)
+      assert {:error, %CodecError{}} =
+               EventStructs.timeline_event_to_struct(event, Equinox.CodecStubs)
     end
 
     test "timeline_event_to_struct/1 errors if wrong parent module given" do
@@ -203,7 +223,8 @@ defmodule Equinox.CodecTest do
           time: NaiveDateTime.utc_now()
         )
 
-      assert {:error, %CodecError{}} = EventStructs.timeline_event_to_struct(event, __MODULE__)
+      assert {:error, %CodecError{}} =
+               EventStructs.timeline_event_to_struct(event, Equinox.CodecStubs)
     end
   end
 end
