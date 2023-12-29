@@ -30,6 +30,87 @@ defmodule Equinox.Decider do
     end
   end
 
+  defmodule ExhaustedLoadAttempts do
+    defexception [:message, :stream_name, :attempts, :exception]
+
+    @type t :: %__MODULE__{
+            message: String.t(),
+            stream_name: String.t(),
+            attempts: pos_integer(),
+            exception: Exception.t()
+          }
+
+    def exception(opts) do
+      stream_name = Keyword.fetch!(opts, :stream_name)
+      attempts = Keyword.fetch!(opts, :attempts)
+      exception = Keyword.fetch!(opts, :exception)
+
+      message =
+        "Load from #{inspect(stream_name)} failed after #{attempts} attempt(s): #{Exception.message(exception)}"
+
+      %__MODULE__{
+        message: message,
+        stream_name: stream_name,
+        exception: exception,
+        attempts: attempts
+      }
+    end
+  end
+
+  defmodule ExhaustedSyncAttempts do
+    defexception [:message, :stream_name, :attempts, :exception]
+
+    @type t :: %__MODULE__{
+            message: String.t(),
+            stream_name: String.t(),
+            attempts: pos_integer(),
+            exception: Exception.t()
+          }
+
+    def exception(opts) do
+      stream_name = Keyword.fetch!(opts, :stream_name)
+      attempts = Keyword.fetch!(opts, :attempts)
+      exception = Keyword.fetch!(opts, :exception)
+
+      message =
+        "Sync to #{stream_name} failed after #{attempts} attempt(s): #{Exception.message(exception)}"
+
+      %__MODULE__{
+        message: message,
+        stream_name: stream_name,
+        exception: exception,
+        attempts: attempts
+      }
+    end
+  end
+
+  defmodule ExhaustedResyncAttempts do
+    defexception [:message, :stream_name, :attempts, :exception]
+
+    @type t :: %__MODULE__{
+            message: String.t(),
+            stream_name: String.t(),
+            attempts: non_neg_integer(),
+            exception: Exception.t()
+          }
+
+    def exception(opts) do
+      stream_name = Keyword.fetch!(opts, :stream_name)
+      attempts = Keyword.fetch!(opts, :attempts)
+      exception = Keyword.fetch!(opts, :exception)
+
+      message =
+        "Failed to resync with #{stream_name} after #{attempts} attempt(s): #{Exception.message(exception)}"
+
+      %__MODULE__{
+        message: message,
+        stream_name: stream_name,
+        exception: exception,
+        attempts: attempts
+      }
+    end
+  end
+
   defmodule Stateless do
     alias Equinox.{State, Store, Codec, Fold}
     alias Equinox.Decider.{Query, Decision}
@@ -127,7 +208,13 @@ defmodule Equinox.Decider do
                 |> load_state_with_retry()
                 |> transact_with_resync(decision, ctx, resync_attempt + 1)
               else
-                reraise version_conflict, __STACKTRACE__
+                reraise ExhaustedResyncAttempts,
+                        [
+                          stream_name: decider.stream_name,
+                          exception: version_conflict,
+                          attempts: resync_attempt
+                        ],
+                        __STACKTRACE__
               end
           end
       end
@@ -148,7 +235,13 @@ defmodule Equinox.Decider do
           if sync_attempt < decider.max_sync_attempts do
             sync_state_with_retry(decider, ctx, events, sync_attempt + 1)
           else
-            reraise recoverable, __STACKTRACE__
+            reraise ExhaustedSyncAttempts,
+                    [
+                      stream_name: decider.stream_name,
+                      exception: recoverable,
+                      attempts: sync_attempt
+                    ],
+                    __STACKTRACE__
           end
       end
     end
@@ -168,7 +261,13 @@ defmodule Equinox.Decider do
           if load_attempt < decider.max_load_attempts do
             load_state_with_retry(decider, load_attempt + 1)
           else
-            reraise recoverable, __STACKTRACE__
+            reraise ExhaustedLoadAttempts,
+                    [
+                      stream_name: decider.stream_name,
+                      exception: recoverable,
+                      attempts: load_attempt
+                    ],
+                    __STACKTRACE__
           end
       end
     end
