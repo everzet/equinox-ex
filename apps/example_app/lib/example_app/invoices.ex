@@ -48,18 +48,22 @@ defmodule ExampleApp.Invoices do
       def finalize(invoice), do: put_in(invoice.status, :finalized)
     end
 
+    @impl Equinox.Fold
     def initial, do: :not_raised
 
+    @impl Equinox.Fold
     def evolve(:not_raised, %InvoiceRaised{} = raised) do
       Invoice.raise(raised.payer_id, raised.amount)
     end
 
+    @impl Equinox.Fold
     def evolve(%Invoice{status: :raised} = invoice, %PaymentReceived{} = paid) do
       invoice
       |> Invoice.receive_payment(paid.reference)
       |> Invoice.pay_amount(paid.amount)
     end
 
+    @impl Equinox.Fold
     def evolve(%Invoice{status: :raised} = invoice, %InvoiceFinalized{}) do
       Invoice.finalize(invoice)
     end
@@ -111,14 +115,18 @@ defmodule ExampleApp.Invoices do
   defmodule Query do
     alias Fold.Invoice
 
-    def summary(:not_raised), do: nil
+    def summary(state) do
+      case state do
+        :not_raised ->
+          nil
 
-    def summary(%Invoice{} = invoice) do
-      %{
-        payer_id: invoice.payer_id,
-        amount: invoice.amount,
-        finalized: invoice.status == :finalized
-      }
+        %Invoice{} = invoice ->
+          %{
+            payer_id: invoice.payer_id,
+            amount: invoice.amount,
+            finalized: invoice.status == :finalized
+          }
+      end
     end
   end
 

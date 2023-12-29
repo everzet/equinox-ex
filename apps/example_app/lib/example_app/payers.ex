@@ -10,7 +10,8 @@ defmodule ExampleApp.Payers do
   end
 
   defmodule Events do
-    use Equinox.Codec.EventStructs, structs_mod: __MODULE__
+    alias Equinox.Codec.EventStructs
+    use EventStructs, structs_mod: __MODULE__
 
     defmodule PayerProfileUpdated do
       defstruct [:name, :email]
@@ -25,8 +26,11 @@ defmodule ExampleApp.Payers do
     @behaviour Equinox.Fold
     alias Events.{PayerProfileUpdated, PayerDeleted}
 
+    @impl Equinox.Fold
     def initial, do: nil
+    @impl Equinox.Fold
     def evolve(_, %PayerProfileUpdated{} = updated), do: Map.from_struct(updated)
+    @impl Equinox.Fold
     def evolve(_, %PayerDeleted{}), do: nil
   end
 
