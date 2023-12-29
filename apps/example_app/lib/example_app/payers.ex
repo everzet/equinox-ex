@@ -98,5 +98,6 @@ defmodule ExampleApp.Payers do
       codec: Events,
       fold: Fold
     )
+    |> Decider.load()
   end
 end

@@ -189,5 +189,6 @@ defmodule ExampleApp.Invoices do
       codec: Events,
       fold: Fold
     )
+    |> Decider.load()
   end
 end
