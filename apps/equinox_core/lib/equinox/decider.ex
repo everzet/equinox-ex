@@ -116,16 +116,14 @@ defmodule Equinox.Decider do
     alias Equinox.Decider.{Query, Decision}
 
     @enforce_keys [:stream_name, :store, :codec, :fold]
-    defstruct [
-      :stream_name,
-      :state,
-      :store,
-      :codec,
-      :fold,
-      :max_load_attempts,
-      :max_sync_attempts,
-      :max_resync_attempts
-    ]
+    defstruct stream_name: nil,
+              state: nil,
+              store: nil,
+              codec: nil,
+              fold: nil,
+              max_load_attempts: 2,
+              max_sync_attempts: 2,
+              max_resync_attempts: 1
 
     @type t :: %__MODULE__{}
 
@@ -147,17 +145,14 @@ defmodule Equinox.Decider do
             ],
             max_load_attempts: [
               type: :pos_integer,
-              default: 2,
               doc: "How many times (in total) should we try to load the state on load errors"
             ],
             max_sync_attempts: [
               type: :pos_integer,
-              default: 2,
               doc: "How many times (in total) should we try to sync the state on write errors"
             ],
             max_resync_attempts: [
               type: :non_neg_integer,
-              default: 1,
               doc: "How many times should we try to resync the state on version conflict"
             ]
           )
@@ -166,12 +161,8 @@ defmodule Equinox.Decider do
     @spec for_stream(String.t(), [option()]) :: t()
     def for_stream(stream_name, opts) do
       case NimbleOptions.validate(opts, @opts) do
-        {:ok, opts} ->
-          decider = struct(__MODULE__, [{:stream_name, stream_name} | opts])
-          %{decider | state: State.init(decider.fold)}
-
-        {:error, validation_error} ->
-          raise ArgumentError, message: Exception.message(validation_error)
+        {:ok, opts} -> struct(__MODULE__, [{:stream_name, stream_name} | opts])
+        {:error, error} -> raise ArgumentError, message: Exception.message(error)
       end
     end
 
@@ -182,16 +173,28 @@ defmodule Equinox.Decider do
 
     @spec query(t(), Query.t()) :: any()
     def query(%__MODULE__{} = decider, query_fun) do
-      Telemetry.span_decider_query(decider, query_fun, fn ->
-        Query.execute(query_fun, decider.state)
+      ensure_state_loaded(decider, fn decider ->
+        Telemetry.span_decider_query(decider, query_fun, fn ->
+          Query.execute(query_fun, decider.state)
+        end)
       end)
     end
 
     @spec transact(t(), Decision.t(), Codec.ctx()) :: {:ok, t()} | {:error, term()}
     def transact(%__MODULE__{} = decider, decision_fun, ctx \\ nil) do
-      Telemetry.span_decider_transact(decider, decision_fun, fn ->
-        transact_with_resync(decider, decision_fun, ctx)
+      ensure_state_loaded(decider, fn decider ->
+        Telemetry.span_decider_transact(decider, decision_fun, fn ->
+          transact_with_resync(decider, decision_fun, ctx)
+        end)
       end)
+    end
+
+    defp ensure_state_loaded(%__MODULE__{} = decider, fun) do
+      if decider.state do
+        fun.(decider)
+      else
+        decider |> load_state_with_retry() |> fun.()
+      end
     end
 
     defp transact_with_resync(%__MODULE__{} = decider, decision_fun, ctx, resync_attempt \\ 0) do
@@ -235,8 +238,14 @@ defmodule Equinox.Decider do
       try do
         Telemetry.span_decider_sync(decider, events, sync_attempt, fn ->
           new_state =
-            decider.stream_name
-            |> decider.store.sync!(decider.state, events, ctx, decider.codec, decider.fold)
+            decider.store.sync!(
+              decider.stream_name,
+              decider.state,
+              events,
+              ctx,
+              decider.codec,
+              decider.fold
+            )
 
           %{decider | state: new_state}
         end)
@@ -263,8 +272,12 @@ defmodule Equinox.Decider do
       try do
         Telemetry.span_decider_load(decider, load_attempt, fn ->
           new_state =
-            decider.stream_name
-            |> decider.store.load!(decider.state, decider.codec, decider.fold)
+            decider.store.load!(
+              decider.stream_name,
+              decider.state || State.init(decider.fold),
+              decider.codec,
+              decider.fold
+            )
 
           %{decider | state: new_state}
         end)
