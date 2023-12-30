@@ -293,8 +293,9 @@ defmodule Equinox.DeciderTest do
   defp init(decider_mod, attrs \\ [])
 
   defp init(Decider.Stateless, attrs) do
-    Decider.Stateless.for_stream(
-      Keyword.get(attrs, :stream_name, "Invoice-1"),
+    attrs
+    |> Keyword.get(:stream_name, "Invoice-1")
+    |> Decider.Stateless.for_stream(
       store: StoreMock,
       codec: CodecMock,
       fold: FoldMock,
@@ -302,28 +303,32 @@ defmodule Equinox.DeciderTest do
       max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 2),
       max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 1)
     )
-    |> Decider.load()
+    |> Decider.Stateless.load()
   end
 
   defp init(Decider.Stateful, attrs) do
     test_pid = self()
 
-    Decider.Stateful.for_stream(
-      Keyword.get(attrs, :stream_name, "Invoice-1"),
-      supervisor: :disabled,
-      registry: :disabled,
-      lifetime: Lifetime.StayAliveFor30Seconds,
+    attrs
+    |> Keyword.get(:stream_name, "Invoice-1")
+    |> Decider.Stateless.for_stream(
       store: StoreMock,
       codec: CodecMock,
       fold: FoldMock,
       max_load_attempts: Keyword.get(attrs, :max_load_attempts, 2),
       max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 2),
-      max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 1),
+      max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 1)
+    )
+    |> Decider.Stateful.wrap_stateless(
+      supervisor: :disabled,
+      registry: :disabled,
+      lifetime: Lifetime.StayAliveFor30Seconds,
       on_init: fn ->
         allow(StoreMock, test_pid, self())
+        allow(CodecMock, test_pid, self())
         allow(FoldMock, test_pid, self())
       end
     )
-    |> Decider.load()
+    |> Decider.Stateful.start()
   end
 end

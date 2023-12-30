@@ -189,7 +189,7 @@ defmodule ExampleApp.Invoices do
   defp resolve(invoice_id) do
     invoice_id
     |> Stream.name()
-    |> Decider.Stateful.for_stream(
+    |> Decider.start_stateful(
       supervisor: ExampleApp.InvoicesSupervisor,
       registry: ExampleApp.InvoicesRegistry,
       lifetime: Equinox.Lifetime.StayAliveFor30Seconds,
@@ -197,6 +197,5 @@ defmodule ExampleApp.Invoices do
       codec: Events,
       fold: Fold
     )
-    |> Decider.load()
   end
 end

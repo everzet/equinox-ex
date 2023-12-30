@@ -163,7 +163,7 @@ defmodule Equinox.Decider do
           )
 
     @type option :: unquote(NimbleOptions.option_typespec(@opts))
-    @spec for_stream(String.t(), [option]) :: t()
+    @spec for_stream(String.t(), [option()]) :: t()
     def for_stream(stream_name, opts) do
       case NimbleOptions.validate(opts, @opts) do
         {:ok, opts} ->
@@ -294,21 +294,8 @@ defmodule Equinox.Decider do
     alias Equinox.Decider.Stateless
     alias Equinox.Codec
 
-    @enforce_keys [:stream_name, :supervisor, :registry, :lifetime, :store, :codec, :fold]
-    defstruct [
-      :stream_name,
-      :server_name,
-      :supervisor,
-      :registry,
-      :lifetime,
-      :store,
-      :codec,
-      :fold,
-      :on_init,
-      :max_load_attempts,
-      :max_sync_attempts,
-      :max_resync_attempts
-    ]
+    @enforce_keys [:supervisor, :registry, :lifetime]
+    defstruct [:server_name, :stateless, :supervisor, :registry, :lifetime, :on_init]
 
     @type t :: %__MODULE__{}
 
@@ -316,7 +303,7 @@ defmodule Equinox.Decider do
             supervisor: [
               type: {:or, [:atom, {:in, [:disabled]}]},
               required: true,
-              doc: "Name of the DynamicSupervisor to start decider under"
+              doc: "Name of the DynamicSupervisor which should parent the decider process"
             ],
             registry: [
               type:
@@ -328,151 +315,114 @@ defmodule Equinox.Decider do
                    {:in, [:disabled]}
                  ]},
               required: true,
-              doc: "Name of the registry under which to register the decider"
+              doc: "Name of the Registry (or :global) under which our decider should be listed"
             ],
             lifetime: [
               type: :atom,
               required: true,
               doc: "Process lifetime defition module that implements `Equinox.Lifetime` behaviour"
             ],
-            store: [
-              type: :atom,
-              required: true,
-              doc: "Persistence module that implements `Equinox.Store` behaviour"
-            ],
-            codec: [
-              type: :atom,
-              required: true,
-              doc: "Event (en|de)coding module that implements `Equinox.Codec` behaviour"
-            ],
-            fold: [
-              type: :atom,
-              required: true,
-              doc: "State generation module that implements `Equinox.Fold` behaviour"
-            ],
             on_init: [
               type: {:fun, 0},
               doc: "Function to execute inside spawned process just before it is initialized"
-            ],
-            max_load_attempts: [
-              type: :pos_integer,
-              default: 2,
-              doc: "How many times (in total) should we try to load the state on load errors"
-            ],
-            max_sync_attempts: [
-              type: :pos_integer,
-              default: 2,
-              doc: "How many times (in total) should we try to sync the state on write errors"
-            ],
-            max_resync_attempts: [
-              type: :non_neg_integer,
-              default: 1,
-              doc: "How many times should we try to resync the state on version conflict"
             ]
           )
 
     @type option :: unquote(NimbleOptions.option_typespec(@opts))
-    @spec for_stream(String.t(), [option()]) :: t()
-    def for_stream(stream_name, opts) do
+    @spec wrap_stateless(Stateless.t(), [option()]) :: t()
+    def wrap_stateless(%Stateless{} = stateless, opts) do
       case NimbleOptions.validate(opts, @opts) do
         {:ok, opts} ->
-          decider = struct(__MODULE__, [{:stream_name, stream_name} | opts])
+          settings = struct(__MODULE__, [{:stateless, stateless} | opts])
 
           server_name =
-            case decider.registry do
+            case settings.registry do
               :disabled -> nil
-              :global -> {:global, decider.stream_name}
-              {:global, prefix} -> {:global, prefix <> decider.stream_name}
-              module -> {:via, Registry, {module, decider.stream_name}}
+              :global -> {:global, stateless.stream_name}
+              {:global, prefix} -> {:global, prefix <> stateless.stream_name}
+              module -> {:via, Registry, {module, stateless.stream_name}}
             end
 
-          %{decider | server_name: server_name}
+          %{settings | server_name: server_name}
 
         {:error, validation_error} ->
           raise ArgumentError, message: Exception.message(validation_error)
       end
     end
 
-    @spec load(pid() | t()) :: pid() | t()
-    def load(decider_or_pid) do
-      ensure_process_alive!(decider_or_pid, fn _pid -> decider_or_pid end)
+    @spec start(t()) :: t() | pid()
+    def start(%__MODULE__{} = settings) do
+      with {:ok, pid} <- start_server(settings) do
+        if(settings.server_name, do: settings, else: pid)
+      else
+        {:error, {:already_started, pid}} -> pid
+        {:error, error} -> raise RuntimeError, message: "Decider.Stateful: #{inspect(error)}"
+      end
     end
 
     @spec start_server(t()) :: GenServer.on_start() | DynamicSupervisor.on_start_child()
-    def start_server(%__MODULE__{} = decider) do
-      case decider.supervisor do
-        :disabled -> start_link(decider)
-        supervisor -> start_supervised(decider, supervisor)
+    def start_server(%__MODULE__{} = settings) do
+      case settings.supervisor do
+        :disabled -> start_link(settings)
+        supervisor -> start_supervised(settings, supervisor)
       end
     end
 
     @spec start_link(t()) :: GenServer.on_start()
-    def start_link(%__MODULE__{} = decider) do
-      GenServer.start_link(__MODULE__, decider, name: decider.server_name)
+    def start_link(%__MODULE__{} = settings) do
+      GenServer.start_link(__MODULE__, settings, name: settings.server_name)
     end
 
-    @spec start_supervised(t(), sup :: GenServer.server()) :: DynamicSupervisor.on_start_child()
-    def start_supervised(%__MODULE__{} = decider, supervisor) do
-      DynamicSupervisor.start_child(supervisor, {__MODULE__, decider})
+    @spec start_supervised(t(), GenServer.server()) :: DynamicSupervisor.on_start_child()
+    def start_supervised(%__MODULE__{} = settings, supervisor) do
+      DynamicSupervisor.start_child(supervisor, {__MODULE__, settings})
     end
 
     @spec query(t() | pid(), Query.t()) :: any()
-    def query(decider_or_pid, query) do
-      ensure_process_alive!(decider_or_pid, fn pid ->
-        GenServer.call(pid, {:query, query})
+    def query(settings_or_pid, query) do
+      within_started_server!(settings_or_pid, fn server_name_or_pid ->
+        GenServer.call(server_name_or_pid, {:query, query})
       end)
     end
 
     @spec transact(t(), Decision.t(), Codec.ctx()) :: {:ok, t()} | {:error, term()}
     @spec transact(pid(), Decision.t(), Codec.ctx()) :: {:ok, pid()} | {:error, term()}
-    def transact(decider_or_pid, decision, ctx \\ nil) do
-      ensure_process_alive!(decider_or_pid, fn pid ->
-        case GenServer.call(pid, {:transact, decision, ctx}) do
-          :ok -> {:ok, decider_or_pid}
+    def transact(settings_or_pid, decision, ctx \\ nil) do
+      within_started_server!(settings_or_pid, fn server_name_or_pid ->
+        case GenServer.call(server_name_or_pid, {:transact, decision, ctx}) do
+          :ok -> {:ok, settings_or_pid}
           {:error, error} -> {:error, error}
         end
       end)
     end
 
-    defp ensure_process_alive!(pid, fun) when is_pid(pid) do
+    defp within_started_server!(pid, fun) when is_pid(pid) do
       if not Process.alive?(pid) do
-        raise RuntimeError, message: "Decider: Given process #{inspect(pid)} is not alive"
+        raise RuntimeError,
+          message: "Decider.Stateful: Given process #{inspect(pid)} is not alive"
       else
         fun.(pid)
       end
     end
 
-    defp ensure_process_alive!(%__MODULE__{} = decider, fun) do
-      case decider.server_name do
-        nil ->
-          raise RuntimeError, message: "Decider: On-demand deciders require name (and registry)"
+    defp within_started_server!(%__MODULE__{server_name: nil}, _fun) do
+      raise RuntimeError,
+        message: "Decider.Stateful failed to start: Start manually or provide `registry` setting"
+    end
 
-        server_name ->
-          try do
-            fun.(server_name)
-          catch
-            :exit, {:noproc, _} -> with({:ok, pid} <- start_server(decider), do: fun.(pid))
-          end
-      end
+    defp within_started_server!(%__MODULE__{server_name: server_name} = server, fun) do
+      fun.(server_name)
+    catch
+      :exit, {:noproc, _} ->
+        with {:ok, _pid} <- start_server(server) do
+          fun.(server_name)
+        end
     end
 
     @impl GenServer
-    def init(%__MODULE__{} = decider) do
-      (decider.on_init || fn -> nil end).()
-
-      stateless_decider =
-        Stateless.for_stream(
-          decider.stream_name,
-          store: decider.store,
-          codec: decider.codec,
-          fold: decider.fold,
-          max_load_attempts: decider.max_load_attempts,
-          max_sync_attempts: decider.max_sync_attempts,
-          max_resync_attempts: decider.max_resync_attempts
-        )
-
-      server = %{decider: stateless_decider, lifetime: decider.lifetime}
-      {:ok, server, {:continue, :load}}
+    def init(%__MODULE__{} = settings) do
+      (settings.on_init || fn -> nil end).()
+      {:ok, %{decider: settings.stateless, lifetime: settings.lifetime}, {:continue, :load}}
     end
 
     @impl GenServer
@@ -508,13 +458,29 @@ defmodule Equinox.Decider do
     end
   end
 
-  @spec load(Stateful.t()) :: Stateful.t()
-  @spec load(Stateless.t()) :: Stateless.t()
-  def load(decider) do
-    case decider do
-      %Stateful{} = decider -> Stateful.load(decider)
-      %Stateless{} = decider -> Stateless.load(decider)
-    end
+  @spec load_stateless(String.t(), [Stateless.option()]) :: Stateless.t()
+  def load_stateless(stream_name, opts) do
+    stream_name
+    |> Stateless.for_stream(opts)
+    |> Stateless.load()
+  end
+
+  @spec start_stateful(String.t(), [Stateless.option() | Stateful.option()]) :: pid()
+  def start_stateful(stream_name, opts) do
+    {stateless_opts, stateful_opts} =
+      Keyword.split(opts, [
+        :store,
+        :codec,
+        :fold,
+        :max_load_attempts,
+        :max_sync_attempts,
+        :max_resync_attempts
+      ])
+
+    stream_name
+    |> Stateless.for_stream(stateless_opts)
+    |> Stateful.wrap_stateless(stateful_opts)
+    |> Stateful.start()
   end
 
   @spec query(pid(), Query.t()) :: any()

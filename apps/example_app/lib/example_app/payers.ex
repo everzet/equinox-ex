@@ -94,7 +94,7 @@ defmodule ExampleApp.Payers do
   defp resolve(payer_id) do
     payer_id
     |> Stream.name()
-    |> Decider.Stateful.for_stream(
+    |> Decider.start_stateful(
       supervisor: ExampleApp.PayersSupervisor,
       registry: :global,
       lifetime: Equinox.Lifetime.StayAliveFor30Seconds,
@@ -102,6 +102,5 @@ defmodule ExampleApp.Payers do
       codec: Events,
       fold: Fold
     )
-    |> Decider.load()
   end
 end
