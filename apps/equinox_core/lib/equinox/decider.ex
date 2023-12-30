@@ -393,7 +393,7 @@ defmodule Equinox.Decider do
 
     @spec query(t() | pid(), Query.t()) :: any()
     def query(settings_or_pid, query) do
-      within_started_server!(settings_or_pid, fn server_name_or_pid ->
+      ensure_server_started(settings_or_pid, fn server_name_or_pid ->
         GenServer.call(server_name_or_pid, {:query, query})
       end)
     end
@@ -401,7 +401,7 @@ defmodule Equinox.Decider do
     @spec transact(t(), Decision.t(), Codec.ctx()) :: {:ok, t()} | {:error, term()}
     @spec transact(pid(), Decision.t(), Codec.ctx()) :: {:ok, pid()} | {:error, term()}
     def transact(settings_or_pid, decision, ctx \\ nil) do
-      within_started_server!(settings_or_pid, fn server_name_or_pid ->
+      ensure_server_started(settings_or_pid, fn server_name_or_pid ->
         case GenServer.call(server_name_or_pid, {:transact, decision, ctx}) do
           :ok -> {:ok, settings_or_pid}
           {:error, error} -> {:error, error}
@@ -409,7 +409,7 @@ defmodule Equinox.Decider do
       end)
     end
 
-    defp within_started_server!(pid, fun) when is_pid(pid) do
+    defp ensure_server_started(pid, fun) when is_pid(pid) do
       if not Process.alive?(pid) do
         raise RuntimeError,
           message: "Decider.Stateful: Given process #{inspect(pid)} is not alive"
@@ -418,12 +418,12 @@ defmodule Equinox.Decider do
       end
     end
 
-    defp within_started_server!(%__MODULE__{server_name: nil}, _fun) do
+    defp ensure_server_started(%__MODULE__{server_name: nil}, _fun) do
       raise RuntimeError,
         message: "Decider.Stateful failed to start: Start manually or provide `registry` setting"
     end
 
-    defp within_started_server!(%__MODULE__{server_name: server_name} = server, fun) do
+    defp ensure_server_started(%__MODULE__{server_name: server_name} = server, fun) do
       fun.(server_name)
     catch
       :exit, {:noproc, _} ->
