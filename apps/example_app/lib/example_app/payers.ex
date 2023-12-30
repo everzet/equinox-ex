@@ -10,8 +10,7 @@ defmodule ExampleApp.Payers do
   end
 
   defmodule Events do
-    alias Equinox.Codec.EventStructs
-    use EventStructs, structs_mod: __MODULE__
+    use Equinox.Codec.EventStructs
 
     defmodule PayerProfileUpdated do
       defstruct [:name, :email]
