@@ -481,15 +481,8 @@ defmodule Equinox.Decider do
   @spec start_stateful(String.t(), [Stateless.option() | Stateful.option()]) ::
           Stateful.t() | pid()
   def start_stateful(stream_name, opts) do
-    {stateless_opts, stateful_opts} =
-      Keyword.split(opts, [
-        :store,
-        :codec,
-        :fold,
-        :max_load_attempts,
-        :max_sync_attempts,
-        :max_resync_attempts
-      ])
+    {stateful_opts, stateless_opts} =
+      Keyword.split(opts, [:supervisor, :registry, :lifetime, :on_init])
 
     stream_name
     |> Stateless.for_stream(stateless_opts)
