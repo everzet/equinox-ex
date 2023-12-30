@@ -116,8 +116,8 @@ defmodule Equinox.Decider do
     alias Equinox.Decider.{Query, Decision}
 
     @enforce_keys [:stream_name, :store, :codec, :fold]
-    defstruct stream_name: nil,
-              state: nil,
+    defstruct state: :not_loaded,
+              stream_name: nil,
               store: nil,
               codec: nil,
               fold: nil,
@@ -166,6 +166,10 @@ defmodule Equinox.Decider do
       end
     end
 
+    @spec loaded?(t()) :: boolean()
+    def loaded?(%__MODULE__{state: %State{}}), do: true
+    def loaded?(%__MODULE__{state: _}), do: false
+
     @spec load(t()) :: t()
     def load(%__MODULE__{} = decider) do
       load_state_with_retry(decider)
@@ -190,11 +194,8 @@ defmodule Equinox.Decider do
     end
 
     defp ensure_state_loaded(%__MODULE__{} = decider, fun) do
-      if decider.state do
-        fun.(decider)
-      else
-        decider |> load_state_with_retry() |> fun.()
-      end
+      loaded_decider = if(not loaded?(decider), do: load(decider), else: decider)
+      fun.(loaded_decider)
     end
 
     defp transact_with_resync(%__MODULE__{} = decider, decision_fun, ctx, resync_attempt \\ 0) do
@@ -237,17 +238,11 @@ defmodule Equinox.Decider do
     defp sync_state_with_retry(%__MODULE__{} = decider, ctx, events, sync_attempt \\ 1) do
       try do
         Telemetry.span_decider_sync(decider, events, sync_attempt, fn ->
-          new_state =
-            decider.store.sync!(
-              decider.stream_name,
-              decider.state,
-              events,
-              ctx,
-              decider.codec,
-              decider.fold
-            )
+          synced_state =
+            decider.stream_name
+            |> decider.store.sync!(decider.state, events, ctx, decider.codec, decider.fold)
 
-          %{decider | state: new_state}
+          %{decider | state: synced_state}
         end)
       rescue
         unrecoverable in [Store.StreamVersionConflict, Codec.CodecError, Fold.FoldError] ->
@@ -271,15 +266,14 @@ defmodule Equinox.Decider do
     defp load_state_with_retry(%__MODULE__{} = decider, load_attempt \\ 1) do
       try do
         Telemetry.span_decider_load(decider, load_attempt, fn ->
-          new_state =
-            decider.store.load!(
-              decider.stream_name,
-              decider.state || State.init(decider.fold),
-              decider.codec,
-              decider.fold
-            )
+          current_state =
+            if(loaded?(decider), do: decider.state, else: State.init(decider.fold))
 
-          %{decider | state: new_state}
+          loaded_state =
+            decider.stream_name
+            |> decider.store.load!(current_state, decider.codec, decider.fold)
+
+          %{decider | state: loaded_state}
         end)
       rescue
         unrecoverable in [Codec.CodecError, Fold.FoldError] ->
@@ -439,8 +433,9 @@ defmodule Equinox.Decider do
     end
 
     @impl GenServer
-    def handle_continue(:load, server) do
-      loaded_decider = Stateless.load(server.decider)
+    def handle_continue(:load, %{decider: decider} = server) do
+      loaded_decider =
+        if(not Stateless.loaded?(decider), do: Stateless.load(decider), else: decider)
 
       {:noreply, %{server | decider: loaded_decider},
        server.lifetime.after_init(loaded_decider.state.value)}

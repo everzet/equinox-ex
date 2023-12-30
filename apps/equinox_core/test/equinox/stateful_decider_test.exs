@@ -9,6 +9,19 @@ defmodule Equinox.StatefulDeciderTest do
 
   setup :verify_on_exit!
 
+  test "only loads state on boot if it was not loaded already" do
+    decider = build_decider()
+
+    expect(FoldMock, :initial, 0, fn -> nil end)
+    expect(StoreMock, :load!, 0, fn _, _, _, _ -> nil end)
+
+    assert {:ok, pid} =
+             put_in(decider.stateless.state, State.new(:value, 2))
+             |> Decider.Stateful.start_server()
+
+    assert Decider.query(pid, & &1) == :value
+  end
+
   describe "supervisor" do
     test "restarts process (which reloads state from store) when it crashes" do
       start_supervised!({DynamicSupervisor, strategy: :one_for_one, name: DeciderTestSupervisor})
@@ -195,7 +208,7 @@ defmodule Equinox.StatefulDeciderTest do
     end)
   end
 
-  defp build_decider(attrs) do
+  defp build_decider(attrs \\ []) do
     test_pid = self()
 
     attrs
