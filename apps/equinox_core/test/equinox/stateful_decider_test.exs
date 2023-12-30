@@ -13,19 +13,19 @@ defmodule Equinox.StatefulDeciderTest do
     test "restarts process (which reloads state from store) when it crashes" do
       start_supervised!({DynamicSupervisor, strategy: :one_for_one, name: DeciderTestSupervisor})
       start_supervised!({Registry, keys: :unique, name: DeciderTestRegistry})
-      stub(FoldMock, :initial, fn -> :initial end)
 
       decider = build_decider(supervisor: DeciderTestSupervisor, registry: DeciderTestRegistry)
 
+      expect(FoldMock, :initial, 2, fn -> :initial end)
       expect(StoreMock, :load!, 2, fn _, _, _, _ -> State.new(0, -1) end)
 
       {:ok, initial_pid} = Decider.Stateful.start_server(decider)
-      assert initial_pid == GenServer.whereis(decider.server_name)
+      assert GenServer.whereis(decider.server_name) == initial_pid
 
       capture_exit(fn -> Decider.transact(initial_pid, fn _ -> raise RuntimeError end) end)
       refute Process.alive?(initial_pid)
 
-      Process.sleep(100)
+      Process.sleep(50)
 
       new_pid = GenServer.whereis(decider.server_name)
       assert Process.alive?(new_pid)
@@ -35,7 +35,6 @@ defmodule Equinox.StatefulDeciderTest do
     test "does not restart processes that exited due to lifetime timeout" do
       start_supervised!({DynamicSupervisor, strategy: :one_for_one, name: DeciderTestSupervisor})
       start_supervised!({Registry, keys: :unique, name: DeciderTestRegistry})
-      stub(FoldMock, :initial, fn -> :initial end)
 
       decider =
         build_decider(
@@ -44,138 +43,141 @@ defmodule Equinox.StatefulDeciderTest do
           lifetime: LifetimeMock
         )
 
+      expect(FoldMock, :initial, 1, fn -> :initial end)
       expect(StoreMock, :load!, 1, fn _, %{version: -1}, _, _ -> State.new(0, -1) end)
-      expect(LifetimeMock, :after_init, fn _ -> 0 end)
+      expect(LifetimeMock, :after_init, 1, fn _ -> 0 end)
 
-      assert {:ok, pid} = Decider.Stateful.start_server(decider)
+      {:ok, pid} = Decider.Stateful.start_server(decider)
 
-      Process.sleep(100)
+      Process.sleep(50)
 
       refute Process.alive?(pid)
-      assert GenServer.whereis(decider.server_name) == nil
+      refute GenServer.whereis(decider.server_name)
     end
   end
 
   describe "registry" do
     test "allows interacting with process without carrying pid around" do
       start_supervised!({Registry, keys: :unique, name: DeciderTestRegistry})
-      stub(FoldMock, :initial, fn -> 0 end)
 
       stream = "Invoice-1"
       decider = build_decider(stream_name: stream, registry: DeciderTestRegistry)
 
-      expect(StoreMock, :load!, fn ^stream, %{version: -1}, _, _ -> State.new(0, -1) end)
+      stub(FoldMock, :initial, fn -> 0 end)
+      stub(StoreMock, :load!, fn ^stream, %{version: -1}, _, _ -> State.new(0, -1) end)
+
       expect(StoreMock, :sync!, fn ^stream, %{version: -1}, [2], _, _, _ -> State.new(2, 0) end)
       expect(StoreMock, :sync!, fn ^stream, %{version: 0}, [3], _, _, _ -> State.new(5, 1) end)
 
       assert {:ok, ^decider} = Decider.transact(decider, fn 0 -> 2 end)
       assert {:ok, ^decider} = Decider.transact(decider, fn 2 -> 3 end)
-      assert 5 = Decider.query(decider, & &1)
+      assert Decider.query(decider, & &1) == 5
     end
 
     test "isolates processes by stream name" do
       start_supervised!({Registry, keys: :unique, name: DeciderTestRegistry})
-      stub(FoldMock, :initial, fn -> 0 end)
 
       stream_1 = "Invoice-1"
-      stream_2 = "Invoice-2"
-
-      expect(StoreMock, :load!, 2, fn _, %{version: -1}, _, _ -> State.new(0, -1) end)
+      decider_1 = build_decider(stream_name: stream_1, registry: DeciderTestRegistry)
+      expect(FoldMock, :initial, fn -> 0 end)
+      expect(StoreMock, :load!, fn ^stream_1, %{version: -1}, _, _ -> State.new(0, -1) end)
       expect(StoreMock, :sync!, fn ^stream_1, %{version: -1}, [2], _, _, _ -> State.new(2, 0) end)
+
+      stream_2 = "Invoice-2"
+      decider_2 = build_decider(stream_name: stream_2, registry: DeciderTestRegistry)
+      expect(FoldMock, :initial, fn -> 0 end)
+      expect(StoreMock, :load!, fn ^stream_2, %{version: -1}, _, _ -> State.new(0, -1) end)
       expect(StoreMock, :sync!, fn ^stream_2, %{version: -1}, [3], _, _, _ -> State.new(3, 0) end)
 
-      decider_1 = build_decider(stream_name: stream_1, registry: DeciderTestRegistry)
       assert {:ok, ^decider_1} = Decider.transact(decider_1, fn 0 -> [2] end)
+      assert Decider.query(decider_1, & &1) == 2
 
-      decider_2 = build_decider(stream_name: stream_2, registry: DeciderTestRegistry)
       assert {:ok, ^decider_2} = Decider.transact(decider_2, fn 0 -> [3] end)
-
-      assert 2 = Decider.query(decider_1, & &1)
-      assert 3 = Decider.query(decider_2, & &1)
+      assert Decider.query(decider_2, & &1) == 3
     end
 
     test ":global is supported" do
-      stub(FoldMock, :initial, fn -> 0 end)
-      stub(StoreMock, :load!, fn _, %{version: -1}, _, _ -> State.new(5, -1) end)
-
       stream = "Invoice-1"
       decider = build_decider(stream_name: stream, registry: :global)
 
-      assert 5 = Decider.query(decider, & &1)
+      stub(FoldMock, :initial, fn -> 0 end)
+      stub(StoreMock, :load!, fn _, %{version: -1}, _, _ -> State.new(5, -1) end)
+
+      assert Decider.query(decider, & &1) == 5
 
       assert pid = GenServer.whereis({:global, stream})
       assert Process.alive?(pid)
     end
 
     test ":global can be prefixed" do
+      stream = "Invoice-1"
+      decider = build_decider(stream_name: stream, registry: {:global, "prefix-"})
+
       stub(FoldMock, :initial, fn -> 0 end)
       stub(StoreMock, :load!, fn _, %{version: -1}, _, _ -> State.new(5, -1) end)
 
-      stream = "Invoice-1"
-      decider = build_decider(stream_name: stream, registry: {:global, "p-"})
+      assert Decider.query(decider, & &1) == 5
 
-      assert 5 = Decider.query(decider, & &1)
-
-      assert pid = GenServer.whereis({:global, "p-" <> stream})
+      assert pid = GenServer.whereis({:global, "prefix-" <> stream})
       assert Process.alive?(pid)
     end
   end
 
   describe "lifetime" do
     test "after_init lifetime controls how long process will wait for query or transact until shutting down" do
+      decider = build_decider(lifetime: LifetimeMock)
+
       stub(FoldMock, :initial, fn -> 0 end)
       stub(StoreMock, :load!, fn _, %{version: -1}, _, _ -> State.new(0, -1) end)
 
-      decider = build_decider(lifetime: LifetimeMock)
-
       expect(LifetimeMock, :after_init, fn _ -> 0 end)
       {:ok, pid} = Decider.Stateful.start_server(decider)
-      Process.sleep(100)
+      Process.sleep(50)
       refute Process.alive?(pid)
 
       expect(LifetimeMock, :after_init, fn _ -> :timer.seconds(10) end)
       {:ok, pid} = Decider.Stateful.start_server(decider)
-      Process.sleep(100)
+      Process.sleep(50)
       assert Process.alive?(pid)
     end
 
     test "after_query lifetime controls how long process will wait for another query or transact until shutting down" do
+      decider = build_decider(lifetime: LifetimeMock)
+
       stub(FoldMock, :initial, fn -> 0 end)
       stub(StoreMock, :load!, fn _, %{version: -1}, _, _ -> State.new(0, -1) end)
       stub(LifetimeMock, :after_init, fn _ -> :timer.seconds(10) end)
 
-      decider = build_decider(lifetime: LifetimeMock)
-
       expect(LifetimeMock, :after_query, fn _ -> 0 end)
       {:ok, pid} = Decider.Stateful.start_server(decider)
-      0 = Decider.query(pid, & &1)
-      Process.sleep(100)
+      Decider.query(pid, & &1)
+      Process.sleep(50)
       refute Process.alive?(pid)
 
       expect(LifetimeMock, :after_query, fn _ -> :timer.seconds(10) end)
       {:ok, pid} = Decider.Stateful.start_server(decider)
-      0 = Decider.query(pid, & &1)
-      Process.sleep(100)
+      Decider.query(pid, & &1)
+      Process.sleep(50)
       assert Process.alive?(pid)
     end
 
     test "after_transact lifetime controls how long process will wait for another query or transact until shutting down" do
+      decider = build_decider(lifetime: LifetimeMock)
+
       stub(FoldMock, :initial, fn -> 0 end)
       stub(StoreMock, :load!, fn _, %{version: -1}, _, _ -> State.new(0, -1) end)
       stub(LifetimeMock, :after_init, fn _ -> :timer.seconds(10) end)
 
-      decider = build_decider(lifetime: LifetimeMock)
-
       expect(LifetimeMock, :after_transact, fn _ -> 0 end)
       {:ok, pid} = Decider.Stateful.start_server(decider)
       {:ok, ^pid} = Decider.transact(pid, fn _ -> nil end)
-      Process.sleep(100)
+      Process.sleep(50)
       refute Process.alive?(pid)
 
       expect(LifetimeMock, :after_transact, fn _ -> :timer.seconds(10) end)
       {:ok, pid} = Decider.Stateful.start_server(decider)
       {:ok, ^pid} = Decider.transact(pid, fn _ -> nil end)
-      Process.sleep(100)
+      Process.sleep(50)
       assert Process.alive?(pid)
     end
   end
