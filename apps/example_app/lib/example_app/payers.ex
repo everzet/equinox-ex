@@ -52,13 +52,13 @@ defmodule ExampleApp.Payers do
     def delete_payer(_), do: %PayerDeleted{}
   end
 
+  alias ExampleApp.CustomValidators
   alias Equinox.{UUID, Decider}
-  alias ExampleApp.Validator
   alias Ecto.Changeset
 
   def update_profile(payer_id, params) do
     with {:ok, payer_id} <- UUID.parse(payer_id),
-         {:ok, data} <- Validator.validate(params, &payer_changeset/1) do
+         {:ok, data} <- validate(params, &profile_change/1, :update_profile) do
       payer_id
       |> resolve()
       |> Decider.transact(&Decide.update_profile(&1, data))
@@ -81,13 +81,15 @@ defmodule ExampleApp.Payers do
     end
   end
 
-  defp payer_changeset(params) do
-    types = %{name: :string, email: :string}
-
-    {%{}, types}
-    |> Changeset.cast(params, Map.keys(types))
+  def profile_change(params) do
+    %{name: :string, email: :string}
+    |> then(&Changeset.cast({%{}, &1}, params, Map.keys(&1)))
     |> Changeset.validate_required([:name, :email])
-    |> Validator.validate_email(:email)
+    |> CustomValidators.validate_email(:email)
+  end
+
+  defp validate(params, changeset_fun, action) do
+    params |> changeset_fun.() |> Changeset.apply_action(action)
   end
 
   defp resolve(payer_id) do

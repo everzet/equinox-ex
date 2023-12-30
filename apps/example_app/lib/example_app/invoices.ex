@@ -131,13 +131,13 @@ defmodule ExampleApp.Invoices do
     end
   end
 
+  alias ExampleApp.CustomValidators
   alias Equinox.{UUID, Decider}
-  alias ExampleApp.Validator
   alias Ecto.Changeset
 
   def raise(invoice_id, params) do
     with {:ok, invoice_id} <- UUID.parse(invoice_id),
-         {:ok, data} <- Validator.validate(params, &invoice_changeset/1) do
+         {:ok, data} <- validate(params, &invoice_change/1, :raise_invoice) do
       invoice_id
       |> resolve()
       |> Decider.transact(&Decide.raise_invoice(&1, data))
@@ -146,7 +146,7 @@ defmodule ExampleApp.Invoices do
 
   def record_payment(invoice_id, params) do
     with {:ok, invoice_id} <- UUID.parse(invoice_id),
-         {:ok, data} <- Validator.validate(params, &payment_changeset/1) do
+         {:ok, data} <- validate(params, &payment_change/1, :record_payment) do
       invoice_id
       |> resolve()
       |> Decider.transact(&Decide.record_payment(&1, data))
@@ -169,22 +169,22 @@ defmodule ExampleApp.Invoices do
     end
   end
 
-  defp invoice_changeset(params) do
-    types = %{payer_id: :string, amount: :float, due_date: :date}
-
-    {%{}, types}
-    |> Changeset.cast(params, Map.keys(types))
+  def invoice_change(params) do
+    %{payer_id: :string, amount: :float, due_date: :date}
+    |> then(&Changeset.cast({%{}, &1}, params, Map.keys(&1)))
     |> Changeset.validate_required([:payer_id, :amount, :due_date])
-    |> Validator.validate_uuid(:payer_id)
+    |> CustomValidators.validate_uuid(:payer_id)
   end
 
-  defp payment_changeset(params) do
-    types = %{reference: :string, amount: :float}
-
-    {%{}, types}
-    |> Changeset.cast(params, Map.keys(types))
+  def payment_change(params) do
+    %{reference: :string, amount: :float}
+    |> then(&Changeset.cast({%{}, &1}, params, Map.keys(&1)))
     |> Changeset.validate_required([:reference, :amount])
-    |> Validator.validate_uuid(:reference)
+    |> CustomValidators.validate_uuid(:reference)
+  end
+
+  defp validate(params, changeset_fun, action) do
+    params |> changeset_fun.() |> Changeset.apply_action(action)
   end
 
   defp resolve(invoice_id) do
