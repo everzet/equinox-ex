@@ -1,4 +1,4 @@
-defmodule Equinox.DeciderTest do
+defmodule Equinox.CommonDeciderTest do
   use ExUnit.Case, async: true
 
   import Mox

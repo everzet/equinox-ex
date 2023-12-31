@@ -9,17 +9,55 @@ defmodule Equinox.StatefulDeciderTest do
 
   setup :verify_on_exit!
 
-  test "only loads state on boot if it was not loaded already" do
-    decider = build_decider()
+  describe "start/1" do
+    test "spawns server and returns pid if registry is :disabled" do
+      decider = build_decider(registry: :disabled)
+      pid = Decider.Stateful.start(decider)
+      assert is_pid(pid)
+    end
 
-    expect(FoldMock, :initial, 0, fn -> nil end)
-    expect(StoreMock, :load!, 0, fn _, _, _, _ -> nil end)
+    test "spawns different servers every time if registry is :disabled" do
+      decider = build_decider(registry: :disabled)
+      pid1 = Decider.Stateful.start(decider)
+      pid2 = Decider.Stateful.start(decider)
+      assert pid1 != pid2
+    end
 
-    assert {:ok, pid} =
-             put_in(decider.stateless.state, State.new(:value, 2))
-             |> Decider.Stateful.start_server()
+    test "spawns server and returns the argument if registry is not :disabled" do
+      start_supervised!({Registry, keys: :unique, name: DeciderTestRegistry})
+      decider = build_decider(registry: DeciderTestRegistry)
+      assert ^decider = Decider.Stateful.start(decider)
+    end
 
-    assert Decider.query(pid, & &1) == :value
+    test "returns the argument if registry is not :disabled" do
+      start_supervised!({Registry, keys: :unique, name: DeciderTestRegistry})
+      decider = build_decider(registry: DeciderTestRegistry)
+      assert ^decider = Decider.Stateful.start(decider)
+    end
+
+    test "keeps single server running if registry is not :disabled" do
+      start_supervised!({Registry, keys: :unique, name: DeciderTestRegistry})
+      decider = build_decider(registry: DeciderTestRegistry)
+
+      assert ^decider = Decider.Stateful.start(decider)
+      pid = GenServer.whereis(decider.server_name)
+
+      assert ^decider = Decider.Stateful.start(decider)
+      assert GenServer.whereis(decider.server_name) == pid
+    end
+
+    test "only loads state on boot if it was not loaded already" do
+      decider = build_decider()
+
+      expect(FoldMock, :initial, 0, fn -> nil end)
+      expect(StoreMock, :load!, 0, fn _, _, _, _ -> nil end)
+
+      assert {:ok, pid} =
+               put_in(decider.stateless.state, State.new(:value, 2))
+               |> Decider.Stateful.start_server()
+
+      assert Decider.query(pid, & &1) == :value
+    end
   end
 
   describe "supervisor" do

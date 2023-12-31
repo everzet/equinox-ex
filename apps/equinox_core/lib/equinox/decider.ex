@@ -362,7 +362,7 @@ defmodule Equinox.Decider do
       with {:ok, pid} <- start_server(settings) do
         if(settings.server_name, do: settings, else: pid)
       else
-        {:error, {:already_started, pid}} -> pid
+        {:error, {:already_started, _pid}} -> settings
         {:error, error} -> raise RuntimeError, message: "Decider.Stateful: #{inspect(error)}"
       end
     end
