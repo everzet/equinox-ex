@@ -57,8 +57,9 @@ defmodule ExampleApp.Payers do
   alias Ecto.Changeset
 
   def update_profile(payer_id, params) do
-    with {:ok, payer_id} <- UUID.parse(payer_id),
-         {:ok, data} <- validate(params, &profile_change/1, :update_profile) do
+    with changeset <- profile_change(params),
+         {:ok, payer_id} <- UUID.parse(payer_id),
+         {:ok, data} <- Changeset.apply_action(changeset, :update_profile) do
       payer_id
       |> resolve()
       |> Decider.transact(&Decide.update_profile(&1, data))
@@ -86,10 +87,6 @@ defmodule ExampleApp.Payers do
     |> then(&Changeset.cast({%{}, &1}, params, Map.keys(&1)))
     |> Changeset.validate_required([:name, :email])
     |> CustomValidators.validate_email(:email)
-  end
-
-  defp validate(params, changeset_fun, action) do
-    params |> changeset_fun.() |> Changeset.apply_action(action)
   end
 
   defp resolve(payer_id) do
