@@ -290,7 +290,7 @@ defmodule Equinox.DeciderTest do
   defp init(Decider.Stateless, attrs) do
     attrs
     |> Keyword.get(:stream_name, "Invoice-1")
-    |> Decider.load_stateless(
+    |> Decider.load(
       store: StoreMock,
       codec: CodecMock,
       fold: FoldMock,
@@ -305,7 +305,7 @@ defmodule Equinox.DeciderTest do
 
     attrs
     |> Keyword.get(:stream_name, "Invoice-1")
-    |> Decider.start_stateful(
+    |> Decider.start(
       supervisor: :disabled,
       registry: :disabled,
       lifetime: Lifetime.StayAliveFor30Seconds,

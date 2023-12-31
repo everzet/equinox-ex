@@ -471,23 +471,6 @@ defmodule Equinox.Decider do
     Stateless.for_stream(stream_name, opts)
   end
 
-  @spec load_stateless(Stateless.t()) :: Stateless.t()
-  def load_stateless(stateless) when is_struct(stateless, Stateless) do
-    Stateless.load(stateless)
-  end
-
-  @spec load_stateless(String.t(), [Stateless.option()]) :: Stateless.t()
-  def load_stateless(stream_name, opts) when is_bitstring(stream_name) do
-    stream_name
-    |> stateless(opts)
-    |> load_stateless()
-  end
-
-  @spec stateful(Stateless.t(), [Stateful.option()]) :: Stateful.t()
-  def stateful(stateless, opts) when is_struct(stateless, Stateless) do
-    Stateful.wrap_stateless(stateless, opts)
-  end
-
   @spec stateful(String.t(), [Stateless.option() | Stateful.option()]) :: Stateful.t()
   def stateful(stream_name, opts) when is_bitstring(stream_name) do
     {stateful_opts, stateless_opts} =
@@ -498,18 +481,28 @@ defmodule Equinox.Decider do
     |> stateful(stateful_opts)
   end
 
-  @spec start_stateful(Stateful.t()) :: Stateful.t() | pid()
-  def start_stateful(stateful) when is_struct(stateful, Stateful) do
-    Stateful.start(stateful)
+  @spec stateful(Stateless.t(), [Stateful.option()]) :: Stateful.t()
+  def stateful(%Stateless{} = stateless, opts), do: Stateful.wrap_stateless(stateless, opts)
+
+  @spec load(Stateless.t()) :: Stateless.t()
+  def load(%Stateless{} = stateless), do: Stateless.load(stateless)
+
+  @spec load(String.t(), [Stateless.option()]) :: Stateless.t()
+  def load(stream_name, opts) when is_bitstring(stream_name) do
+    stream_name
+    |> stateless(opts)
+    |> load()
   end
 
-  @spec start_stateful(String.t(), [Stateless.option() | Stateful.option()]) ::
-          Stateful.t() | pid()
-  @spec start_stateful(Stateless.t(), [Stateful.option()]) :: Stateful.t() | pid()
-  def start_stateful(stream_name_or_stateless, stateful_or_both_opts) do
+  @spec start(Stateful.t()) :: Stateful.t() | pid()
+  def start(%Stateful{} = stateful), do: Stateful.start(stateful)
+
+  @spec start(String.t(), [Stateless.option() | Stateful.option()]) :: Stateful.t() | pid()
+  @spec start(Stateless.t(), [Stateful.option()]) :: Stateful.t() | pid()
+  def start(stream_name_or_stateless, stateful_or_both_opts) do
     stream_name_or_stateless
     |> stateful(stateful_or_both_opts)
-    |> start_stateful()
+    |> start()
   end
 
   @spec query(pid(), Query.t()) :: any()

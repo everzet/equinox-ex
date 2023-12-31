@@ -213,18 +213,16 @@ defmodule Equinox.StatefulDeciderTest do
 
     attrs
     |> Keyword.get(:stream_name, "Invoice-1")
-    |> Decider.stateless(
+    |> Decider.stateful(
       store: StoreMock,
       codec: CodecMock,
       fold: FoldMock,
-      max_load_attempts: Keyword.get(attrs, :max_load_attempts, 2),
-      max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 2),
-      max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 1)
-    )
-    |> Decider.stateful(
       supervisor: Keyword.get(attrs, :supervisor, :disabled),
       registry: Keyword.get(attrs, :registry, :disabled),
       lifetime: Keyword.get(attrs, :lifetime, Lifetime.StayAliveFor30Seconds),
+      max_load_attempts: Keyword.get(attrs, :max_load_attempts, 2),
+      max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 2),
+      max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 1),
       on_init: fn ->
         allow(LifetimeMock, test_pid, self())
         allow(StoreMock, test_pid, self())

@@ -92,7 +92,7 @@ defmodule ExampleApp.Payers do
   defp resolve(payer_id) do
     payer_id
     |> Stream.name()
-    |> Decider.start_stateful(
+    |> Decider.start(
       supervisor: ExampleApp.PayersSupervisor,
       registry: :global,
       lifetime: Equinox.Lifetime.StayAliveFor30Seconds,
