@@ -4,8 +4,8 @@ defmodule Equinox.CommonDeciderTest do
   import Mox
   import ExUnit.CaptureLog
 
-  alias Equinox.{State, Store, Codec, Fold, Decider, Lifetime}
-  alias Equinox.TestMocks.{StoreMock, CodecMock, FoldMock}
+  alias Equinox.{State, Store, Codec, Fold, Decider}
+  alias Equinox.TestMocks.{StoreMock, CodecMock, FoldMock, LifetimeMock}
 
   setup :verify_on_exit!
 
@@ -320,6 +320,7 @@ defmodule Equinox.CommonDeciderTest do
       store: StoreMock,
       codec: CodecMock,
       fold: FoldMock,
+      context: %{test_pid: self()},
       max_load_attempts: Keyword.get(attrs, :max_load_attempts, 1),
       max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 1),
       max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 0)
@@ -327,19 +328,15 @@ defmodule Equinox.CommonDeciderTest do
   end
 
   defp init(Decider.Stateful, attrs) do
-    attrs
-    |> Keyword.get(:stream_name, "Invoice-1")
+    stub(LifetimeMock, :after_init, fn _ -> :timer.seconds(10) end)
+    stub(LifetimeMock, :after_query, fn _ -> :timer.seconds(10) end)
+    stub(LifetimeMock, :after_transact, fn _ -> :timer.seconds(10) end)
+
+    init(Decider.Stateless, attrs)
     |> Decider.start(
       supervisor: :disabled,
       registry: :disabled,
-      lifetime: Lifetime.StayAliveFor30Seconds,
-      store: StoreMock,
-      codec: CodecMock,
-      fold: FoldMock,
-      max_load_attempts: Keyword.get(attrs, :max_load_attempts, 1),
-      max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 1),
-      max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 0),
-      context: %{test_pid: self()}
+      lifetime: LifetimeMock
     )
   end
 end
