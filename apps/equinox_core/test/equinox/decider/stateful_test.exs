@@ -1,4 +1,4 @@
-defmodule Equinox.StatefulDeciderTest do
+defmodule Equinox.Decider.StatefulTest do
   use ExUnit.Case, async: false
 
   import Mox
@@ -256,7 +256,7 @@ defmodule Equinox.StatefulDeciderTest do
       context: %{allow_mocks_from: self()},
       supervisor: Keyword.get(attrs, :supervisor, :disabled),
       registry: Keyword.get(attrs, :registry, :disabled),
-      lifetime: Keyword.get(attrs, :lifetime, Lifetime.StayAliveFor30Seconds)
+      lifetime: Keyword.get(attrs, :lifetime, Lifetime.StopAfter30sOfInactivity)
     )
   end
 end

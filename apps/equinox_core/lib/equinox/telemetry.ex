@@ -3,8 +3,6 @@ defmodule Equinox.Telemetry do
   Equinox telemetry spans.
   """
 
-  alias Equinox.Decider.Stateless
-
   def span_codec_encode(codec, domain_event, context, fun) do
     meta = %{codec: codec, domain_event: domain_event, context: context}
 
@@ -32,7 +30,7 @@ defmodule Equinox.Telemetry do
     end)
   end
 
-  def span_decider_load(%Stateless{} = decider, attempt, fun) do
+  def span_decider_load(decider, attempt, fun) do
     meta = %{original: decider, attempt: attempt, max_attempts: decider.max_load_attempts}
 
     :telemetry.span([:equinox, :decider, :load], meta, fn ->
@@ -41,7 +39,7 @@ defmodule Equinox.Telemetry do
     end)
   end
 
-  def span_decider_sync(%Stateless{} = decider, events, attempt, fun) do
+  def span_decider_sync(decider, events, attempt, fun) do
     meta = %{
       original: decider,
       events: events,
@@ -55,12 +53,12 @@ defmodule Equinox.Telemetry do
     end)
   end
 
-  def span_decider_query(%Stateless{} = decider, query, fun) do
+  def span_decider_query(decider, query, fun) do
     meta = %{decider: decider, query_fun: query}
     :telemetry.span([:equinox, :decider, :query], meta, fn -> {fun.(), meta} end)
   end
 
-  def span_decider_transact(%Stateless{} = decider, decision, context, fun) do
+  def span_decider_transact(decider, decision, context, fun) do
     meta = %{original_decider: decider, decision_fun: decision, context: context}
 
     :telemetry.span([:equinox, :decider, :transact], meta, fn ->
@@ -74,7 +72,7 @@ defmodule Equinox.Telemetry do
     end)
   end
 
-  def span_decider_decision(%Stateless{} = decider, attempt, decision, context, fun) do
+  def span_decider_decision(decider, attempt, decision, context, fun) do
     meta = %{
       decider: decider,
       decision_fun: decision,
@@ -94,7 +92,7 @@ defmodule Equinox.Telemetry do
     end)
   end
 
-  def span_decider_resync(%Stateless{} = decider, attempt, fun) do
+  def span_decider_resync(decider, attempt, fun) do
     meta = %{
       original_decider: decider,
       attempt: attempt,
@@ -126,7 +124,7 @@ defmodule Equinox.Telemetry do
   def span_decider_server_load(server, fun) do
     meta = %{
       settings: server.settings,
-      preloaded?: Stateless.loaded?(server.decider),
+      preloaded?: Equinox.Decider.Stateless.loaded?(server.decider),
       original_decider: server.decider
     }
 

@@ -1,7 +1,7 @@
 defmodule Equinox.MessageDb.WriterTest do
   use Equinox.MessageDb.ConnCase
 
-  alias Equinox.Store.{DuplicateMessageId, StreamVersionConflict}
+  alias Equinox.Store.Errors.{DuplicateMessageId, StreamVersionConflict}
   alias Equinox.Events.EventData
   alias Equinox.MessageDb.Writer
 

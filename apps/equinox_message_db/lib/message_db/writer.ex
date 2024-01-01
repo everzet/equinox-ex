@@ -1,14 +1,13 @@
 defmodule Equinox.MessageDb.Writer do
-  alias Equinox.Store.{DuplicateMessageId, StreamVersionConflict}
   alias Equinox.Events.EventData
+  alias Equinox.Store.Errors
 
   @type stream_name :: String.t()
   @type expected_version :: -1 | non_neg_integer()
   @type written_position :: non_neg_integer()
 
   @spec write_messages(Postgrex.conn(), stream_name(), list(EventData.t()), expected_version()) ::
-          {:ok, new_version :: written_position()}
-          | {:error, DuplicateMessageId.t() | StreamVersionConflict.t() | Postgrex.Error.t()}
+          {:ok, new_version :: written_position()} | {:error, Errors.t() | Postgrex.Error.t()}
   def write_messages(conn, stream, messages, version) do
     conn
     |> do_write_messages(stream, messages, version)
@@ -49,7 +48,7 @@ defmodule Equinox.MessageDb.Writer do
             nil -> {nil, nil}
           end
 
-        exception = %StreamVersionConflict{
+        exception = %Errors.StreamVersionConflict{
           message: postgres.message,
           stream_name: stream_name,
           stream_version: stream_version
@@ -64,7 +63,7 @@ defmodule Equinox.MessageDb.Writer do
             nil -> nil
           end
 
-        exception = %DuplicateMessageId{message: postgres.message, message_id: message_id}
+        exception = %Errors.DuplicateMessageId{message: postgres.message, message_id: message_id}
         {:error, exception}
 
       true ->

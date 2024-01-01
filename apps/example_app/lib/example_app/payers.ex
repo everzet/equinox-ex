@@ -95,7 +95,7 @@ defmodule ExampleApp.Payers do
     |> Decider.start(
       supervisor: ExampleApp.PayersSupervisor,
       registry: :global,
-      lifetime: Equinox.Lifetime.StayAliveFor30Seconds,
+      lifetime: Equinox.Lifetime.StopAfter30sOfInactivity,
       store: ExampleApp.EventStore.LatestKnownEvent,
       codec: Events,
       fold: Fold

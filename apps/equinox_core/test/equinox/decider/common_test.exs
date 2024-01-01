@@ -1,4 +1,4 @@
-defmodule Equinox.CommonDeciderTest do
+defmodule Equinox.Decider.CommonTest do
   use ExUnit.Case, async: true
 
   import Mox
@@ -47,7 +47,7 @@ defmodule Equinox.CommonDeciderTest do
         stub(FoldMock, :initial, fn -> :initial end)
 
         expect(StoreMock, :load!, 1, fn @stream, %{version: -1}, _, _ ->
-          raise Codec.CodecError, message: "codec error"
+          raise Codec.Errors.CodecError, message: "codec error"
         end)
 
         assert capture_crash(fn ->
@@ -59,7 +59,7 @@ defmodule Equinox.CommonDeciderTest do
         stub(FoldMock, :initial, fn -> :initial end)
 
         expect(StoreMock, :load!, 1, fn @stream, %{version: -1}, _, _ ->
-          raise Fold.FoldError, message: "fold error"
+          raise Fold.Errors.FoldError, message: "fold error"
         end)
 
         assert capture_crash(fn ->
@@ -150,7 +150,7 @@ defmodule Equinox.CommonDeciderTest do
 
         # 4. We fail to sync the result of the decision due to the version conflict (-1 != 0)
         expect(StoreMock, :sync!, fn @stream, %{version: -1}, [3], %{}, CodecMock, FoldMock ->
-          raise Store.StreamVersionConflict
+          raise Store.Errors.StreamVersionConflict
         end)
 
         # 5. We automatically reload the stream and arrive at the new state value `2`, version 0
@@ -175,7 +175,7 @@ defmodule Equinox.CommonDeciderTest do
         stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
 
         expect(StoreMock, :sync!, 1, fn @stream, %{version: -1}, _, _, CodecMock, FoldMock ->
-          raise Store.StreamVersionConflict
+          raise Store.Errors.StreamVersionConflict
         end)
 
         decider = init(unquote(decider_mod), stream_name: @stream, max_resync_attempts: 0)
@@ -189,7 +189,7 @@ defmodule Equinox.CommonDeciderTest do
         expect(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
 
         expect(StoreMock, :sync!, fn @stream, %{version: -1}, _, _, _, _ ->
-          raise Store.StreamVersionConflict
+          raise Store.Errors.StreamVersionConflict
         end)
 
         expect(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> raise RuntimeError end)
@@ -240,7 +240,7 @@ defmodule Equinox.CommonDeciderTest do
         stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
 
         expect(StoreMock, :sync!, 1, fn @stream, %{version: -1}, _, _, CodecMock, FoldMock ->
-          raise Codec.CodecError, message: "codec error"
+          raise Codec.Errors.CodecError, message: "codec error"
         end)
 
         decider = init(unquote(decider_mod), stream_name: @stream, max_sync_attempts: 2)
@@ -253,7 +253,7 @@ defmodule Equinox.CommonDeciderTest do
         stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
 
         expect(StoreMock, :sync!, 1, fn @stream, %{version: -1}, _, _, CodecMock, FoldMock ->
-          raise Fold.FoldError, message: "fold error"
+          raise Fold.Errors.FoldError, message: "fold error"
         end)
 
         decider = init(unquote(decider_mod), stream_name: @stream, max_sync_attempts: 2)

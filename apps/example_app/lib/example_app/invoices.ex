@@ -191,7 +191,7 @@ defmodule ExampleApp.Invoices do
     |> Decider.start(
       supervisor: ExampleApp.InvoicesSupervisor,
       registry: ExampleApp.InvoicesRegistry,
-      lifetime: Equinox.Lifetime.StayAliveFor30Seconds,
+      lifetime: Equinox.Lifetime.StopAfter30sOfInactivity,
       store: ExampleApp.EventStore.Unoptimized,
       codec: Events,
       fold: Fold

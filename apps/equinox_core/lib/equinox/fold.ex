@@ -1,17 +1,12 @@
 defmodule Equinox.Fold do
   alias Equinox.{State, Telemetry}
   alias Equinox.Events.DomainEvent
+  alias Equinox.Fold.Errors
 
   @type t :: module()
 
   @callback initial() :: State.value()
   @callback evolve(State.value(), DomainEvent.t()) :: State.value()
-
-  defmodule FoldError do
-    @enforce_keys [:message]
-    defexception [:message, :exception]
-    @type t :: %__MODULE__{message: String.t(), exception: nil | Exception.t()}
-  end
 
   @spec fold(Enumerable.t(DomainEvent.with_position()), State.t(), t()) :: State.t()
   def fold(domain_events, %State{} = state, fold) do
@@ -21,7 +16,7 @@ defmodule Equinox.Fold do
           State.update(state, &fold.evolve(&1, event), position)
         rescue
           exception ->
-            reraise FoldError,
+            reraise Errors.FoldError,
                     [
                       message: "#{inspect(fold)}.evolve: #{Exception.message(exception)}",
                       exception: exception
@@ -30,15 +25,5 @@ defmodule Equinox.Fold do
         end
       end)
     end)
-  end
-
-  defmodule ReplaceWithLatestEvent do
-    @behaviour Equinox.Fold
-
-    @impl Equinox.Fold
-    def initial(), do: nil
-
-    @impl Equinox.Fold
-    def evolve(_, event), do: event
   end
 end

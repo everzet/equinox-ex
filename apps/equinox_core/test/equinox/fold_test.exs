@@ -3,6 +3,7 @@ defmodule Equinox.FoldTest do
 
   alias Equinox.TestMocks.FoldMock
   alias Equinox.{Fold, State}
+  alias Equinox.Fold.Errors.FoldError
 
   import Mox
 
@@ -20,21 +21,9 @@ defmodule Equinox.FoldTest do
     test "wraps all exceptions into FoldError" do
       expect(FoldMock, :evolve, fn _, _ -> raise RuntimeError end)
 
-      assert_raise Fold.FoldError, ~r/runtime error/, fn ->
+      assert_raise FoldError, ~r/runtime error/, fn ->
         Fold.fold([{:a, 0}], %State{value: 0, version: -1}, FoldMock)
       end
-    end
-  end
-
-  describe "ReplaceWithLatestEvent" do
-    alias Equinox.Fold.ReplaceWithLatestEvent
-
-    test "its initial value is nil" do
-      assert nil == ReplaceWithLatestEvent.initial()
-    end
-
-    test "it evolves by replacing its whole state with the latest event" do
-      assert :new_event == ReplaceWithLatestEvent.evolve(:any_previous_state, :new_event)
     end
   end
 end

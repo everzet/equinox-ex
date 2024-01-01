@@ -1,6 +1,6 @@
 defmodule Equinox.StreamTest do
   use ExUnit.Case, async: true
-  alias Equinox.Stream.{StreamId, StreamName, ElementError}
+  alias Equinox.Stream.{StreamId, StreamName, Errors}
 
   describe "StreamId.generate/1" do
     test "supports varied number of elements" do
@@ -9,8 +9,8 @@ defmodule Equinox.StreamTest do
     end
 
     test "does not allow elements to contain reserved characters" do
-      assert_raise ElementError, fn -> StreamId.generate(["a_"]) end
-      assert_raise ElementError, fn -> StreamId.generate(["a", "_b"]) end
+      assert_raise Errors.ElementError, fn -> StreamId.generate(["a_"]) end
+      assert_raise Errors.ElementError, fn -> StreamId.generate(["a", "_b"]) end
     end
   end
 
@@ -24,8 +24,8 @@ defmodule Equinox.StreamTest do
     end
 
     test "requires non-empty string" do
-      assert {:error, %ElementError{}} = StreamId.parse("")
-      assert {:error, %ElementError{}} = StreamId.parse(:val)
+      assert {:error, %Errors.ElementError{}} = StreamId.parse("")
+      assert {:error, %Errors.ElementError{}} = StreamId.parse(:val)
     end
   end
 
@@ -35,8 +35,13 @@ defmodule Equinox.StreamTest do
     end
 
     test "does not allow category names with separators in them" do
-      assert_raise ElementError, fn -> StreamName.generate("a-", StreamId.generate(["b"])) end
-      assert_raise ElementError, fn -> StreamName.generate("-a", StreamId.generate(["b"])) end
+      assert_raise Errors.ElementError, fn ->
+        StreamName.generate("a-", StreamId.generate(["b"]))
+      end
+
+      assert_raise Errors.ElementError, fn ->
+        StreamName.generate("-a", StreamId.generate(["b"]))
+      end
     end
   end
 
@@ -46,12 +51,12 @@ defmodule Equinox.StreamTest do
     end
 
     test "always expects category and stream id present" do
-      assert {:error, %ElementError{}} = StreamName.parse("Invoice")
+      assert {:error, %Errors.ElementError{}} = StreamName.parse("Invoice")
     end
 
     test "requires non-empty string" do
-      assert {:error, %ElementError{}} = StreamName.parse("")
-      assert {:error, %ElementError{}} = StreamName.parse(:val)
+      assert {:error, %Errors.ElementError{}} = StreamName.parse("")
+      assert {:error, %Errors.ElementError{}} = StreamName.parse(:val)
     end
   end
 
@@ -61,7 +66,7 @@ defmodule Equinox.StreamTest do
     end
 
     test "parses and returns error if category does not match" do
-      assert {:error, %ElementError{}} = StreamName.match("Payment", "Invoice-A-B-C_D-E-F")
+      assert {:error, %Errors.ElementError{}} = StreamName.match("Payment", "Invoice-A-B-C_D-E-F")
     end
   end
 end
