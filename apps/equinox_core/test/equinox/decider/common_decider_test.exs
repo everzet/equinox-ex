@@ -322,8 +322,6 @@ defmodule Equinox.CommonDeciderTest do
   end
 
   defp init(Decider.Stateful, attrs) do
-    test_pid = self()
-
     attrs
     |> Keyword.get(:stream_name, "Invoice-1")
     |> Decider.start(
@@ -336,11 +334,7 @@ defmodule Equinox.CommonDeciderTest do
       max_load_attempts: Keyword.get(attrs, :max_load_attempts, 1),
       max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 1),
       max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 0),
-      on_init: fn ->
-        allow(StoreMock, test_pid, self())
-        allow(CodecMock, test_pid, self())
-        allow(FoldMock, test_pid, self())
-      end
+      ctx: %{test_pid: self()}
     )
   end
 end

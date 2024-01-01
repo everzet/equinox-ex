@@ -247,8 +247,6 @@ defmodule Equinox.StatefulDeciderTest do
   end
 
   defp build_decider(attrs \\ []) do
-    test_pid = self()
-
     attrs
     |> Keyword.get(:stream_name, "Invoice-1")
     |> Decider.stateful(
@@ -258,12 +256,7 @@ defmodule Equinox.StatefulDeciderTest do
       supervisor: Keyword.get(attrs, :supervisor, :disabled),
       registry: Keyword.get(attrs, :registry, :disabled),
       lifetime: Keyword.get(attrs, :lifetime, Lifetime.StayAliveFor30Seconds),
-      on_init: fn ->
-        allow(LifetimeMock, test_pid, self())
-        allow(StoreMock, test_pid, self())
-        allow(CodecMock, test_pid, self())
-        allow(FoldMock, test_pid, self())
-      end
+      ctx: %{test_pid: self()}
     )
   end
 end

@@ -302,7 +302,7 @@ defmodule Equinox.Decider do
     alias Equinox.{Telemetry, Codec}
 
     @enforce_keys [:supervisor, :registry, :lifetime]
-    defstruct [:server_name, :stateless, :supervisor, :registry, :lifetime, :on_init]
+    defstruct [:server_name, :stateless, :supervisor, :registry, :lifetime, :ctx]
 
     @type t :: %__MODULE__{}
 
@@ -329,9 +329,10 @@ defmodule Equinox.Decider do
               required: true,
               doc: "Process lifetime defition module that implements `Equinox.Lifetime` behaviour"
             ],
-            on_init: [
-              type: {:fun, 0},
-              doc: "Function to execute inside spawned process just before it is initialized"
+            ctx: [
+              type: :map,
+              default: %{},
+              doc: "Optional meta bag used for telemetry and testing"
             ]
           )
 
@@ -428,7 +429,6 @@ defmodule Equinox.Decider do
 
     @impl GenServer
     def init(%__MODULE__{} = settings) do
-      (settings.on_init || fn -> nil end).()
       server = %{decider: settings.stateless, settings: settings}
       Telemetry.decider_process_init(self(), server)
       {:ok, server, {:continue, :load}}
@@ -493,7 +493,7 @@ defmodule Equinox.Decider do
   @spec stateful(String.t(), [Stateless.option() | Stateful.option()]) :: Stateful.t()
   def stateful(stream_name, opts) when is_bitstring(stream_name) do
     {stateful_opts, stateless_opts} =
-      Keyword.split(opts, [:supervisor, :registry, :lifetime, :on_init])
+      Keyword.split(opts, [:supervisor, :registry, :lifetime, :ctx])
 
     stream_name
     |> stateless(stateless_opts)
