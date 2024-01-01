@@ -1,4 +1,6 @@
 defmodule Equinox.Store do
+  alias Equinox.{State, Codec, Fold, Events}
+
   @type t :: module()
   @type stream_name :: String.t()
   @type stream_version :: -1 | non_neg_integer()
@@ -7,7 +9,7 @@ defmodule Equinox.Store do
   @callback sync!(
               stream_name(),
               State.t(),
-              list(DomainEvent.t()),
+              list(Events.DomainEvent.t()),
               Codec.context(),
               Codec.t(),
               Fold.t()

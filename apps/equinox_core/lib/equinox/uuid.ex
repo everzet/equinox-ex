@@ -41,7 +41,7 @@ defmodule Equinox.UUID do
   @doc """
   Parses given string as UUID by validating and downcasting it.
   """
-  @spec parse(String.t()) :: {:ok, String.t()} | {:error, ArgumentError.t()}
+  @spec parse(String.t()) :: {:ok, String.t()} | {:error, Exception.t()}
   def parse(str) when is_bitstring(str) do
     if String.match?(
          str,

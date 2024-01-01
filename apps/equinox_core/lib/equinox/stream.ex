@@ -62,7 +62,7 @@ defmodule Equinox.Stream do
       Enum.join([category, stream_id], @separator)
     end
 
-    @spec match(String.t(), String.t()) :: {:ok, StreamId.parsed()} | {:error, Errors.t()}
+    @spec match(String.t(), String.t()) :: {:ok, nonempty_list(String.t())} | {:error, Errors.t()}
     def match(expected_category, string) when is_bitstring(string) do
       with {:ok, {category, stream_id}} when category == expected_category <- parse(string) do
         {:ok, stream_id}

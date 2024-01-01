@@ -7,6 +7,8 @@ defmodule Equinox.Store.Errors do
   end
 
   defmodule StreamVersionConflict do
+    alias Equinox.Store
+
     defexception message: "Wrong expected version",
                  stream_name: nil,
                  stream_version: nil

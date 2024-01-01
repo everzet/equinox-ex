@@ -1,4 +1,5 @@
 defmodule Equinox.Decider do
+  alias Equinox.Codec
   alias Equinox.Decider.{Stateless, Stateful}
   alias Equinox.Decider.Actions.{Query, Decision}
 
