@@ -24,16 +24,16 @@ defmodule Equinox.Telemetry do
   end
 
   def span_fold(fold, state, fun) do
-    meta = %{fold: fold, old_state: state}
+    meta = %{fold: fold, original_state: state}
 
     :telemetry.span([:equinox, :fold], meta, fn ->
-      new_state = fun.()
-      {new_state, Map.put(meta, :new_state, new_state)}
+      folded_state = fun.()
+      {folded_state, Map.put(meta, :folded_state, folded_state)}
     end)
   end
 
   def span_decider_load(%Stateless{} = decider, attempt, fun) do
-    meta = %{initial: decider, attempt: attempt, max_attempts: decider.max_load_attempts}
+    meta = %{original: decider, attempt: attempt, max_attempts: decider.max_load_attempts}
 
     :telemetry.span([:equinox, :decider, :load], meta, fn ->
       loaded = fun.()
@@ -43,7 +43,7 @@ defmodule Equinox.Telemetry do
 
   def span_decider_sync(%Stateless{} = decider, events, attempt, fun) do
     meta = %{
-      initial: decider,
+      original: decider,
       events: events,
       attempt: attempt,
       max_attempts: decider.max_sync_attempts
@@ -61,12 +61,15 @@ defmodule Equinox.Telemetry do
   end
 
   def span_decider_transact(%Stateless{} = decider, decision, context, fun) do
-    meta = %{decider: decider, decision_fun: decision, context: context}
+    meta = %{original_decider: decider, decision_fun: decision, context: context}
 
     :telemetry.span([:equinox, :decider, :transact], meta, fn ->
       case fun.() do
-        {:ok, decider} -> {{:ok, decider}, Map.put(meta, :ok?, true)}
-        {:error, error} -> {{:error, error}, Map.merge(meta, %{ok?: false, error: error})}
+        {:ok, decider} ->
+          {{:ok, decider}, Map.merge(meta, %{ok?: true, synced_decider: decider})}
+
+        {:error, error} ->
+          {{:error, error}, Map.merge(meta, %{ok?: false, error: error})}
       end
     end)
   end
@@ -92,52 +95,63 @@ defmodule Equinox.Telemetry do
   end
 
   def span_decider_resync(%Stateless{} = decider, attempt, fun) do
-    meta = %{decider: decider, attempt: attempt, max_attempts: decider.max_resync_attempts}
-    :telemetry.span([:equinox, :decider, :transact, :resync], meta, fn -> {fun.(), meta} end)
+    meta = %{
+      original_decider: decider,
+      attempt: attempt,
+      max_attempts: decider.max_resync_attempts
+    }
+
+    :telemetry.span([:equinox, :decider, :transact, :resync], meta, fn ->
+      resynced_decider = fun.()
+      {resynced_decider, Map.put(meta, :resynced_decider, resynced_decider)}
+    end)
   end
 
-  def decider_process_init(server) do
+  def decider_server_init(server) do
     :telemetry.execute(
-      [:equinox, :decider, :process, :init],
+      [:equinox, :decider, :server, :init],
       %{system_time: System.system_time()},
       %{settings: server.settings, decider: server.decider}
     )
   end
 
-  def decider_process_stop(server, reason) do
+  def decider_server_stop(server, reason) do
     :telemetry.execute(
-      [:equinox, :decider, :process, :stop],
+      [:equinox, :decider, :server, :stop],
       %{system_time: System.system_time()},
       %{settings: server.settings, decider: server.decider, reason: reason}
     )
   end
 
-  def span_decider_process_load(server, fun) do
-    meta = %{settings: server.settings, initial_decider: server.decider}
+  def span_decider_server_load(server, fun) do
+    meta = %{settings: server.settings, original_decider: server.decider}
 
-    :telemetry.span([:equinox, :decider, :process, :load], meta, fn ->
+    :telemetry.span([:equinox, :decider, :server, :load], meta, fn ->
       loaded_decider = fun.()
       {loaded_decider, Map.put(meta, :loaded_decider, loaded_decider)}
     end)
   end
 
-  def span_decider_process_query(server, query, fun) do
+  def span_decider_server_query(server, query, fun) do
     meta = %{settings: server.settings, decider: server.decider, query_fun: query}
     :telemetry.span([:equinox, :decider, :query], meta, fn -> {fun.(), meta} end)
   end
 
-  def span_decider_process_transact(server, decision, context, fun) do
+  def span_decider_server_transact(server, decision, context, fun) do
     meta = %{
       settings: server.settings,
-      decider: server.decider,
+      original_decider: server.decider,
       decision_fun: decision,
       context: context
     }
 
-    :telemetry.span([:equinox, :decider, :process, :transact], meta, fn ->
+    :telemetry.span([:equinox, :decider, :server, :transact], meta, fn ->
       case fun.() do
-        {:ok, decider} -> {{:ok, decider}, Map.put(meta, :ok?, true)}
-        {:error, error} -> {{:error, error}, Map.merge(meta, %{ok?: false, error: error})}
+        {:ok, decider} ->
+          {{:ok, decider}, Map.merge(meta, %{ok?: true, synced_decider: decider})}
+
+        {:error, error} ->
+          {{:error, error}, Map.merge(meta, %{ok?: false, error: error})}
       end
     end)
   end
