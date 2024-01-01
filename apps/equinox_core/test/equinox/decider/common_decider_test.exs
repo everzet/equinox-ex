@@ -334,7 +334,7 @@ defmodule Equinox.CommonDeciderTest do
       max_load_attempts: Keyword.get(attrs, :max_load_attempts, 1),
       max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 1),
       max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 0),
-      ctx: %{test_pid: self()}
+      context: %{test_pid: self()}
     )
   end
 end

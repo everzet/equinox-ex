@@ -3,9 +3,9 @@ defmodule Equinox.Codec do
   alias Equinox.Events.{DomainEvent, EventData, TimelineEvent}
 
   @type t :: module()
-  @type ctx :: any()
+  @type context :: any()
 
-  @callback encode(DomainEvent.t(), ctx()) :: {:ok, EventData.t()} | {:error, CodecError.t()}
+  @callback encode(DomainEvent.t(), context()) :: {:ok, EventData.t()} | {:error, CodecError.t()}
   @callback decode(TimelineEvent.t()) :: {:ok, DomainEvent.t()} | {:error, CodecError.t()}
 
   defmodule CodecError do
@@ -14,16 +14,16 @@ defmodule Equinox.Codec do
     @type t :: %__MODULE__{message: String.t(), exception: nil | Exception.t()}
   end
 
-  @spec encode!(list(DomainEvent.t()), ctx(), t()) :: list(EventData.t())
-  def encode!(events, ctx, codec) when is_list(events) do
-    Enum.map(events, &encode!(&1, ctx, codec))
+  @spec encode!(list(DomainEvent.t()), context(), t()) :: list(EventData.t())
+  def encode!(events, context, codec) when is_list(events) do
+    Enum.map(events, &encode!(&1, context, codec))
   end
 
-  @spec encode!(DomainEvent.t(), ctx(), t()) :: EventData.t()
-  def encode!(domain_event, ctx, codec) do
+  @spec encode!(DomainEvent.t(), context(), t()) :: EventData.t()
+  def encode!(domain_event, context, codec) do
     try do
-      Telemetry.span_codec_encode(codec, domain_event, ctx, fn ->
-        case codec.encode(domain_event, ctx) do
+      Telemetry.span_codec_encode(codec, domain_event, context, fn ->
+        case codec.encode(domain_event, context) do
           {:ok, timeline_event} -> timeline_event
           {:error, exception} when is_exception(exception) -> raise exception
           {:error, term} -> raise RuntimeError, message: inspect(term)

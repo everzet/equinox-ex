@@ -184,11 +184,11 @@ defmodule Equinox.Decider do
       end)
     end
 
-    @spec transact(t(), Decision.t(), Codec.ctx()) :: {:ok, t()} | {:error, term()}
-    def transact(%__MODULE__{} = decider, decision_fun, ctx \\ nil) do
+    @spec transact(t(), Decision.t(), Codec.context()) :: {:ok, t()} | {:error, term()}
+    def transact(%__MODULE__{} = decider, decision_fun, context \\ nil) do
       ensure_state_loaded(decider, fn decider ->
-        Telemetry.span_decider_transact(decider, decision_fun, ctx, fn ->
-          transact_with_resync(decider, decision_fun, ctx)
+        Telemetry.span_decider_transact(decider, decision_fun, context, fn ->
+          transact_with_resync(decider, decision_fun, context)
         end)
       end)
     end
@@ -198,9 +198,9 @@ defmodule Equinox.Decider do
       fun.(loaded_decider)
     end
 
-    defp transact_with_resync(%__MODULE__{} = decider, decision_fun, ctx, resync_attempt \\ 0) do
+    defp transact_with_resync(%__MODULE__{} = decider, decision_fun, context, resync_attempt \\ 0) do
       decision_result =
-        Telemetry.span_decider_decision(decider, resync_attempt, decision_fun, ctx, fn ->
+        Telemetry.span_decider_decision(decider, resync_attempt, decision_fun, context, fn ->
           Decision.execute(decision_fun, decider.state)
         end)
 
@@ -213,7 +213,7 @@ defmodule Equinox.Decider do
 
         {:ok, events} ->
           try do
-            {:ok, sync_state_with_retry(decider, ctx, events)}
+            {:ok, sync_state_with_retry(decider, context, events)}
           rescue
             version_conflict in [Store.StreamVersionConflict] ->
               if resync_attempt < decider.max_resync_attempts do
@@ -221,7 +221,7 @@ defmodule Equinox.Decider do
                 |> Telemetry.span_decider_resync(resync_attempt, fn ->
                   load_state_with_retry(decider, decider.max_load_attempts)
                 end)
-                |> transact_with_resync(decision_fun, ctx, resync_attempt + 1)
+                |> transact_with_resync(decision_fun, context, resync_attempt + 1)
               else
                 reraise ExhaustedResyncAttempts,
                         [
@@ -235,12 +235,12 @@ defmodule Equinox.Decider do
       end
     end
 
-    defp sync_state_with_retry(%__MODULE__{} = decider, ctx, events, sync_attempt \\ 1) do
+    defp sync_state_with_retry(%__MODULE__{} = decider, context, events, sync_attempt \\ 1) do
       try do
         Telemetry.span_decider_sync(decider, events, sync_attempt, fn ->
           synced_state =
             decider.stream_name
-            |> decider.store.sync!(decider.state, events, ctx, decider.codec, decider.fold)
+            |> decider.store.sync!(decider.state, events, context, decider.codec, decider.fold)
 
           %{decider | state: synced_state}
         end)
@@ -250,7 +250,7 @@ defmodule Equinox.Decider do
 
         recoverable ->
           if sync_attempt < decider.max_sync_attempts do
-            sync_state_with_retry(decider, ctx, events, sync_attempt + 1)
+            sync_state_with_retry(decider, context, events, sync_attempt + 1)
           else
             reraise ExhaustedSyncAttempts,
                     [
@@ -302,7 +302,7 @@ defmodule Equinox.Decider do
     alias Equinox.{Telemetry, Codec}
 
     @enforce_keys [:supervisor, :registry, :lifetime]
-    defstruct [:server_name, :stateless, :supervisor, :registry, :lifetime, :ctx]
+    defstruct [:server_name, :stateless, :supervisor, :registry, :lifetime, :context]
 
     @type t :: %__MODULE__{}
 
@@ -329,7 +329,7 @@ defmodule Equinox.Decider do
               required: true,
               doc: "Process lifetime defition module that implements `Equinox.Lifetime` behaviour"
             ],
-            ctx: [
+            context: [
               type: :map,
               default: %{},
               doc: "Optional meta bag used for telemetry and testing"
@@ -393,11 +393,11 @@ defmodule Equinox.Decider do
       end)
     end
 
-    @spec transact(t(), Decision.t(), Codec.ctx()) :: {:ok, t()} | {:error, term()}
-    @spec transact(pid(), Decision.t(), Codec.ctx()) :: {:ok, pid()} | {:error, term()}
-    def transact(settings_or_pid, decision, ctx \\ nil) do
+    @spec transact(t(), Decision.t(), Codec.context()) :: {:ok, t()} | {:error, term()}
+    @spec transact(pid(), Decision.t(), Codec.context()) :: {:ok, pid()} | {:error, term()}
+    def transact(settings_or_pid, decision, context \\ nil) do
       ensure_server_started(settings_or_pid, fn server_name_or_pid ->
-        case GenServer.call(server_name_or_pid, {:transact, decision, ctx}) do
+        case GenServer.call(server_name_or_pid, {:transact, decision, context}) do
           :ok -> {:ok, settings_or_pid}
           {:error, error} -> {:error, error}
         end
@@ -461,10 +461,10 @@ defmodule Equinox.Decider do
     end
 
     @impl GenServer
-    def handle_call({:transact, decision, ctx}, _from, server) do
+    def handle_call({:transact, decision, context}, _from, server) do
       transact_result =
-        Telemetry.span_decider_process_transact(self(), server, decision, ctx, fn ->
-          Stateless.transact(server.decider, decision, ctx)
+        Telemetry.span_decider_process_transact(self(), server, decision, context, fn ->
+          Stateless.transact(server.decider, decision, context)
         end)
 
       case transact_result do
@@ -493,7 +493,7 @@ defmodule Equinox.Decider do
   @spec stateful(String.t(), [Stateless.option() | Stateful.option()]) :: Stateful.t()
   def stateful(stream_name, opts) when is_bitstring(stream_name) do
     {stateful_opts, stateless_opts} =
-      Keyword.split(opts, [:supervisor, :registry, :lifetime, :ctx])
+      Keyword.split(opts, [:supervisor, :registry, :lifetime, :context])
 
     stream_name
     |> stateless(stateless_opts)
@@ -535,17 +535,17 @@ defmodule Equinox.Decider do
     end
   end
 
-  @spec transact(pid(), Decision.t(), Codec.ctx()) ::
+  @spec transact(pid(), Decision.t(), Codec.context()) ::
           {:ok, pid()} | {:error, term()}
-  @spec transact(Stateful.t(), Decision.t(), Codec.ctx()) ::
+  @spec transact(Stateful.t(), Decision.t(), Codec.context()) ::
           {:ok, Stateful.t()} | {:error, term()}
-  @spec transact(Stateless.t(), Decision.t(), Codec.ctx()) ::
+  @spec transact(Stateless.t(), Decision.t(), Codec.context()) ::
           {:ok, Stateless.t()} | {:error, term()}
-  def transact(decider, decision, ctx \\ nil) do
+  def transact(decider, decision, context \\ nil) do
     case decider do
-      pid when is_pid(pid) -> Stateful.transact(pid, decision, ctx)
-      %Stateful{} = decider -> Stateful.transact(decider, decision, ctx)
-      %Stateless{} = decider -> Stateless.transact(decider, decision, ctx)
+      pid when is_pid(pid) -> Stateful.transact(pid, decision, context)
+      %Stateful{} = decider -> Stateful.transact(decider, decision, context)
+      %Stateless{} = decider -> Stateless.transact(decider, decision, context)
     end
   end
 end

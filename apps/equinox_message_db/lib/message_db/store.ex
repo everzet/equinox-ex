@@ -17,8 +17,8 @@ defmodule Equinox.MessageDb.Store do
           Store.load_unoptimized!(unquote(fetch_conn), stream, state, codec, fold, @batch_size)
         end
 
-        def sync!(stream, state, events, ctx, codec, fold) do
-          Store.sync!(unquote(write_conn), stream, state, events, ctx, codec, fold)
+        def sync!(stream, state, events, context, codec, fold) do
+          Store.sync!(unquote(write_conn), stream, state, events, context, codec, fold)
         end
       end
     end
@@ -37,15 +37,15 @@ defmodule Equinox.MessageDb.Store do
           Store.load_latest_known_event!(unquote(fetch_conn), stream, state, codec, fold)
         end
 
-        def sync!(stream, state, events, ctx, codec, fold) do
-          Store.sync!(unquote(write_conn), stream, state, events, ctx, codec, fold)
+        def sync!(stream, state, events, context, codec, fold) do
+          Store.sync!(unquote(write_conn), stream, state, events, context, codec, fold)
         end
       end
     end
   end
 
-  def sync!(conn, stream_name, state, events, ctx, codec, fold) do
-    State.sync!(state, events, ctx, codec, fold, fn event_data ->
+  def sync!(conn, stream_name, state, events, context, codec, fold) do
+    State.sync!(state, events, context, codec, fold, fn event_data ->
       case Writer.write_messages(conn, stream_name, event_data, state.version) do
         {:ok, new_version} -> new_version
         {:error, exception} -> raise exception

@@ -7,7 +7,7 @@ defmodule Equinox.Store do
               stream_name :: String.t(),
               State.t(),
               list(DomainEvent.t()),
-              Codec.ctx(),
+              Codec.context(),
               Codec.t(),
               Fold.t()
             ) :: State.t()

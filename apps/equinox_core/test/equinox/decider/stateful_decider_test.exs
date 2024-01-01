@@ -256,7 +256,7 @@ defmodule Equinox.StatefulDeciderTest do
       supervisor: Keyword.get(attrs, :supervisor, :disabled),
       registry: Keyword.get(attrs, :registry, :disabled),
       lifetime: Keyword.get(attrs, :lifetime, Lifetime.StayAliveFor30Seconds),
-      ctx: %{test_pid: self()}
+      context: %{test_pid: self()}
     )
   end
 end

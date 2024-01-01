@@ -9,7 +9,7 @@ defmodule DeciderProcessMocks do
   end
 
   def handle_event(_even_name, _event_measurements, %{settings: settings}, %{mocks: mocks}) do
-    with %{ctx: %{test_pid: test_pid}} when is_pid(test_pid) <- settings do
+    with %{context: %{test_pid: test_pid}} when is_pid(test_pid) <- settings do
       for mock <- mocks do
         Mox.allow(mock, test_pid, self())
       end

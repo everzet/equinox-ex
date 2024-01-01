@@ -5,8 +5,8 @@ defmodule Equinox.Telemetry do
 
   alias Equinox.Decider.Stateless
 
-  def span_codec_encode(codec, domain_event, ctx, fun) do
-    meta = %{codec: codec, domain_event: domain_event, ctx: ctx}
+  def span_codec_encode(codec, domain_event, context, fun) do
+    meta = %{codec: codec, domain_event: domain_event, context: context}
 
     :telemetry.span([:equinox, :codec, :encode], meta, fn ->
       event_data = fun.()
@@ -60,8 +60,8 @@ defmodule Equinox.Telemetry do
     :telemetry.span([:equinox, :decider, :query], meta, fn -> {fun.(), meta} end)
   end
 
-  def span_decider_transact(%Stateless{} = decider, decision, ctx, fun) do
-    meta = %{decider: decider, decision_fun: decision, ctx: ctx}
+  def span_decider_transact(%Stateless{} = decider, decision, context, fun) do
+    meta = %{decider: decider, decision_fun: decision, context: context}
 
     :telemetry.span([:equinox, :decider, :transact], meta, fn ->
       case fun.() do
@@ -71,11 +71,11 @@ defmodule Equinox.Telemetry do
     end)
   end
 
-  def span_decider_decision(%Stateless{} = decider, attempt, decision, ctx, fun) do
+  def span_decider_decision(%Stateless{} = decider, attempt, decision, context, fun) do
     meta = %{
       decider: decider,
       decision_fun: decision,
-      ctx: ctx,
+      context: context,
       attempt: attempt,
       max_attempts: decider.max_resync_attempts
     }
@@ -132,13 +132,13 @@ defmodule Equinox.Telemetry do
     :telemetry.span([:equinox, :decider, :query], meta, fn -> {fun.(), meta} end)
   end
 
-  def span_decider_process_transact(pid, server, decision, ctx, fun) do
+  def span_decider_process_transact(pid, server, decision, context, fun) do
     meta = %{
       pid: pid,
       settings: server.settings,
       decider: server.decider,
       decision_fun: decision,
-      ctx: ctx
+      context: context
     }
 
     :telemetry.span([:equinox, :decider, :process, :transact], meta, fn ->

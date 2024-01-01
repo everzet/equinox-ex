@@ -32,15 +32,15 @@ defmodule Equinox.State do
   @spec sync!(
           t(),
           list(DomainEvent.t()),
-          Codec.ctx(),
+          Codec.context(),
           Codec.t(),
           Fold.t(),
           (list(EventData.t()) -> Store.stream_version())
         ) :: t()
-  def sync!(%__MODULE__{} = state, domain_events, ctx, codec, fold, write_fun) do
+  def sync!(%__MODULE__{} = state, domain_events, context, codec, fold, write_fun) do
     new_version =
       domain_events
-      |> Codec.encode!(ctx, codec)
+      |> Codec.encode!(context, codec)
       |> write_fun.()
 
     domain_events
