@@ -124,7 +124,11 @@ defmodule Equinox.Telemetry do
   end
 
   def span_decider_server_load(server, fun) do
-    meta = %{settings: server.settings, original_decider: server.decider}
+    meta = %{
+      settings: server.settings,
+      preloaded?: Stateless.loaded?(server.decider),
+      original_decider: server.decider
+    }
 
     :telemetry.span([:equinox, :decider, :server, :load], meta, fn ->
       loaded_decider = fun.()
