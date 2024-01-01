@@ -96,19 +96,28 @@ defmodule Equinox.CommonDeciderTest do
         stub(FoldMock, :initial, fn -> 0 end)
         stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
 
-        expect(StoreMock, :sync!, fn @stream,
-                                     %{version: -1},
-                                     [2, 3],
-                                     %{c: 1},
-                                     CodecMock,
-                                     FoldMock ->
+        expect(StoreMock, :sync!, fn @stream, %{version: -1}, [2, 3], %{}, CodecMock, FoldMock ->
           State.new(5, 1)
         end)
 
         decider = init(unquote(decider_mod), stream_name: @stream)
 
-        assert {:ok, decider} = Decider.transact(decider, fn 0 -> [2, 3] end, %{c: 1})
+        assert {:ok, decider} = Decider.transact(decider, fn 0 -> [2, 3] end)
         assert Decider.query(decider, & &1) == 5
+      end
+
+      test "merges decider context with transact context and passes it all the way to store" do
+        stub(FoldMock, :initial, fn -> 0 end)
+        stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
+
+        expect(StoreMock, :sync!, fn @stream, %{version: -1}, [2], ctx, CodecMock, FoldMock ->
+          assert Map.has_key?(ctx, :allow_mocks_from)
+          assert Map.has_key?(ctx, :custom_value)
+          State.new(5, 1)
+        end)
+
+        decider = init(unquote(decider_mod), stream_name: @stream)
+        assert {:ok, _} = Decider.transact(decider, fn 0 -> [2] end, %{custom_value: 2})
       end
 
       test "keeps track of state (stream) version during the sync process" do
@@ -140,7 +149,7 @@ defmodule Equinox.CommonDeciderTest do
         decision = &(&1 + 3)
 
         # 4. We fail to sync the result of the decision due to the version conflict (-1 != 0)
-        expect(StoreMock, :sync!, fn @stream, %{version: -1}, [3], %{c: 1}, CodecMock, FoldMock ->
+        expect(StoreMock, :sync!, fn @stream, %{version: -1}, [3], %{}, CodecMock, FoldMock ->
           raise Store.StreamVersionConflict
         end)
 
@@ -150,13 +159,13 @@ defmodule Equinox.CommonDeciderTest do
         # 6. We redo the `+ 3` decision based on the new state value `2`, producing `2 + 3 = 5` event
 
         # 7. We successfully sync the result of the updated decision to the stream and produce new state
-        expect(StoreMock, :sync!, fn @stream, %{version: 0}, [5], %{c: 1}, CodecMock, FoldMock ->
+        expect(StoreMock, :sync!, fn @stream, %{version: 0}, [5], %{}, CodecMock, FoldMock ->
           State.new(7, 1)
         end)
 
         # Execution:
 
-        assert {:ok, decider} = Decider.transact(decider, decision, %{c: 1})
+        assert {:ok, decider} = Decider.transact(decider, decision)
         # expect final state to be addition of both events: `2 + 5 = 7`
         assert Decider.query(decider, & &1) == 7
       end
