@@ -187,7 +187,7 @@ defmodule Equinox.Decider do
     @spec transact(t(), Decision.t(), Codec.ctx()) :: {:ok, t()} | {:error, term()}
     def transact(%__MODULE__{} = decider, decision_fun, ctx \\ nil) do
       ensure_state_loaded(decider, fn decider ->
-        Telemetry.span_decider_transact(decider, decision_fun, fn ->
+        Telemetry.span_decider_transact(decider, decision_fun, ctx, fn ->
           transact_with_resync(decider, decision_fun, ctx)
         end)
       end)
@@ -200,7 +200,7 @@ defmodule Equinox.Decider do
 
     defp transact_with_resync(%__MODULE__{} = decider, decision_fun, ctx, resync_attempt \\ 0) do
       decision_result =
-        Telemetry.span_decider_decision(decider, resync_attempt, decision_fun, fn ->
+        Telemetry.span_decider_decision(decider, resync_attempt, decision_fun, ctx, fn ->
           Decision.execute(decision_fun, decider.state)
         end)
 
@@ -299,7 +299,7 @@ defmodule Equinox.Decider do
     use GenServer, restart: :transient
 
     alias Equinox.Decider.Stateless
-    alias Equinox.Codec
+    alias Equinox.{Telemetry, Codec}
 
     @enforce_keys [:supervisor, :registry, :lifetime]
     defstruct [:server_name, :stateless, :supervisor, :registry, :lifetime, :on_init]
@@ -429,39 +429,58 @@ defmodule Equinox.Decider do
     @impl GenServer
     def init(%__MODULE__{} = settings) do
       (settings.on_init || fn -> nil end).()
-      {:ok, %{decider: settings.stateless, lifetime: settings.lifetime}, {:continue, :load}}
+      server = %{decider: settings.stateless, settings: settings}
+      Telemetry.decider_process_init(self(), server)
+      {:ok, server, {:continue, :load}}
     end
 
     @impl GenServer
     def handle_continue(:load, %{decider: decider} = server) do
-      loaded_decider =
-        if(not Stateless.loaded?(decider), do: Stateless.load(decider), else: decider)
+      decider =
+        Telemetry.span_decider_process_load(self(), server, fn ->
+          if not Stateless.loaded?(decider) do
+            Stateless.load(decider)
+          else
+            decider
+          end
+        end)
 
-      {:noreply, %{server | decider: loaded_decider},
-       server.lifetime.after_init(loaded_decider.state.value)}
+      {:noreply, %{server | decider: decider},
+       server.settings.lifetime.after_init(decider.state.value)}
     end
 
     @impl GenServer
     def handle_call({:query, query}, _from, server) do
-      {:reply, Stateless.query(server.decider, query), server,
-       server.lifetime.after_query(server.decider.state.value)}
+      query_result =
+        Telemetry.span_decider_process_query(self(), server, query, fn ->
+          Stateless.query(server.decider, query)
+        end)
+
+      {:reply, query_result, server,
+       server.settings.lifetime.after_query(server.decider.state.value)}
     end
 
     @impl GenServer
     def handle_call({:transact, decision, ctx}, _from, server) do
-      case Stateless.transact(server.decider, decision, ctx) do
+      transact_result =
+        Telemetry.span_decider_process_transact(self(), server, decision, ctx, fn ->
+          Stateless.transact(server.decider, decision, ctx)
+        end)
+
+      case transact_result do
         {:ok, updated_decider} ->
           {:reply, :ok, %{server | decider: updated_decider},
-           server.lifetime.after_transact(updated_decider.state.value)}
+           server.settings.lifetime.after_transact(updated_decider.state.value)}
 
         {:error, error} ->
           {:reply, {:error, error}, server,
-           server.lifetime.after_transact(server.decider.state.value)}
+           server.settings.lifetime.after_transact(server.decider.state.value)}
       end
     end
 
     @impl GenServer
     def handle_info(:timeout, server) do
+      Telemetry.decider_process_stop(self(), server, :timeout)
       {:stop, :normal, server}
     end
   end
