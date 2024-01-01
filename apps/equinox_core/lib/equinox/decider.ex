@@ -165,10 +165,8 @@ defmodule Equinox.Decider do
     @type option :: unquote(NimbleOptions.option_typespec(@opts))
     @spec for_stream(String.t(), [option()]) :: t()
     def for_stream(stream_name, opts) do
-      case NimbleOptions.validate(opts, @opts) do
-        {:ok, opts} -> struct(__MODULE__, [{:stream_name, stream_name} | opts])
-        {:error, error} -> raise ArgumentError, message: Exception.message(error)
-      end
+      opts = NimbleOptions.validate!(opts, @opts)
+      struct(__MODULE__, [{:stream_name, stream_name} | opts])
     end
 
     @spec loaded?(t()) :: boolean()
@@ -335,23 +333,18 @@ defmodule Equinox.Decider do
     @type option :: unquote(NimbleOptions.option_typespec(@opts))
     @spec wrap_stateless(Stateless.t(), [option()]) :: t()
     def wrap_stateless(%Stateless{} = stateless, opts) do
-      case NimbleOptions.validate(opts, @opts) do
-        {:ok, opts} ->
-          settings = struct(__MODULE__, [{:stateless, stateless} | opts])
+      opts = NimbleOptions.validate!(opts, @opts)
+      settings = struct(__MODULE__, [{:stateless, stateless} | opts])
 
-          server_name =
-            case settings.registry do
-              :disabled -> nil
-              :global -> {:global, stateless.stream_name}
-              {:global, prefix} -> {:global, prefix <> stateless.stream_name}
-              module -> {:via, Registry, {module, stateless.stream_name}}
-            end
+      server_name =
+        case settings.registry do
+          :disabled -> nil
+          :global -> {:global, stateless.stream_name}
+          {:global, prefix} -> {:global, prefix <> stateless.stream_name}
+          module -> {:via, Registry, {module, stateless.stream_name}}
+        end
 
-          %{settings | server_name: server_name}
-
-        {:error, validation_error} ->
-          raise ArgumentError, message: Exception.message(validation_error)
-      end
+      %{settings | server_name: server_name}
     end
 
     @spec start(t()) :: t() | pid()
