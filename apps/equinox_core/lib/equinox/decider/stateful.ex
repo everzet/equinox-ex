@@ -183,7 +183,8 @@ defmodule Equinox.Decider.Stateful do
 
   @impl GenServer
   def init(%__MODULE__{} = settings) do
-    server = %{decider: settings.stateless, settings: settings}
+    {decider, settings} = Map.pop(settings, :stateless)
+    server = %{decider: decider, settings: settings}
     Telemetry.decider_server_init(server)
     {:ok, server, {:continue, :load}}
   end
