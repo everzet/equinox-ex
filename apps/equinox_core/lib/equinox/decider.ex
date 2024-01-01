@@ -128,44 +128,99 @@ defmodule Equinox.Decider do
 
     @type t :: %__MODULE__{}
 
-    @opts NimbleOptions.new!(
-            store: [
-              type: :atom,
-              required: true,
-              doc: "Persistence module that implements `Equinox.Store` behaviour"
-            ],
-            codec: [
-              type: :atom,
-              required: true,
-              doc: "Event (en|de)coding module that implements `Equinox.Codec` behaviour"
-            ],
-            fold: [
-              type: :atom,
-              required: true,
-              doc: "State generation module that implements `Equinox.Fold` behaviour"
-            ],
-            context: [
-              type: :map,
-              doc: "Decider-wide context. Merged with context passed explicitly via transact"
-            ],
-            max_load_attempts: [
-              type: :pos_integer,
-              doc: "How many times (in total) should we try to load the state on load errors"
-            ],
-            max_sync_attempts: [
-              type: :pos_integer,
-              doc: "How many times (in total) should we try to sync the state on write errors"
-            ],
-            max_resync_attempts: [
-              type: :non_neg_integer,
-              doc: "How many times should we try to resync the state on version conflict"
-            ]
-          )
+    defmodule Options do
+      @opts NimbleOptions.new!(
+              store: [
+                type: {:custom, __MODULE__, :validate_store, []},
+                required: true,
+                doc: "Persistence module that implements `Equinox.Store` behaviour"
+              ],
+              codec: [
+                type: {:custom, __MODULE__, :validate_codec, []},
+                required: true,
+                doc: "Event (en|de)coding module that implements `Equinox.Codec` behaviour"
+              ],
+              fold: [
+                type: {:custom, __MODULE__, :validate_fold, []},
+                required: true,
+                doc: "State generation module that implements `Equinox.Fold` behaviour"
+              ],
+              context: [
+                type: :map,
+                doc: "Decider-wide context. Merged with context passed explicitly via transact"
+              ],
+              max_load_attempts: [
+                type: :pos_integer,
+                doc: "How many times (in total) should we try to load the state on load errors"
+              ],
+              max_sync_attempts: [
+                type: :pos_integer,
+                doc: "How many times (in total) should we try to sync the state on write errors"
+              ],
+              max_resync_attempts: [
+                type: :non_neg_integer,
+                doc: "How many times should we try to resync the state on version conflict"
+              ]
+            )
 
-    @type option :: unquote(NimbleOptions.option_typespec(@opts))
-    @spec for_stream(String.t(), [option()]) :: t()
+      @type t :: [o()]
+      @type o :: unquote(NimbleOptions.option_typespec(@opts))
+
+      def validate!(opts), do: NimbleOptions.validate!(opts, @opts)
+      def docs, do: NimbleOptions.docs(@opts)
+
+      def validate_store(store) do
+        case store do
+          store when is_atom(store) ->
+            Code.ensure_loaded(store)
+
+            if function_exported?(store, :load!, 4) do
+              {:ok, store}
+            else
+              {:error, "must be a module implementing `Equinox.Store`, but got #{inspect(store)}"}
+            end
+
+          _ ->
+            {:error, "must be a module implementing `Equinox.Store`, but got #{inspect(store)}"}
+        end
+      end
+
+      def validate_codec(codec) do
+        case codec do
+          codec when is_atom(codec) ->
+            Code.ensure_loaded(codec)
+
+            if function_exported?(codec, :encode, 2) do
+              {:ok, codec}
+            else
+              {:error, "must be a module implementing `Equinox.Codec`, but got #{inspect(codec)}"}
+            end
+
+          _ ->
+            {:error, "must be a module implementing `Equinox.Codec`, but got #{inspect(codec)}"}
+        end
+      end
+
+      def validate_fold(fold) do
+        case fold do
+          fold when is_atom(fold) ->
+            Code.ensure_loaded(fold)
+
+            if function_exported?(fold, :evolve, 2) do
+              {:ok, fold}
+            else
+              {:error, "must be a module implementing `Equinox.Fold`, but got #{inspect(fold)}"}
+            end
+
+          _ ->
+            {:error, "must be a module implementing `Equinox.Fold`, but got #{inspect(fold)}"}
+        end
+      end
+    end
+
+    @spec for_stream(String.t(), Options.t()) :: t()
     def for_stream(stream_name, opts) do
-      opts = NimbleOptions.validate!(opts, @opts)
+      opts = Options.validate!(opts)
       struct(__MODULE__, [{:stream_name, stream_name} | opts])
     end
 
@@ -305,35 +360,95 @@ defmodule Equinox.Decider do
 
     @type t :: %__MODULE__{}
 
-    @opts NimbleOptions.new!(
-            supervisor: [
-              type: {:or, [:atom, {:in, [:disabled]}]},
-              required: true,
-              doc: "Name of the DynamicSupervisor which should parent the decider process"
-            ],
-            registry: [
-              type:
-                {:or,
-                 [
-                   :atom,
-                   {:in, [:global]},
-                   {:tuple, [{:in, [:global]}, :string]},
-                   {:in, [:disabled]}
-                 ]},
-              required: true,
-              doc: "Name of the Registry (or :global) under which our decider should be listed"
-            ],
-            lifetime: [
-              type: :atom,
-              required: true,
-              doc: "Process lifetime defition module that implements `Equinox.Lifetime` behaviour"
-            ]
-          )
+    defmodule Options do
+      @opts NimbleOptions.new!(
+              supervisor: [
+                type: {:custom, __MODULE__, :validate_supervisor, []},
+                required: true,
+                doc: "Name of the DynamicSupervisor which should parent the decider process"
+              ],
+              registry: [
+                type: {:custom, __MODULE__, :validate_registry, []},
+                required: true,
+                doc: "Name of the Registry (or :global) under which our decider should be listed"
+              ],
+              lifetime: [
+                type: {:custom, __MODULE__, :validate_lifetime, []},
+                required: true,
+                doc: "Server lifetime spec module that implements `Equinox.Lifetime` behaviour"
+              ]
+            )
 
-    @type option :: unquote(NimbleOptions.option_typespec(@opts))
-    @spec wrap_stateless(Stateless.t(), [option()]) :: t()
+      @type t :: [o]
+      @type o :: unquote(NimbleOptions.option_typespec(@opts))
+
+      def validate!(opts), do: NimbleOptions.validate!(opts, @opts)
+      def docs, do: NimbleOptions.docs(@opts)
+
+      def validate_supervisor(supervisor) do
+        case supervisor do
+          :disabled ->
+            {:ok, :disabled}
+
+          supervisor when is_atom(supervisor) ->
+            if supervisor |> GenServer.whereis() |> Process.alive?() do
+              {:ok, supervisor}
+            else
+              {:error, "must be a running DynamicSupervisor, but got #{inspect(supervisor)}"}
+            end
+
+          _ ->
+            {:error,
+             "must be a running DynamicSupervisor or :disabled, but got #{inspect(supervisor)}"}
+        end
+      end
+
+      def validate_registry(registry) do
+        case registry do
+          :disabled ->
+            {:ok, :disabled}
+
+          :global ->
+            {:ok, :global}
+
+          {:global, prefix} ->
+            {:ok, {:global, prefix}}
+
+          registry when is_atom(registry) ->
+            if registry |> GenServer.whereis() |> Process.alive?() do
+              {:ok, registry}
+            else
+              {:error, "must be a running Registry, but got #{inspect(registry)}"}
+            end
+
+          _ ->
+            {:error,
+             "must be a running Registry, :global, {:global, prefix} or :disabled, but got #{inspect(registry)}"}
+        end
+      end
+
+      def validate_lifetime(lifetime) do
+        case lifetime do
+          lifetime when is_atom(lifetime) ->
+            Code.ensure_loaded(lifetime)
+
+            if function_exported?(lifetime, :after_init, 1) do
+              {:ok, lifetime}
+            else
+              {:error,
+               "must be a module implementing `Equinox.Lifetime`, but got #{inspect(lifetime)}"}
+            end
+
+          _ ->
+            {:error,
+             "must be a module implementing `Equinox.Lifetime`, but got #{inspect(lifetime)}"}
+        end
+      end
+    end
+
+    @spec wrap_stateless(Stateless.t(), Options.t()) :: t()
     def wrap_stateless(%Stateless{} = stateless, opts) do
-      opts = NimbleOptions.validate!(opts, @opts)
+      opts = Options.validate!(opts)
       settings = struct(__MODULE__, [{:stateless, stateless} | opts])
 
       server_name =
@@ -474,12 +589,12 @@ defmodule Equinox.Decider do
     end
   end
 
-  @spec stateless(String.t(), [Stateless.option()]) :: Stateless.t()
+  @spec stateless(String.t(), Stateless.Options.t()) :: Stateless.t()
   def stateless(stream_name, opts) when is_bitstring(stream_name) do
     Stateless.for_stream(stream_name, opts)
   end
 
-  @spec stateful(String.t(), [Stateless.option() | Stateful.option()]) :: Stateful.t()
+  @spec stateful(String.t(), [Stateless.Options.o() | Stateful.Options.o()]) :: Stateful.t()
   def stateful(stream_name, opts) when is_bitstring(stream_name) do
     {stateful_opts, stateless_opts} = Keyword.split(opts, [:supervisor, :registry, :lifetime])
 
@@ -488,13 +603,13 @@ defmodule Equinox.Decider do
     |> stateful(stateful_opts)
   end
 
-  @spec stateful(Stateless.t(), [Stateful.option()]) :: Stateful.t()
+  @spec stateful(Stateless.t(), Stateful.Options.t()) :: Stateful.t()
   def stateful(%Stateless{} = stateless, opts), do: Stateful.wrap_stateless(stateless, opts)
 
   @spec load(Stateless.t()) :: Stateless.t()
   def load(%Stateless{} = stateless), do: Stateless.load(stateless)
 
-  @spec load(String.t(), [Stateless.option()]) :: Stateless.t()
+  @spec load(String.t(), Stateless.Options.t()) :: Stateless.t()
   def load(stream_name, opts) when is_bitstring(stream_name) do
     stream_name
     |> stateless(opts)
@@ -504,8 +619,8 @@ defmodule Equinox.Decider do
   @spec start(Stateful.t()) :: Stateful.t() | pid()
   def start(%Stateful{} = stateful), do: Stateful.start(stateful)
 
-  @spec start(String.t(), [Stateless.option() | Stateful.option()]) :: Stateful.t() | pid()
-  @spec start(Stateless.t(), [Stateful.option()]) :: Stateful.t() | pid()
+  @spec start(String.t(), [Stateless.Options.o() | Stateful.Options.o()]) :: Stateful.t() | pid()
+  @spec start(Stateless.t(), Stateful.Options.t()) :: Stateful.t() | pid()
   def start(stream_name_or_stateless, stateful_or_both_opts) do
     stream_name_or_stateless
     |> stateful(stateful_or_both_opts)
