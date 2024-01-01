@@ -320,7 +320,7 @@ defmodule Equinox.CommonDeciderTest do
       store: StoreMock,
       codec: CodecMock,
       fold: FoldMock,
-      context: %{test_pid: self()},
+      context: %{allow_mocks_from: self()},
       max_load_attempts: Keyword.get(attrs, :max_load_attempts, 1),
       max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 1),
       max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 0)
