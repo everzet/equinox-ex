@@ -7,7 +7,7 @@ defmodule Equinox.MessageDb.StoreTest do
 
   defmodule NumberCodec do
     @behaviour Equinox.Codec
-    def encode(n, :ctx) when is_number(n), do: {:ok, EventData.new(type: "Number", data: n)}
+    def encode(n, %{}) when is_number(n), do: {:ok, EventData.new(type: "Number", data: n)}
     def decode(event) when is_number(event.data), do: {:ok, event.data}
   end
 
@@ -30,15 +30,15 @@ defmodule Equinox.MessageDb.StoreTest do
 
     test_in_isolation "syncs from initial state", %{conn: conn} do
       assert %State{value: 9, version: 2} =
-               Store.sync!(conn, "num-1", @state, [2, 3, 4], :ctx, @codec, @fold)
+               Store.sync!(conn, "num-1", @state, [2, 3, 4], %{}, @codec, @fold)
     end
 
     test_in_isolation "syncs from intermediate state", %{conn: conn} do
       assert %State{value: 5, version: 1} =
-               Store.sync!(conn, "num-1", @state, [2, 3], :ctx, @codec, @fold)
+               Store.sync!(conn, "num-1", @state, [2, 3], %{}, @codec, @fold)
 
       assert %State{value: 9, version: 2} =
-               Store.sync!(conn, "num-1", State.new(5, 1), [4], :ctx, @codec, @fold)
+               Store.sync!(conn, "num-1", State.new(5, 1), [4], %{}, @codec, @fold)
     end
   end
 
@@ -48,14 +48,14 @@ defmodule Equinox.MessageDb.StoreTest do
     @state State.init(@fold)
 
     test_in_isolation "loads from initial state", %{conn: conn} do
-      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], :ctx, @codec, @fold)
+      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], %{}, @codec, @fold)
 
       assert %State{value: 9, version: 2} =
                Store.load_unoptimized!(conn, "num-1", @state, @codec, @fold, 100)
     end
 
     test_in_isolation "loads from intermediate state", %{conn: conn} do
-      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], :ctx, @codec, @fold)
+      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], %{}, @codec, @fold)
 
       assert %State{value: 9, version: 2} =
                Store.load_unoptimized!(conn, "num-1", State.new(5, 1), @codec, @fold, 100)
@@ -67,7 +67,7 @@ defmodule Equinox.MessageDb.StoreTest do
     end
 
     test_in_isolation "handles different batch sizes", %{conn: conn} do
-      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], :ctx, @codec, @fold)
+      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], %{}, @codec, @fold)
 
       assert %State{value: 9, version: 2} =
                Store.load_unoptimized!(conn, "num-1", @state, @codec, @fold, 1)
@@ -83,14 +83,14 @@ defmodule Equinox.MessageDb.StoreTest do
     @state State.init(@fold)
 
     test_in_isolation "loads from initial state", %{conn: conn} do
-      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], :ctx, @codec, @fold)
+      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], %{}, @codec, @fold)
 
       assert %State{value: 4, version: 2} =
                Store.load_latest_known_event!(conn, "num-1", @state, @codec, @fold)
     end
 
     test_in_isolation "loads from intermediate state", %{conn: conn} do
-      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], :ctx, @codec, @fold)
+      assert %State{} = Store.sync!(conn, "num-1", @state, [2, 3, 4], %{}, @codec, @fold)
 
       assert %State{value: 4, version: 2} =
                Store.load_latest_known_event!(conn, "num-1", State.new(3, 1), @codec, @fold)

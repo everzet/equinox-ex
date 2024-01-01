@@ -29,8 +29,8 @@ defmodule Equinox.StateTest do
       state = %State{value: 0, version: 2}
       events = [:one, :two]
 
-      expect(CodecMock, :encode, fn :one, :ctx -> {:ok, 1} end)
-      expect(CodecMock, :encode, fn :two, :ctx -> {:ok, 2} end)
+      expect(CodecMock, :encode, fn :one, %{} -> {:ok, 1} end)
+      expect(CodecMock, :encode, fn :two, %{} -> {:ok, 2} end)
 
       write = fn encoded_events ->
         assert encoded_events == [1, 2]
@@ -40,7 +40,7 @@ defmodule Equinox.StateTest do
       expect(FoldMock, :evolve, fn 0, :one -> 1 end)
       expect(FoldMock, :evolve, fn 1, :two -> 2 end)
 
-      assert State.sync!(state, events, :ctx, CodecMock, FoldMock, write) ==
+      assert State.sync!(state, events, %{}, CodecMock, FoldMock, write) ==
                %State{value: 2, version: 4}
     end
   end
