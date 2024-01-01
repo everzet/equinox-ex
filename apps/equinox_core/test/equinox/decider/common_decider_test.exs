@@ -169,6 +169,27 @@ defmodule Equinox.CommonDeciderTest do
         assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "StreamVersionConflict"
       end
 
+      test "does not retry failing loads during resync (to avoid confusing overlap of settings)" do
+        stub(FoldMock, :initial, fn -> 0 end)
+
+        expect(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
+
+        expect(StoreMock, :sync!, fn @stream, %{version: -1}, _, _, _, _ ->
+          raise Store.StreamVersionConflict
+        end)
+
+        expect(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> raise RuntimeError end)
+
+        decider =
+          init(unquote(decider_mod),
+            stream_name: @stream,
+            max_resync_attempts: 1,
+            max_load_attempts: 2
+          )
+
+        assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "RuntimeError"
+      end
+
       test "handles general sync errors (non-conflicts) by retrying" do
         stub(FoldMock, :initial, fn -> 0 end)
         stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)

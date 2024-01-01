@@ -200,7 +200,7 @@ defmodule Equinox.Decider do
 
     defp transact_with_resync(%__MODULE__{} = decider, decision_fun, ctx, resync_attempt \\ 0) do
       decision_result =
-        Telemetry.span_decider_decision(decider, decision_fun, fn ->
+        Telemetry.span_decider_decision(decider, resync_attempt, decision_fun, fn ->
           Decision.execute(decision_fun, decider.state)
         end)
 
@@ -219,7 +219,7 @@ defmodule Equinox.Decider do
               if resync_attempt < decider.max_resync_attempts do
                 decider
                 |> Telemetry.span_decider_resync(resync_attempt, fn ->
-                  load_state_with_retry(decider)
+                  load_state_with_retry(decider, decider.max_load_attempts)
                 end)
                 |> transact_with_resync(decision_fun, ctx, resync_attempt + 1)
               else
