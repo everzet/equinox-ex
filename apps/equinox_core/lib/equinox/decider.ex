@@ -426,14 +426,14 @@ defmodule Equinox.Decider do
     @impl GenServer
     def init(%__MODULE__{} = settings) do
       server = %{decider: settings.stateless, settings: settings}
-      Telemetry.decider_process_init(self(), server)
+      Telemetry.decider_process_init(server)
       {:ok, server, {:continue, :load}}
     end
 
     @impl GenServer
     def handle_continue(:load, %{decider: decider} = server) do
       decider =
-        Telemetry.span_decider_process_load(self(), server, fn ->
+        Telemetry.span_decider_process_load(server, fn ->
           if not Stateless.loaded?(decider) do
             Stateless.load(decider)
           else
@@ -448,7 +448,7 @@ defmodule Equinox.Decider do
     @impl GenServer
     def handle_call({:query, query}, _from, server) do
       query_result =
-        Telemetry.span_decider_process_query(self(), server, query, fn ->
+        Telemetry.span_decider_process_query(server, query, fn ->
           Stateless.query(server.decider, query)
         end)
 
@@ -459,7 +459,7 @@ defmodule Equinox.Decider do
     @impl GenServer
     def handle_call({:transact, decision, context}, _from, server) do
       transact_result =
-        Telemetry.span_decider_process_transact(self(), server, decision, context, fn ->
+        Telemetry.span_decider_process_transact(server, decision, context, fn ->
           Stateless.transact(server.decider, decision, context)
         end)
 
@@ -476,7 +476,7 @@ defmodule Equinox.Decider do
 
     @impl GenServer
     def handle_info(:timeout, server) do
-      Telemetry.decider_process_stop(self(), server, :timeout)
+      Telemetry.decider_process_stop(server, :timeout)
       {:stop, :normal, server}
     end
   end

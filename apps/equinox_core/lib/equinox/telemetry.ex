@@ -96,24 +96,24 @@ defmodule Equinox.Telemetry do
     :telemetry.span([:equinox, :decider, :transact, :resync], meta, fn -> {fun.(), meta} end)
   end
 
-  def decider_process_init(pid, server) do
+  def decider_process_init(server) do
     :telemetry.execute(
       [:equinox, :decider, :process, :init],
       %{system_time: System.system_time()},
-      %{pid: pid, settings: server.settings, decider: server.decider}
+      %{settings: server.settings, decider: server.decider}
     )
   end
 
-  def decider_process_stop(pid, server, reason) do
+  def decider_process_stop(server, reason) do
     :telemetry.execute(
       [:equinox, :decider, :process, :stop],
       %{system_time: System.system_time()},
-      %{pid: pid, settings: server.settings, decider: server.decider, reason: reason}
+      %{settings: server.settings, decider: server.decider, reason: reason}
     )
   end
 
-  def span_decider_process_load(pid, server, fun) do
-    meta = %{pid: pid, settings: server.settings, initial_decider: server.decider}
+  def span_decider_process_load(server, fun) do
+    meta = %{settings: server.settings, initial_decider: server.decider}
 
     :telemetry.span([:equinox, :decider, :process, :load], meta, fn ->
       loaded_decider = fun.()
@@ -121,20 +121,13 @@ defmodule Equinox.Telemetry do
     end)
   end
 
-  def span_decider_process_query(pid, server, query, fun) do
-    meta = %{
-      pid: pid,
-      settings: server.settings,
-      decider: server.decider,
-      query_fun: query
-    }
-
+  def span_decider_process_query(server, query, fun) do
+    meta = %{settings: server.settings, decider: server.decider, query_fun: query}
     :telemetry.span([:equinox, :decider, :query], meta, fn -> {fun.(), meta} end)
   end
 
-  def span_decider_process_transact(pid, server, decision, context, fun) do
+  def span_decider_process_transact(server, decision, context, fun) do
     meta = %{
-      pid: pid,
       settings: server.settings,
       decider: server.decider,
       decision_fun: decision,
