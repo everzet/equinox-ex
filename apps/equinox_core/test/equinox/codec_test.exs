@@ -11,26 +11,26 @@ defmodule Equinox.CodecTest do
 
   describe "encode!/3" do
     test "performs Codec.encode/2 on every given event" do
-      expect(CodecMock, :encode, fn 1, :ctx -> {:ok, :one} end)
-      expect(CodecMock, :encode, fn 2, :ctx -> {:ok, :two} end)
-      assert Codec.encode!([1, 2], :ctx, CodecMock) == [:one, :two]
+      expect(CodecMock, :encode, fn 1, %{c: 1} -> {:ok, :one} end)
+      expect(CodecMock, :encode, fn 2, %{c: 1} -> {:ok, :two} end)
+      assert Codec.encode!([1, 2], %{c: 1}, CodecMock) == [:one, :two]
     end
 
     test "raises exception if Codec returns {:error, exception}" do
       expect(CodecMock, :encode, fn _, _ -> {:error, %Codec.CodecError{message: "bang"}} end)
-      assert_raise Codec.CodecError, ~r/bang/, fn -> Codec.encode!([1], :ctx, CodecMock) end
+      assert_raise Codec.CodecError, ~r/bang/, fn -> Codec.encode!([1], %{c: 1}, CodecMock) end
     end
 
     test "raises exception if Codec returns {:error, term}" do
       expect(CodecMock, :encode, fn _, _ -> {:error, :bang} end)
-      assert_raise Codec.CodecError, ~r/:bang/, fn -> Codec.encode!([1], :ctx, CodecMock) end
+      assert_raise Codec.CodecError, ~r/:bang/, fn -> Codec.encode!([1], %{c: 1}, CodecMock) end
     end
 
     test "wraps all exceptions into CodecError" do
       expect(CodecMock, :encode, fn _, _ -> raise RuntimeError end)
 
       assert_raise Codec.CodecError, ~r/runtime error/, fn ->
-        Codec.encode!([1], :ctx, CodecMock)
+        Codec.encode!([1], %{c: 1}, CodecMock)
       end
     end
   end

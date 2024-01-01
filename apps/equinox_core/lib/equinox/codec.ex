@@ -3,7 +3,7 @@ defmodule Equinox.Codec do
   alias Equinox.Events.{DomainEvent, EventData, TimelineEvent}
 
   @type t :: module()
-  @type context :: any()
+  @type context :: map()
 
   @callback encode(DomainEvent.t(), context()) :: {:ok, EventData.t()} | {:error, CodecError.t()}
   @callback decode(TimelineEvent.t()) :: {:ok, DomainEvent.t()} | {:error, CodecError.t()}
