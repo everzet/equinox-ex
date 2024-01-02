@@ -1,7 +1,8 @@
 defmodule Equinox.Decider do
-  alias Equinox.Codec
   alias Equinox.Decider.{Stateless, Stateful}
   alias Equinox.Decider.Actions.{Query, Decision}
+
+  @type context :: map()
 
   @spec stateless(String.t(), Stateless.Options.t()) :: Stateless.t()
   def stateless(stream_name, opts) when is_bitstring(stream_name) do
@@ -52,11 +53,11 @@ defmodule Equinox.Decider do
     end
   end
 
-  @spec transact(pid(), Decision.t(), Codec.context()) ::
+  @spec transact(pid(), Decision.t(), context()) ::
           {:ok, pid()} | {:error, term()}
-  @spec transact(Stateful.t(), Decision.t(), Codec.context()) ::
+  @spec transact(Stateful.t(), Decision.t(), context()) ::
           {:ok, Stateful.t()} | {:error, term()}
-  @spec transact(Stateless.t(), Decision.t(), Codec.context()) ::
+  @spec transact(Stateless.t(), Decision.t(), context()) ::
           {:ok, Stateless.t()} | {:error, term()}
   def transact(decider, decision, context \\ %{}) do
     case decider do

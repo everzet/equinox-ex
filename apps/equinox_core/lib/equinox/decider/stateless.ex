@@ -1,12 +1,7 @@
 defmodule Equinox.Decider.Stateless do
-  alias Equinox.{State, Store, Codec, Fold, Telemetry}
+  alias Equinox.{Decider, State, Store, Codec, Fold, Telemetry}
   alias Equinox.Decider.Actions.{Query, Decision}
-
-  alias Equinox.Decider.Errors.{
-    ExhaustedLoadAttempts,
-    ExhaustedSyncAttempts,
-    ExhaustedResyncAttempts
-  }
+  alias Equinox.Decider.Errors
 
   @enforce_keys [:stream_name, :store, :codec, :fold]
   defstruct state: :not_loaded,
@@ -135,7 +130,7 @@ defmodule Equinox.Decider.Stateless do
     end)
   end
 
-  @spec transact(t(), Decision.t(), Codec.context()) :: {:ok, t()} | {:error, term()}
+  @spec transact(t(), Decision.t(), Decider.context()) :: {:ok, t()} | {:error, term()}
   def transact(%__MODULE__{} = decider, decision_fun, context \\ %{}) do
     decider = if(not loaded?(decider), do: load(decider), else: decider)
     context = Map.merge(decider.context, context)
@@ -147,42 +142,40 @@ defmodule Equinox.Decider.Stateless do
 
   defp transact_with_resync(%__MODULE__{} = decider, decision_fun, context, resync_attempt \\ 0) do
     decision_result =
-      Telemetry.span_decider_decision(decider, resync_attempt, decision_fun, context, fn ->
+      Telemetry.span_decider_decision(decider, decision_fun, context, resync_attempt, fn ->
         Decision.execute(decision_fun, decider.state)
       end)
 
-    case decision_result do
-      {:error, error} ->
-        {:error, error}
+    with {:ok, events} <- decision_result do
+      try do
+        {:ok, sync_state_with_retry(decider, events, context)}
+      rescue
+        version_conflict in [Store.Errors.StreamVersionConflict] ->
+          if resync_attempt >= decider.max_resync_attempts do
+            reraise Errors.ExhaustedResyncAttempts,
+                    [
+                      stream_name: decider.stream_name,
+                      exception: version_conflict,
+                      attempts: resync_attempt
+                    ],
+                    __STACKTRACE__
+          end
 
-      {:ok, []} ->
-        {:ok, decider}
+          resynced_decider =
+            Telemetry.span_decider_resync(decider, resync_attempt, fn ->
+              load_state_without_retry(decider)
+            end)
 
-      {:ok, events} ->
-        try do
-          {:ok, sync_state_with_retry(decider, context, events)}
-        rescue
-          version_conflict in [Store.Errors.StreamVersionConflict] ->
-            if resync_attempt < decider.max_resync_attempts do
-              decider
-              |> Telemetry.span_decider_resync(resync_attempt, fn ->
-                load_state_with_retry(decider, decider.max_load_attempts)
-              end)
-              |> transact_with_resync(decision_fun, context, resync_attempt + 1)
-            else
-              reraise ExhaustedResyncAttempts,
-                      [
-                        stream_name: decider.stream_name,
-                        exception: version_conflict,
-                        attempts: resync_attempt
-                      ],
-                      __STACKTRACE__
-            end
-        end
+          transact_with_resync(resynced_decider, decision_fun, context, resync_attempt + 1)
+      end
     end
   end
 
-  defp sync_state_with_retry(%__MODULE__{} = decider, context, events, sync_attempt \\ 1) do
+  defp sync_state_with_retry(decider, events, context, sync_attempt \\ 1)
+
+  defp sync_state_with_retry(decider, [], _context, _sync_attempt), do: decider
+
+  defp sync_state_with_retry(%__MODULE__{} = decider, events, context, sync_attempt) do
     try do
       Telemetry.span_decider_sync(decider, events, sync_attempt, fn ->
         synced_state =
@@ -195,14 +188,12 @@ defmodule Equinox.Decider.Stateless do
       version_conflict in [Store.Errors.StreamVersionConflict] ->
         reraise version_conflict, __STACKTRACE__
 
-      unrecoverable in [Codec.Errors.CodecError, Fold.Errors.FoldError] ->
+      unrecoverable in [Codec.Errors.EncodeError, Fold.Errors.EvolveError] ->
         reraise unrecoverable, __STACKTRACE__
 
       recoverable ->
-        if sync_attempt < decider.max_sync_attempts do
-          sync_state_with_retry(decider, context, events, sync_attempt + 1)
-        else
-          reraise ExhaustedSyncAttempts,
+        if sync_attempt >= decider.max_sync_attempts do
+          reraise Errors.ExhaustedSyncAttempts,
                   [
                     stream_name: decider.stream_name,
                     exception: recoverable,
@@ -210,6 +201,8 @@ defmodule Equinox.Decider.Stateless do
                   ],
                   __STACKTRACE__
         end
+
+        sync_state_with_retry(decider, events, context, sync_attempt + 1)
     end
   end
 
@@ -217,7 +210,7 @@ defmodule Equinox.Decider.Stateless do
     try do
       Telemetry.span_decider_load(decider, load_attempt, fn ->
         current_state =
-          if(loaded?(decider), do: decider.state, else: State.init(decider.fold))
+          if(not loaded?(decider), do: State.init(decider.fold), else: decider.state)
 
         loaded_state =
           decider.stream_name
@@ -226,14 +219,12 @@ defmodule Equinox.Decider.Stateless do
         %{decider | state: loaded_state}
       end)
     rescue
-      unrecoverable in [Codec.Errors.CodecError, Fold.Errors.FoldError] ->
+      unrecoverable in [Codec.Errors.DecodeError, Fold.Errors.EvolveError] ->
         reraise unrecoverable, __STACKTRACE__
 
       recoverable ->
-        if load_attempt < decider.max_load_attempts do
-          load_state_with_retry(decider, load_attempt + 1)
-        else
-          reraise ExhaustedLoadAttempts,
+        if load_attempt >= decider.max_load_attempts do
+          reraise Errors.ExhaustedLoadAttempts,
                   [
                     stream_name: decider.stream_name,
                     exception: recoverable,
@@ -241,6 +232,12 @@ defmodule Equinox.Decider.Stateless do
                   ],
                   __STACKTRACE__
         end
+
+        load_state_with_retry(decider, load_attempt + 1)
     end
+  end
+
+  defp load_state_without_retry(%__MODULE__{} = decider) do
+    load_state_with_retry(decider, decider.max_load_attempts)
   end
 end

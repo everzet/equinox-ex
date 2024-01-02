@@ -3,7 +3,7 @@ defmodule Equinox.FoldTest do
 
   alias Equinox.TestMocks.FoldMock
   alias Equinox.{Fold, State}
-  alias Equinox.Fold.Errors.FoldError
+  alias Equinox.Fold.Errors.EvolveError
 
   import Mox
 
@@ -18,10 +18,10 @@ defmodule Equinox.FoldTest do
                %State{value: 2, version: 1}
     end
 
-    test "wraps all exceptions into FoldError" do
+    test "wraps all exceptions into EvolveError" do
       expect(FoldMock, :evolve, fn _, _ -> raise RuntimeError end)
 
-      assert_raise FoldError, ~r/runtime error/, fn ->
+      assert_raise EvolveError, ~r/runtime error/, fn ->
         Fold.fold([{:a, 0}], %State{value: 0, version: -1}, FoldMock)
       end
     end

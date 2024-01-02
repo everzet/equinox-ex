@@ -47,24 +47,24 @@ defmodule Equinox.Decider.CommonTest do
         stub(FoldMock, :initial, fn -> :initial end)
 
         expect(StoreMock, :load!, 1, fn @stream, %{version: -1}, _, _ ->
-          raise Codec.Errors.CodecError, message: "codec error"
+          raise Codec.Errors.DecodeError, message: "codec error"
         end)
 
         assert capture_crash(fn ->
                  init(unquote(decider_mod), stream_name: @stream, max_load_attempts: 2)
-               end) =~ "CodecError"
+               end) =~ "DecodeError"
       end
 
       test "fold exceptions never trigger load retries as they should be unrecoberable" do
         stub(FoldMock, :initial, fn -> :initial end)
 
         expect(StoreMock, :load!, 1, fn @stream, %{version: -1}, _, _ ->
-          raise Fold.Errors.FoldError, message: "fold error"
+          raise Fold.Errors.EvolveError, message: "fold error"
         end)
 
         assert capture_crash(fn ->
                  init(unquote(decider_mod), stream_name: @stream, max_load_attempts: 2)
-               end) =~ "FoldError"
+               end) =~ "EvolveError"
       end
     end
 
@@ -240,12 +240,12 @@ defmodule Equinox.Decider.CommonTest do
         stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
 
         expect(StoreMock, :sync!, 1, fn @stream, %{version: -1}, _, _, CodecMock, FoldMock ->
-          raise Codec.Errors.CodecError, message: "codec error"
+          raise Codec.Errors.EncodeError, message: "codec error"
         end)
 
         decider = init(unquote(decider_mod), stream_name: @stream, max_sync_attempts: 2)
 
-        assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "CodecError"
+        assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "EncodeError"
       end
 
       test "fold exceptions never trigger sync retries as they should be unrecoverable" do
@@ -253,12 +253,12 @@ defmodule Equinox.Decider.CommonTest do
         stub(StoreMock, :load!, fn @stream, %{version: -1}, _, _ -> State.new(0, -1) end)
 
         expect(StoreMock, :sync!, 1, fn @stream, %{version: -1}, _, _, CodecMock, FoldMock ->
-          raise Fold.Errors.FoldError, message: "fold error"
+          raise Fold.Errors.EvolveError, message: "fold error"
         end)
 
         decider = init(unquote(decider_mod), stream_name: @stream, max_sync_attempts: 2)
 
-        assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "FoldError"
+        assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "EvolveError"
       end
 
       test "decision callbacks returning nil or empty list do not trigger sync" do

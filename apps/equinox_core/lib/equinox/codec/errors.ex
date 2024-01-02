@@ -1,9 +1,15 @@
 defmodule Equinox.Codec.Errors do
-  defmodule CodecError do
+  defmodule EncodeError do
     @enforce_keys [:message]
     defexception [:message, :exception]
     @type t :: %__MODULE__{message: String.t(), exception: nil | Exception.t()}
   end
 
-  @type t :: CodecError.t()
+  defmodule DecodeError do
+    @enforce_keys [:message]
+    defexception [:message, :exception]
+    @type t :: %__MODULE__{message: String.t(), exception: nil | Exception.t()}
+  end
+
+  @type t :: EncodeError.t() | DecodeError.t()
 end

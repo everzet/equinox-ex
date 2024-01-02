@@ -1,7 +1,7 @@
 defmodule Equinox.Decider.Stateful do
   use GenServer, restart: :transient
 
-  alias Equinox.{Codec, Telemetry}
+  alias Equinox.{Decider, Telemetry}
   alias Equinox.Decider.Stateless
   alias Equinox.Decider.Actions.{Query, Decision}
 
@@ -147,8 +147,8 @@ defmodule Equinox.Decider.Stateful do
     end)
   end
 
-  @spec transact(t(), Decision.t(), Codec.context()) :: {:ok, t()} | {:error, term()}
-  @spec transact(pid(), Decision.t(), Codec.context()) :: {:ok, pid()} | {:error, term()}
+  @spec transact(t(), Decision.t(), Decider.context()) :: {:ok, t()} | {:error, term()}
+  @spec transact(pid(), Decision.t(), Decider.context()) :: {:ok, pid()} | {:error, term()}
   def transact(settings_or_pid, decision, context \\ %{}) do
     ensure_server_started(settings_or_pid, fn server_name_or_pid ->
       case GenServer.call(server_name_or_pid, {:transact, decision, context}) do

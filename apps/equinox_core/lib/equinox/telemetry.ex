@@ -21,12 +21,21 @@ defmodule Equinox.Telemetry do
     end)
   end
 
-  def span_fold(fold, state, fun) do
-    meta = %{fold: fold, original_state: state}
+  def span_fold(fold, domain_events, state, fun) do
+    meta = %{fold: fold, domain_events: domain_events, original_state: state}
 
     :telemetry.span([:equinox, :fold], meta, fn ->
       folded_state = fun.()
       {folded_state, Map.put(meta, :folded_state, folded_state)}
+    end)
+  end
+
+  def span_fold_evolve(fold, domain_event, state, fun) do
+    meta = %{fold: fold, domain_event: domain_event, original_state: state}
+
+    :telemetry.span([:equinox, :fold, :evolve], meta, fn ->
+      evolved_state = fun.()
+      {evolved_state, Map.put(meta, :evolved_state, evolved_state)}
     end)
   end
 
@@ -72,7 +81,7 @@ defmodule Equinox.Telemetry do
     end)
   end
 
-  def span_decider_decision(decider, attempt, decision, context, fun) do
+  def span_decider_decision(decider, decision, context, attempt, fun) do
     meta = %{
       decider: decider,
       decision_fun: decision,

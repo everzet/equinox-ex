@@ -17,34 +17,27 @@ defmodule Equinox.State do
   @spec update(t(), (value() -> value()), Store.stream_version()) :: t()
   def update(%__MODULE__{value: value}, fun, new_version), do: new(fun.(value), new_version)
 
-  @spec load!(
-          t(),
-          Codec.t(),
-          Fold.t(),
-          (-> Enumerable.t(TimelineEvent.t()))
-        ) :: t()
+  @type fetcher :: (-> Enumerable.t(TimelineEvent.t()))
+  @spec load!(t(), Codec.t(), Fold.t(), fetcher) :: t()
   def load!(%__MODULE__{} = state, codec, fold, fetch_fun) do
     fetch_fun.()
-    |> Codec.decode_with_position!(codec)
+    |> Codec.decode_stream!(codec)
     |> Fold.fold(state, fold)
   end
 
-  @spec sync!(
-          t(),
-          list(DomainEvent.t()),
-          Codec.context(),
-          Codec.t(),
-          Fold.t(),
-          (list(EventData.t()) -> Store.stream_version())
-        ) :: t()
+  @type writer :: (list(EventData.t()) -> Store.stream_version())
+  @spec sync!(t(), list(DomainEvent.t()), Codec.context(), Codec.t(), Fold.t(), writer) :: t()
   def sync!(%__MODULE__{} = state, domain_events, context, codec, fold, write_fun) do
-    new_version =
+    written_version =
       domain_events
-      |> Codec.encode!(context, codec)
+      |> Codec.encode_list!(context, codec)
       |> write_fun.()
 
-    domain_events
-    |> Enum.zip((state.version + 1)..new_version)
-    |> Fold.fold(state, fold)
+    new_state =
+      domain_events
+      |> Enum.zip((state.version + 1)..written_version)
+      |> Fold.fold(state, fold)
+
+    new_state
   end
 end

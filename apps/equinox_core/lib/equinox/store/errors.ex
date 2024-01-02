@@ -15,7 +15,7 @@ defmodule Equinox.Store.Errors do
 
     @type t :: %__MODULE__{
             message: String.t(),
-            stream_name: nil | String.t(),
+            stream_name: nil | Store.stream_name(),
             stream_version: nil | Store.stream_version()
           }
   end

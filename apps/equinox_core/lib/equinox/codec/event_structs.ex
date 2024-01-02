@@ -40,17 +40,16 @@ defmodule Equinox.Codec.EventStructs do
       {:ok, Equinox.Events.EventData.new(type: type, data: data)}
     else
       {:error,
-       %Errors.CodecError{
-         message:
-           "#{inspect(__MODULE__)}.encode: Expected a struct under #{parent_type}, got #{full_type}"
+       %Errors.EncodeError{
+         message: "Expected a struct under #{parent_type}, got #{full_type}"
        }}
     end
   end
 
   def struct_to_event_data(not_struct, _) do
     {:error,
-     %Errors.CodecError{
-       message: "#{inspect(__MODULE__)}.encode: Expected struct, got #{inspect(not_struct)}"
+     %Errors.EncodeError{
+       message: "Expected struct, got #{inspect(not_struct)}"
      }}
   end
 
@@ -66,10 +65,7 @@ defmodule Equinox.Codec.EventStructs do
       {:ok, struct}
     rescue
       exception in [ArgumentError] ->
-        {:error,
-         %Errors.CodecError{
-           message: "#{inspect(__MODULE__)}.decode: #{Exception.message(exception)}"
-         }}
+        {:error, %Errors.DecodeError{message: Exception.message(exception)}}
     end
   end
 end
