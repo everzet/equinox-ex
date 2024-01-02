@@ -1,4 +1,4 @@
-defmodule Equinox.Fold.ReplaceWithLatestEvent do
+defmodule Equinox.Fold.LatestEventIsState do
   @behaviour Equinox.Fold
 
   @impl Equinox.Fold
