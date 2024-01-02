@@ -1,6 +1,6 @@
 defmodule Equinox.State do
   alias Equinox.Events.{TimelineEvent, EventData, DomainEvent}
-  alias Equinox.{Store, Codec, Fold}
+  alias Equinox.{Decider, Store, Codec, Fold}
 
   @enforce_keys [:value, :version]
   defstruct [:value, :version]
@@ -26,7 +26,7 @@ defmodule Equinox.State do
   end
 
   @type writer :: (list(EventData.t()) -> Store.stream_version())
-  @spec sync!(t(), list(DomainEvent.t()), Codec.context(), Codec.t(), Fold.t(), writer) :: t()
+  @spec sync!(t(), list(DomainEvent.t()), Decider.context(), Codec.t(), Fold.t(), writer) :: t()
   def sync!(%__MODULE__{} = state, domain_events, context, codec, fold, write_fun) do
     written_version =
       domain_events

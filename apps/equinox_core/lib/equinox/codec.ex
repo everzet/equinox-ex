@@ -1,15 +1,16 @@
 defmodule Equinox.Codec do
-  alias Equinox.Telemetry
+  alias Equinox.{Decider, Telemetry}
   alias Equinox.Events.{DomainEvent, EventData, TimelineEvent}
   alias Equinox.Codec.Errors
 
   @type t :: module()
-  @type context :: map()
 
-  @callback encode(DomainEvent.t(), context()) :: {:ok, EventData.t()} | {:error, Errors.t()}
-  @callback decode(TimelineEvent.t()) :: {:ok, DomainEvent.t()} | {:error, Errors.t()}
+  @callback encode(DomainEvent.t(), Decider.context()) ::
+              {:ok, EventData.t()} | {:error, Errors.EncodeError.t()}
+  @callback decode(TimelineEvent.t()) ::
+              {:ok, DomainEvent.t()} | {:error, Errors.DecodeError.t()}
 
-  @spec encode!(DomainEvent.t(), context(), t()) :: EventData.t()
+  @spec encode!(DomainEvent.t(), Decider.context(), t()) :: EventData.t()
   def encode!(domain_event, context, codec) do
     Telemetry.span_codec_encode(codec, domain_event, context, fn ->
       case codec.encode(domain_event, context) do
@@ -29,6 +30,11 @@ defmodule Equinox.Codec do
                 exception: unwrapped
               ],
               __STACKTRACE__
+  end
+
+  @spec encode_list!(list(DomainEvent.t()), Decider.context(), t()) :: list(EventData.t())
+  def encode_list!(events, context, codec) when is_list(events) do
+    Enum.map(events, &encode!(&1, context, codec))
   end
 
   @spec decode!(TimelineEvent.t(), t()) :: DomainEvent.with_position()
@@ -51,11 +57,6 @@ defmodule Equinox.Codec do
                 exception: unwrapped
               ],
               __STACKTRACE__
-  end
-
-  @spec encode_list!(list(DomainEvent.t()), context(), t()) :: list(EventData.t())
-  def encode_list!(events, context, codec) when is_list(events) do
-    Enum.map(events, &encode!(&1, context, codec))
   end
 
   @spec decode_stream!(Enumerable.t(TimelineEvent.t()), t()) ::

@@ -1,5 +1,5 @@
 defmodule Equinox.Store do
-  alias Equinox.{State, Codec, Fold, Events}
+  alias Equinox.{Decider, State, Codec, Fold, Events}
 
   @type t :: module()
   @type stream_name :: String.t()
@@ -10,7 +10,7 @@ defmodule Equinox.Store do
               stream_name(),
               State.t(),
               list(Events.DomainEvent.t()),
-              Codec.context(),
+              Decider.context(),
               Codec.t(),
               Fold.t()
             ) :: State.t()
