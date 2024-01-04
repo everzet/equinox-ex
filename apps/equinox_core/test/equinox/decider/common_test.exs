@@ -9,8 +9,8 @@ defmodule Equinox.Decider.CommonTest do
 
   setup :verify_on_exit!
 
-  # We test both Stateful and Stateless versions of decider with same test suite
-  Enum.each([Decider.Stateful, Decider.Stateless], fn decider_mod ->
+  # We test all versions of decider with same test suite
+  Enum.each([Decider, Decider.Async], fn decider_mod ->
     describe "#{inspect(decider_mod)} initialization" do
       @stream "Invoice-1"
 
@@ -322,7 +322,7 @@ defmodule Equinox.Decider.CommonTest do
 
   defp init(decider_mod, attrs \\ [])
 
-  defp init(Decider.Stateless, attrs) do
+  defp init(Decider, attrs) do
     attrs
     |> Keyword.get(:stream_name, "Invoice-1")
     |> Decider.load(
@@ -336,12 +336,12 @@ defmodule Equinox.Decider.CommonTest do
     )
   end
 
-  defp init(Decider.Stateful, attrs) do
+  defp init(Decider.Async, attrs) do
     stub(LifetimeMock, :after_init, fn _ -> :timer.seconds(10) end)
     stub(LifetimeMock, :after_query, fn _ -> :timer.seconds(10) end)
     stub(LifetimeMock, :after_transact, fn _ -> :timer.seconds(10) end)
 
-    init(Decider.Stateless, attrs)
+    init(Decider, attrs)
     |> Decider.start(
       supervisor: :disabled,
       registry: :disabled,

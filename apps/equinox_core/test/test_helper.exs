@@ -2,7 +2,7 @@ defmodule DeciderProcessMocks do
   def attach_mocks(mocks) do
     :telemetry.attach(
       {__MODULE__, mocks},
-      [:equinox, :decider, :server, :init],
+      [:equinox, :decider, :async, :init],
       &__MODULE__.handle_event/4,
       %{mocks: mocks}
     )
