@@ -49,7 +49,7 @@ defmodule Equinox.UUID do
        ) do
       {:ok, String.downcase(str)}
     else
-      {:error, %ArgumentError{message: "UUID: Expected a valid UUID, but got: #{inspect(str)}"}}
+      {:error, ArgumentError.exception("UUID: Expected a valid UUID, but got: #{inspect(str)}")}
     end
   end
 

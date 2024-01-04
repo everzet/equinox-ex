@@ -16,8 +16,7 @@ defmodule Equinox.Stream do
     def generate(elements) when is_list(elements) and length(elements) > 0 do
       if Enum.any?(elements, &String.contains?(&1, @separator)) do
         raise Errors.ElementError,
-          message:
-            "StreamId: Expected elements to not contain #{@separator}, but got: #{inspect(elements)}"
+              "StreamId: Expected elements to not contain #{@separator}, but got: #{inspect(elements)}"
       end
 
       Enum.join(elements, @separator)
@@ -36,11 +35,11 @@ defmodule Equinox.Stream do
       case string do
         "" ->
           {:error,
-           %Errors.ElementError{message: "StreamId: Expected non-empty string, but got one"}}
+           Errors.ElementError.exception("StreamId: Expected non-empty string, but got one")}
 
         val when not is_bitstring(val) ->
           {:error,
-           %Errors.ElementError{message: "StreamId: Expected a string, but got #{inspect(val)}"}}
+           Errors.ElementError.exception("StreamId: Expected a string, but got #{inspect(val)}")}
 
         _ ->
           {:ok, String.split(string, @separator)}
@@ -55,8 +54,7 @@ defmodule Equinox.Stream do
     def generate(category, stream_id) when is_bitstring(category) and is_bitstring(stream_id) do
       if String.contains?(category, @separator) do
         raise Errors.ElementError,
-          message:
-            "StreamName: Expected category to not contain #{@separator}, but got: #{inspect(category)}"
+              "StreamName: Expected category to not contain #{@separator}, but got: #{inspect(category)}"
       end
 
       Enum.join([category, stream_id], @separator)
@@ -69,10 +67,9 @@ defmodule Equinox.Stream do
       else
         {:ok, _not_matching_stream_name} ->
           {:error,
-           %Errors.ElementError{
-             message:
-               "StreamName: Expected a stream under category of #{expected_category}, but got '#{string}'"
-           }}
+           Errors.ElementError.exception(
+             "StreamName: Expected a stream under category of #{expected_category}, but got '#{string}'"
+           )}
       end
     end
 
@@ -90,7 +87,7 @@ defmodule Equinox.Stream do
 
     def parse(val) when not is_bitstring(val) do
       {:error,
-       %Errors.ElementError{message: "StreamName: Expected a string, but got: #{inspect(val)}"}}
+       Errors.ElementError.exception("StreamName: Expected a string, but got: #{inspect(val)}")}
     end
 
     def parse(string) do
@@ -100,10 +97,9 @@ defmodule Equinox.Stream do
       else
         list when is_list(list) ->
           {:error,
-           %Errors.ElementError{
-             message:
-               "StreamName: Expected a string with 2 elements separated by #{@separator}, but got: #{inspect(string)}"
-           }}
+           Errors.ElementError.exception(
+             "StreamName: Expected a string with 2 elements separated by #{@separator}, but got: #{inspect(string)}"
+           )}
       end
     end
   end

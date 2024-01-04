@@ -119,5 +119,22 @@ defmodule Equinox.Codec.EventStructsTest do
       assert {:error, %Errors.DecodeError{}} =
                EventStructs.timeline_event_to_struct(event, Equinox.CodecStubs)
     end
+
+    test "timeline_event_to_struct/1 errors if unknown fields are present" do
+      event =
+        TimelineEvent.new(
+          id: Equinox.UUID.generate(),
+          type: "TestStruct",
+          stream_name: "testStream-42",
+          position: 0,
+          global_position: 0,
+          data: %{"val1" => 1, "val2" => 2, "val3" => 3},
+          metadata: nil,
+          time: NaiveDateTime.utc_now()
+        )
+
+      assert {:error, %Errors.DecodeError{}} =
+               EventStructs.timeline_event_to_struct(event, Equinox.CodecStubs)
+    end
   end
 end

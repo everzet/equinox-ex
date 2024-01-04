@@ -40,32 +40,25 @@ defmodule Equinox.Codec.EventStructs do
       {:ok, Equinox.Events.EventData.new(type: type, data: data)}
     else
       {:error,
-       %Errors.EncodeError{
-         message: "Expected a struct under #{parent_type}, got #{full_type}"
-       }}
+       Errors.EncodeError.exception("Expected a struct under #{parent_type}, got #{full_type}")}
     end
   end
 
   def struct_to_event_data(not_struct, _) do
-    {:error,
-     %Errors.EncodeError{
-       message: "Expected struct, got #{inspect(not_struct)}"
-     }}
+    {:error, Errors.EncodeError.exception("Expected struct, got #{inspect(not_struct)}")}
   end
 
   def timeline_event_to_struct(%{type: type, data: data}, parent_module) do
-    try do
-      module = String.to_existing_atom("#{Atom.to_string(parent_module)}.#{type}")
+    module = String.to_existing_atom("#{Atom.to_string(parent_module)}.#{type}")
 
-      struct =
-        module
-        |> struct!(for({k, v} <- data, do: {String.to_existing_atom(k), v}))
-        |> Upcast.upcast()
+    struct =
+      module
+      |> struct!(for({k, v} <- data, do: {String.to_existing_atom(k), v}))
+      |> Upcast.upcast()
 
-      {:ok, struct}
-    rescue
-      exception in [ArgumentError] ->
-        {:error, %Errors.DecodeError{message: Exception.message(exception)}}
-    end
+    {:ok, struct}
+  rescue
+    exception ->
+      {:error, Errors.DecodeError.exception(Exception.message(exception))}
   end
 end

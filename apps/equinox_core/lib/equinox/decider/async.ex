@@ -46,7 +46,7 @@ defmodule Equinox.Decider.Async do
       if(async.server_name, do: async, else: pid)
     else
       {:error, {:already_started, _pid}} -> async
-      {:error, error} -> raise AsyncError, message: inspect(error)
+      {:error, error} -> raise AsyncError, inspect(error)
     end
   end
 
@@ -88,15 +88,14 @@ defmodule Equinox.Decider.Async do
 
   defp ensure_server_started(pid, fun) when is_pid(pid) do
     if not Process.alive?(pid) do
-      raise AsyncError, message: "given process #{inspect(pid)} is not alive"
+      raise AsyncError, "given process #{inspect(pid)} is not alive"
     else
       fun.(pid)
     end
   end
 
   defp ensure_server_started(%__MODULE__{server_name: nil}, _fun) do
-    raise AsyncError,
-      message: "failed to auto-start decider. Start manually or provide `registry` setting"
+    raise AsyncError, "failed to auto-start decider. Start manually or provide `registry` setting"
   end
 
   defp ensure_server_started(%__MODULE__{server_name: server_name} = server, fun) do
