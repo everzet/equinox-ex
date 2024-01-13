@@ -10,15 +10,19 @@ defmodule Equinox.MessageDb.Store do
 
       quote do
         @behaviour Equinox.Store
+
+        @fetch_conn unquote(fetch_conn)
+        @write_conn unquote(write_conn)
         @batch_size unquote(batch_size)
-        alias Equinox.MessageDb.Store
+
+        alias Equinox.MessageDb
 
         def load(stream, state, codec, fold) do
-          Store.load_unoptimized(unquote(fetch_conn), stream, state, codec, fold, @batch_size)
+          MessageDb.Store.load_unoptimized(@fetch_conn, stream, state, codec, fold, @batch_size)
         end
 
         def sync(stream, state, outcome, codec, fold) do
-          Store.sync(unquote(write_conn), stream, state, outcome, codec, fold)
+          MessageDb.Store.sync(@write_conn, stream, state, outcome, codec, fold)
         end
 
         defoverridable Equinox.Store
@@ -33,14 +37,18 @@ defmodule Equinox.MessageDb.Store do
 
       quote do
         @behaviour Equinox.Store
-        alias Equinox.MessageDb.Store
+
+        @fetch_conn unquote(fetch_conn)
+        @write_conn unquote(write_conn)
+
+        alias Equinox.MessageDb
 
         def load(stream, state, codec, fold) do
-          Store.load_latest_known_event(unquote(fetch_conn), stream, state, codec, fold)
+          MessageDb.Store.load_latest_known_event(@fetch_conn, stream, state, codec, fold)
         end
 
         def sync(stream, state, outcome, codec, fold) do
-          Store.sync(unquote(write_conn), stream, state, outcome, codec, fold)
+          MessageDb.Store.sync(@write_conn, stream, state, outcome, codec, fold)
         end
 
         defoverridable Equinox.Store
