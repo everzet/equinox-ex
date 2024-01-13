@@ -71,8 +71,7 @@ defmodule Equinox.MessageDb.Store do
         new_state =
           timeline_event
           |> codec.decode()
-          |> List.wrap()
-          |> fold.fold(state.value)
+          |> then(&fold.fold([&1], state.value))
           |> State.new(timeline_event.position)
 
         {:cont, {:ok, new_state}}
@@ -93,8 +92,7 @@ defmodule Equinox.MessageDb.Store do
         new_state =
           timeline_event
           |> codec.decode()
-          |> List.wrap()
-          |> fold.fold(state.value)
+          |> then(&fold.fold([&1], state.value))
           |> State.new(timeline_event.position)
 
         {:ok, new_state}
