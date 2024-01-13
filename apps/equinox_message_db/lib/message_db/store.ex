@@ -45,7 +45,7 @@ defmodule Equinox.MessageDb.Store do
   end
 
   def sync(conn, stream_name, state, outcome, codec, fold) do
-    messages = Outcome.encode(outcome, codec)
+    messages = Outcome.produce_messages(outcome, codec)
 
     case Writer.write_messages(conn, stream_name, messages, state.version) do
       {:ok, new_version} ->
