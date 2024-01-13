@@ -68,16 +68,27 @@ defmodule Equinox.MessageDb.Reader do
     |> get_first_result()
   end
 
-  @spec stream_stream_messages(Postgrex.conn(), stream_name(), position(), batch_size()) ::
-          Enumerable.t(TimelineEvent.t())
-  def stream_stream_messages(conn, stream, start_position, batch_size) do
+  @spec stream_messages(Postgrex.conn(), stream_name(), position(), batch_size()) ::
+          Enumerable.t({:ok, TimelineEvent.t()} | {:error, Exception.t()})
+  def stream_messages(conn, stream, start_position, batch_size) do
     {start_position, batch_size}
-    |> Stream.unfold(fn {position, batch_size} ->
-      case get_stream_messages(conn, stream, position, batch_size) do
-        {:ok, []} -> nil
-        {:ok, messages} -> {messages, {position + length(messages), batch_size}}
-        {:error, error} -> raise error
-      end
+    |> Stream.unfold(fn
+      {position, batch_size} ->
+        case get_stream_messages(conn, stream, position, batch_size) do
+          {:ok, []} ->
+            nil
+
+          {:ok, messages} ->
+            okayed_messages = Enum.map(messages, &{:ok, &1})
+            next_batch = {position + length(messages), batch_size}
+            {okayed_messages, next_batch}
+
+          {:error, error} ->
+            {[{:error, error}], nil}
+        end
+
+      nil ->
+        nil
     end)
     |> Stream.flat_map(& &1)
   end

@@ -8,6 +8,6 @@ defmodule Equinox.Fold.LatestEventIsStateTest do
   end
 
   test "it evolves by replacing its whole state with the latest event" do
-    assert :new_event == LatestEventIsState.evolve(:any_previous_state, :new_event)
+    assert :second == LatestEventIsState.fold([:first, :second], :any_previous_state)
   end
 end

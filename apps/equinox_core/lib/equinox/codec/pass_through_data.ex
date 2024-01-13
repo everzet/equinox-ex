@@ -3,12 +3,11 @@ defmodule Equinox.Codec.PassThroughData do
 
   @impl Equinox.Codec
   def encode(data, _ctx) do
-    type = Map.get(data, "type", "unknown")
-    {:ok, Equinox.Events.EventData.new(type: type, data: data)}
+    Equinox.Events.EventData.new(type: Map.get(data, "type", "unknown"), data: data)
   end
 
   @impl Equinox.Codec
   def decode(timeline_event) do
-    {:ok, timeline_event.data}
+    timeline_event.data
   end
 end

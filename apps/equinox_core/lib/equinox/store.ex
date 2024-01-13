@@ -1,17 +1,16 @@
 defmodule Equinox.Store do
-  alias Equinox.{Decider, State, Codec, Fold, Events}
+  alias Equinox.{Codec, Fold}
+  alias Equinox.Store.{State, Outcome, StreamVersionConflict}
 
   @type t :: module()
   @type stream_name :: String.t()
-  @type stream_version :: -1 | non_neg_integer()
+  @type stream_version :: term()
 
-  @callback load!(stream_name(), State.t(), Codec.t(), Fold.t()) :: State.t()
-  @callback sync!(
-              stream_name(),
-              State.t(),
-              list(Events.DomainEvent.t()),
-              Decider.context(),
-              Codec.t(),
-              Fold.t()
-            ) :: State.t()
+  @callback load(stream_name(), nil | State.t(), Codec.t(), Fold.t()) ::
+              {:ok, State.t()}
+              | {:error, Exception.t(), partial :: State.t()}
+
+  @callback sync(stream_name(), State.t(), Outcome.t(), Codec.t(), Fold.t()) ::
+              {:ok, State.t()}
+              | {:error, StreamVersionConflict.t() | Exception.t()}
 end

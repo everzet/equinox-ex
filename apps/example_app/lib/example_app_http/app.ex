@@ -12,8 +12,8 @@ defmodule ExampleAppHttp.App do
 
   get "/payers/:payer_id" do
     case Payers.read_profile(payer_id) do
-      nil -> send_resp(conn, 404, "not found")
-      profile -> json_resp(conn, 200, profile)
+      {nil, _} -> send_resp(conn, 404, "not found")
+      {profile, _} -> json_resp(conn, 200, profile)
     end
   end
 
@@ -44,8 +44,8 @@ defmodule ExampleAppHttp.App do
 
   get "/invoices/:invoice_id" do
     case Invoices.read_invoice(invoice_id) do
-      nil -> send_resp(conn, 404, "not found")
-      invoice -> json_resp(conn, 200, invoice)
+      {nil, _} -> send_resp(conn, 404, "not found")
+      {invoice, _} -> json_resp(conn, 200, invoice)
     end
   end
 

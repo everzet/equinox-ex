@@ -1,8 +1,8 @@
 defmodule Equinox.Decider.Query do
-  alias Equinox.State
+  alias Equinox.Fold
 
-  @type t :: (State.value() -> any())
+  @type t :: (Fold.result() -> any())
 
-  @spec execute(t(), State.t()) :: any()
-  def execute(query, %State{value: value}), do: query.(value)
+  @spec execute(t(), Fold.result()) :: any()
+  def execute(query, state), do: query.(state)
 end

@@ -68,25 +68,26 @@ defmodule Equinox.Decider.Async do
     DynamicSupervisor.start_child(supervisor, {__MODULE__, async})
   end
 
-  @spec query(t() | pid(), Query.t()) :: any()
+  @spec query(t(), Query.t()) :: {any(), t()}
+  @spec query(pid(), Query.t()) :: {any(), pid()}
   def query(async_or_pid, query) do
-    ensure_server_started(async_or_pid, fn server_name_or_pid ->
-      GenServer.call(server_name_or_pid, {:query, query})
+    ensure_async_started(async_or_pid, fn server_name_or_pid ->
+      {GenServer.call(server_name_or_pid, {:query, query}), async_or_pid}
     end)
   end
 
-  @spec transact(t(), Decision.t(), Decider.context()) :: {:ok, t()} | {:error, term()}
-  @spec transact(pid(), Decision.t(), Decider.context()) :: {:ok, pid()} | {:error, term()}
+  @spec transact(t(), Decision.t(), Decider.context()) :: {:ok, t()} | {:error, term(), t()}
+  @spec transact(pid(), Decision.t(), Decider.context()) :: {:ok, pid()} | {:error, term(), pid()}
   def transact(async_or_pid, decision, context \\ %{}) do
-    ensure_server_started(async_or_pid, fn server_name_or_pid ->
+    ensure_async_started(async_or_pid, fn server_name_or_pid ->
       case GenServer.call(server_name_or_pid, {:transact, decision, context}) do
         :ok -> {:ok, async_or_pid}
-        {:error, error} -> {:error, error}
+        {:error, error} -> {:error, error, async_or_pid}
       end
     end)
   end
 
-  defp ensure_server_started(pid, fun) when is_pid(pid) do
+  defp ensure_async_started(pid, fun) when is_pid(pid) do
     if not Process.alive?(pid) do
       raise AsyncError, "given process #{inspect(pid)} is not alive"
     else
@@ -94,11 +95,11 @@ defmodule Equinox.Decider.Async do
     end
   end
 
-  defp ensure_server_started(%__MODULE__{server_name: nil}, _fun) do
+  defp ensure_async_started(%__MODULE__{server_name: nil}, _fun) do
     raise AsyncError, "failed to auto-start decider. Start manually or provide `registry` setting"
   end
 
-  defp ensure_server_started(%__MODULE__{server_name: server_name} = server, fun) do
+  defp ensure_async_started(%__MODULE__{server_name: server_name} = server, fun) do
     fun.(server_name)
   catch
     :exit, {:noproc, _} ->
@@ -111,14 +112,14 @@ defmodule Equinox.Decider.Async do
   def init(%__MODULE__{} = async) do
     {decider, settings} = Map.pop(async, :decider)
     server_state = %{decider: decider, settings: settings}
-    Telemetry.decider_server_init(server_state)
+    Telemetry.async_server_init(server_state)
     {:ok, server_state, {:continue, :load}}
   end
 
   @impl GenServer
   def handle_continue(:load, %{decider: decider} = server_state) do
     decider =
-      Telemetry.span_decider_server_load(server_state, fn ->
+      Telemetry.span_async_load(server_state, fn ->
         if not Decider.loaded?(decider) do
           Decider.load(decider)
         else
@@ -132,19 +133,19 @@ defmodule Equinox.Decider.Async do
 
   @impl GenServer
   def handle_call({:query, query}, _from, server_state) do
-    query_result =
-      Telemetry.span_decider_server_query(server_state, query, fn ->
+    {query_result, loaded_decider} =
+      Telemetry.span_async_query(server_state, query, fn ->
         Decider.query(server_state.decider, query)
       end)
 
-    {:reply, query_result, server_state,
+    {:reply, query_result, %{server_state | decider: loaded_decider},
      server_state.settings.lifetime.after_query(server_state.decider.state.value)}
   end
 
   @impl GenServer
   def handle_call({:transact, decision, context}, _from, server_state) do
     transact_result =
-      Telemetry.span_decider_server_transact(server_state, decision, context, fn ->
+      Telemetry.span_async_transact(server_state, decision, context, fn ->
         Decider.transact(server_state.decider, decision, context)
       end)
 
@@ -153,15 +154,15 @@ defmodule Equinox.Decider.Async do
         {:reply, :ok, %{server_state | decider: updated_decider},
          server_state.settings.lifetime.after_transact(updated_decider.state.value)}
 
-      {:error, error} ->
-        {:reply, {:error, error}, server_state,
+      {:error, error, loaded_decider} ->
+        {:reply, {:error, error}, %{server_state | decider: loaded_decider},
          server_state.settings.lifetime.after_transact(server_state.decider.state.value)}
     end
   end
 
   @impl GenServer
   def handle_info(:timeout, server_state) do
-    Telemetry.decider_server_stop(server_state, :timeout)
+    Telemetry.async_server_stop(server_state, :timeout)
     {:stop, :normal, server_state}
   end
 end

@@ -28,8 +28,9 @@ defmodule ExampleApp.Payers do
     @impl Equinox.Fold
     def initial, do: nil
     @impl Equinox.Fold
+    def fold(events, state), do: Enum.reduce(events, state, &evolve(&2, &1))
+
     def evolve(_, %PayerProfileUpdated{} = updated), do: Map.from_struct(updated)
-    @impl Equinox.Fold
     def evolve(_, %PayerDeleted{}), do: nil
   end
 

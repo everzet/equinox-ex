@@ -51,20 +51,19 @@ defmodule ExampleApp.Invoices do
 
     @impl Equinox.Fold
     def initial, do: :not_raised
-
     @impl Equinox.Fold
+    def fold(events, state), do: Enum.reduce(events, state, &evolve(&2, &1))
+
     def evolve(:not_raised, %InvoiceRaised{} = raised) do
       Invoice.raise(raised.payer_id, raised.amount)
     end
 
-    @impl Equinox.Fold
     def evolve(%Invoice{status: :raised} = invoice, %PaymentReceived{} = paid) do
       invoice
       |> Invoice.receive_payment(paid.reference)
       |> Invoice.pay_amount(paid.amount)
     end
 
-    @impl Equinox.Fold
     def evolve(%Invoice{status: :raised} = invoice, %InvoiceFinalized{}) do
       Invoice.finalize(invoice)
     end

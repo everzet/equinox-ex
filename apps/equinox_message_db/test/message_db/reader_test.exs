@@ -89,7 +89,7 @@ defmodule Equinox.MessageDb.ReaderTest do
     end
   end
 
-  describe "stream_stream_messages/4" do
+  describe "stream_messages/4" do
     @stream "testStream-42"
     @messages Stream.repeatedly(fn -> EventData.new(type: "SomeMessageType") end)
               |> Enum.take(10)
@@ -97,31 +97,31 @@ defmodule Equinox.MessageDb.ReaderTest do
     test_in_isolation "streaming all written messages in one large batch", %{conn: conn} do
       assert {:ok, 9} = Writer.write_messages(conn, @stream, @messages, -1)
 
-      messages = conn |> Reader.stream_stream_messages(@stream, 0, 10) |> Enum.to_list()
+      messages = conn |> Reader.stream_messages(@stream, 0, 10) |> Enum.to_list()
 
       assert length(messages) == 10
-      assert List.first(messages).id == List.first(@messages).id
-      assert List.last(messages).id == List.last(@messages).id
+      assert messages |> List.first() |> then(&elem(&1, 1).id) == List.first(@messages).id
+      assert messages |> List.last() |> then(&elem(&1, 1).id) == List.last(@messages).id
     end
 
     test_in_isolation "streaming all written messages in batches of 1", %{conn: conn} do
       assert {:ok, 9} = Writer.write_messages(conn, @stream, @messages, -1)
 
-      messages = conn |> Reader.stream_stream_messages(@stream, 0, 1) |> Enum.to_list()
+      messages = conn |> Reader.stream_messages(@stream, 0, 1) |> Enum.to_list()
 
       assert length(messages) == 10
-      assert List.first(messages).id == List.first(@messages).id
-      assert List.last(messages).id == List.last(@messages).id
+      assert messages |> List.first() |> then(&elem(&1, 1).id) == List.first(@messages).id
+      assert messages |> List.last() |> then(&elem(&1, 1).id) == List.last(@messages).id
     end
 
     test_in_isolation "streaming all written messages in batches of 3", %{conn: conn} do
       assert {:ok, 9} = Writer.write_messages(conn, @stream, @messages, -1)
 
-      messages = conn |> Reader.stream_stream_messages(@stream, 0, 3) |> Enum.to_list()
+      messages = conn |> Reader.stream_messages(@stream, 0, 3) |> Enum.to_list()
 
       assert length(messages) == 10
-      assert List.first(messages).id == List.first(@messages).id
-      assert List.last(messages).id == List.last(@messages).id
+      assert messages |> List.first() |> then(&elem(&1, 1).id) == List.first(@messages).id
+      assert messages |> List.last() |> then(&elem(&1, 1).id) == List.last(@messages).id
     end
   end
 end

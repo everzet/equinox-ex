@@ -1,6 +1,15 @@
 defmodule Equinox.Decider do
-  alias Equinox.{Store, State, Codec, Fold, Telemetry}
-  alias Equinox.Decider.{Options, Query, Decision, Async, Errors}
+  alias Equinox.{Store, Codec, Fold, Telemetry}
+
+  alias Equinox.Decider.{
+    Options,
+    Decision,
+    Query,
+    Async,
+    ExhaustedLoadAttempts,
+    ExhaustedSyncAttempts,
+    ExhaustedResyncAttempts
+  }
 
   @enforce_keys [:stream_name, :store, :codec, :fold]
   defstruct [
@@ -17,7 +26,7 @@ defmodule Equinox.Decider do
 
   @type t :: %__MODULE__{
           stream_name: Store.stream_name(),
-          state: not_loaded :: nil | State.t(),
+          state: nil | Store.State.t(),
           store: Store.t(),
           codec: Codec.t(),
           fold: Fold.t(),
@@ -35,8 +44,7 @@ defmodule Equinox.Decider do
   end
 
   @spec loaded?(t()) :: boolean()
-  def loaded?(%__MODULE__{state: %State{}}), do: true
-  def loaded?(%__MODULE__{state: _}), do: false
+  def loaded?(%__MODULE__{state: state}), do: Store.State.initialized?(state)
 
   @spec load(t()) :: t()
   def load(%__MODULE__{} = decider), do: load_with_retry(decider)
@@ -77,131 +85,134 @@ defmodule Equinox.Decider do
     |> start()
   end
 
-  @spec query(pid(), Query.t()) :: any()
+  @spec query(pid(), Query.t()) :: {any(), pid()}
   def query(pid, query) when is_pid(pid), do: Async.query(pid, query)
 
-  @spec query(Async.t(), Query.t()) :: any()
+  @spec query(Async.t(), Query.t()) :: {any(), Async.t()}
   def query(%Async{} = async, query), do: Async.query(async, query)
 
-  @spec query(t(), Query.t()) :: any()
-  def query(%__MODULE__{} = decider, query_fun) do
-    decider = if(not loaded?(decider), do: load(decider), else: decider)
+  @spec query(t(), Query.t()) :: {any(), t()}
+  def query(%__MODULE__{} = decider, query), do: make_query(decider, query)
 
-    Telemetry.span_decider_query(decider, query_fun, fn ->
-      Query.execute(query_fun, decider.state)
+  defp make_query(%__MODULE__{} = decider, query) do
+    Telemetry.span_decider_query(decider, query, fn ->
+      decider = if(not loaded?(decider), do: load(decider), else: decider)
+      {Query.execute(query, decider.state.value), decider}
     end)
   end
 
   def transact(decider_or_async, decision, transact_context \\ %{})
 
-  @spec transact(pid(), Decision.t(), context()) :: {:ok, pid()} | {:error, term()}
+  @spec transact(pid(), Decision.t(), context()) :: {:ok, pid()} | {:error, term(), pid()}
   def transact(pid, decision, ctx) when is_pid(pid), do: Async.transact(pid, decision, ctx)
 
-  @spec transact(Async.t(), Decision.t(), context()) :: {:ok, Async.t()} | {:error, term()}
+  @spec transact(Async.t(), Decision.t(), context()) ::
+          {:ok, Async.t()} | {:error, term(), Async.t()}
   def transact(%Async{} = async, decision, ctx), do: Async.transact(async, decision, ctx)
 
-  @spec transact(t(), Decision.t(), context()) :: {:ok, t()} | {:error, term()}
-  def transact(%__MODULE__{} = decider, decision_fun, transact_context) do
-    decider = if(not loaded?(decider), do: load(decider), else: decider)
-    context = Map.merge(decider.context, transact_context)
+  @spec transact(t(), Decision.t(), context()) :: {:ok, t()} | {:error, term(), t()}
+  def transact(%__MODULE__{} = decider, decision, ctx), do: do_transact(decider, decision, ctx)
 
-    Telemetry.span_decider_transact(decider, decision_fun, context, fn ->
-      transact_with_resync(decider, decision_fun, context)
+  defp do_transact(%__MODULE__{} = decider, decision, transact_context) do
+    Telemetry.span_decider_transact(decider, decision, transact_context, fn ->
+      decider = if(not loaded?(decider), do: load(decider), else: decider)
+      context = Map.merge(decider.context, transact_context)
+
+      case transact_with_resync(decider, decision, context) do
+        {:ok, decider} -> {:ok, decider}
+        {:error, error} -> {:error, error, decider}
+      end
     end)
   end
 
-  defp transact_with_resync(%__MODULE__{} = decider, decision_fun, context, resync_attempt \\ 0) do
-    decision_result =
-      Telemetry.span_decider_decision(decider, decision_fun, context, resync_attempt, fn ->
-        Decision.execute(decision_fun, decider.state)
-      end)
+  defp transact_with_resync(%__MODULE__{} = decider, decision, context, attempt \\ 0) do
+    with {:ok, decision_outcome} <- make_decision(decider, decision, context, attempt),
+         {:ok, synced_decider} <- sync_with_retry(decider, decision_outcome) do
+      {:ok, synced_decider}
+    else
+      {:error, %Decision.Error{} = decision_error} ->
+        {:error, decision_error}
 
-    with {:ok, events} <- decision_result do
-      case sync_with_retry(decider, events, context) do
-        %__MODULE__{} = synced_decider ->
-          {:ok, synced_decider}
+      {:error, %Store.StreamVersionConflict{} = version_conflict} ->
+        if attempt >= decider.max_resync_attempts do
+          raise ExhaustedResyncAttempts,
+            stream_name: decider.stream_name,
+            exception: version_conflict,
+            attempts: attempt
+        end
 
-        {:conflict, version_conflict} ->
-          if resync_attempt >= decider.max_resync_attempts do
-            raise Errors.ExhaustedResyncAttempts,
-              stream_name: decider.stream_name,
-              exception: version_conflict,
-              attempts: resync_attempt
-          end
-
-          resynced_decider =
-            Telemetry.span_decider_resync(decider, resync_attempt, fn ->
-              load_without_retry(decider)
-            end)
-
-          transact_with_resync(resynced_decider, decision_fun, context, resync_attempt + 1)
-      end
+        decider
+        |> do_resync(attempt)
+        |> transact_with_resync(decision, context, attempt + 1)
     end
   end
 
-  defp sync_with_retry(decider, events, context, sync_attempt \\ 1)
-
-  defp sync_with_retry(decider, [], _context, _sync_attempt), do: decider
-
-  defp sync_with_retry(%__MODULE__{} = decider, events, context, sync_attempt) do
-    Telemetry.span_decider_sync(decider, events, sync_attempt, fn ->
-      synced_state =
-        decider.stream_name
-        |> decider.store.sync!(decider.state, events, context, decider.codec, decider.fold)
-
-      %{decider | state: synced_state}
-    end)
-  rescue
-    version_conflict in [Store.Errors.StreamVersionConflict] ->
-      {:conflict, version_conflict}
-
-    unrecoverable in [Codec.Errors.EncodeError, Fold.Errors.EvolveError] ->
-      reraise unrecoverable, __STACKTRACE__
-
-    recoverable ->
-      if sync_attempt >= decider.max_sync_attempts do
-        reraise Errors.ExhaustedSyncAttempts,
-                [
-                  stream_name: decider.stream_name,
-                  exception: recoverable,
-                  attempts: sync_attempt
-                ],
-                __STACKTRACE__
+  defp make_decision(%__MODULE__{} = decider, decision, context, attempt) do
+    Telemetry.span_transact_decision(decider, decision, context, attempt, fn ->
+      case Decision.execute(decision, decider.state.value) do
+        {:ok, new_events} -> {:ok, Store.Outcome.new(new_events, context)}
+        {:error, error} -> {:error, error}
       end
-
-      sync_with_retry(decider, events, context, sync_attempt + 1)
-  end
-
-  defp load_with_retry(%__MODULE__{} = decider, load_attempt \\ 1) do
-    Telemetry.span_decider_load(decider, load_attempt, fn ->
-      current_state =
-        if(not loaded?(decider), do: State.init(decider.fold), else: decider.state)
-
-      loaded_state =
-        decider.stream_name
-        |> decider.store.load!(current_state, decider.codec, decider.fold)
-
-      %{decider | state: loaded_state}
     end)
-  rescue
-    unrecoverable in [Codec.Errors.DecodeError, Fold.Errors.EvolveError] ->
-      reraise unrecoverable, __STACKTRACE__
+  end
 
-    recoverable ->
-      if load_attempt >= decider.max_load_attempts do
-        reraise Errors.ExhaustedLoadAttempts,
-                [
-                  stream_name: decider.stream_name,
-                  exception: recoverable,
-                  attempts: load_attempt
-                ],
-                __STACKTRACE__
+  defp do_resync(%__MODULE__{} = decider, attempt) do
+    Telemetry.span_transact_resync(decider, attempt, fn ->
+      load_with_retry(decider)
+    end)
+  end
+
+  defp load_state(%__MODULE__{state: state} = decider, attempt) do
+    Telemetry.span_load_state(decider, attempt, fn ->
+      decider.store.load(decider.stream_name, state, decider.codec, decider.fold)
+    end)
+  end
+
+  defp load_with_retry(%__MODULE__{} = decider, attempt \\ 1) do
+    with {:ok, loaded_state} <- load_state(decider, attempt) do
+      set_state(decider, loaded_state)
+    else
+      {:error, maybe_recoverable_exception, partially_loaded_state} ->
+        if attempt >= decider.max_load_attempts do
+          raise ExhaustedLoadAttempts,
+            stream_name: decider.stream_name,
+            exception: maybe_recoverable_exception,
+            attempts: attempt
+        end
+
+        decider
+        |> set_state(partially_loaded_state)
+        |> load_with_retry(attempt + 1)
+    end
+  end
+
+  defp sync_state(%__MODULE__{state: state} = decider, outcome, attempt) do
+    Telemetry.span_sync_state(decider, outcome, attempt, fn ->
+      case outcome.events do
+        [] -> {:ok, state}
+        _ -> decider.store.sync(decider.stream_name, state, outcome, decider.codec, decider.fold)
       end
-
-      load_with_retry(decider, load_attempt + 1)
+    end)
   end
 
-  defp load_without_retry(%__MODULE__{} = decider) do
-    load_with_retry(decider, decider.max_load_attempts)
+  defp sync_with_retry(%__MODULE__{} = decider, outcome, attempt \\ 1) do
+    with {:ok, synced_state} <- sync_state(decider, outcome, attempt) do
+      {:ok, set_state(decider, synced_state)}
+    else
+      {:error, %Store.StreamVersionConflict{} = version_conflict} ->
+        {:error, version_conflict}
+
+      {:error, maybe_recoverable_exception} ->
+        if attempt >= decider.max_sync_attempts do
+          raise ExhaustedSyncAttempts,
+            stream_name: decider.stream_name,
+            exception: maybe_recoverable_exception,
+            attempts: attempt
+        end
+
+        sync_with_retry(decider, outcome, attempt + 1)
+    end
   end
+
+  defp set_state(%__MODULE__{} = decider, new_state), do: %{decider | state: new_state}
 end

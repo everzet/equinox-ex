@@ -1,6 +1,4 @@
 defmodule Equinox.Codec.EventStructs do
-  alias Equinox.Codec.Errors
-
   defmacro __using__(_opts) do
     quote do
       @behaviour Equinox.Codec
@@ -37,28 +35,16 @@ defmodule Equinox.Codec.EventStructs do
     if String.starts_with?(full_type, parent_type) do
       type = String.replace_leading(full_type, parent_type <> ".", "")
       data = event |> Map.from_struct() |> Map.new(fn {k, v} -> {Atom.to_string(k), v} end)
-      {:ok, Equinox.Events.EventData.new(type: type, data: data)}
+      Equinox.Events.EventData.new(type: type, data: data)
     else
-      {:error,
-       Errors.EncodeError.exception("Expected a struct under #{parent_type}, got #{full_type}")}
+      raise ArgumentError, "Expected a struct under #{parent_type}, got #{full_type}"
     end
   end
 
-  def struct_to_event_data(not_struct, _) do
-    {:error, Errors.EncodeError.exception("Expected struct, got #{inspect(not_struct)}")}
-  end
-
   def timeline_event_to_struct(%{type: type, data: data}, parent_module) do
-    module = String.to_existing_atom("#{Atom.to_string(parent_module)}.#{type}")
-
-    struct =
-      module
-      |> struct!(for({k, v} <- data, do: {String.to_existing_atom(k), v}))
-      |> Upcast.upcast()
-
-    {:ok, struct}
-  rescue
-    exception ->
-      {:error, Errors.DecodeError.exception(Exception.message(exception))}
+    "#{Atom.to_string(parent_module)}.#{type}"
+    |> String.to_existing_atom()
+    |> struct!(for({k, v} <- data, do: {String.to_existing_atom(k), v}))
+    |> Upcast.upcast()
   end
 end

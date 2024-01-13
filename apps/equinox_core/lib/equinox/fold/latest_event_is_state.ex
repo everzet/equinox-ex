@@ -5,5 +5,5 @@ defmodule Equinox.Fold.LatestEventIsState do
   def initial(), do: nil
 
   @impl Equinox.Fold
-  def evolve(_, event), do: event
+  def fold(events, _), do: Enum.at(events, -1)
 end
