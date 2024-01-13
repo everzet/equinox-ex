@@ -20,6 +20,8 @@ defmodule Equinox.MessageDb.Store do
         def sync(stream, state, outcome, codec, fold) do
           Store.sync(unquote(write_conn), stream, state, outcome, codec, fold)
         end
+
+        defoverridable Equinox.Store
       end
     end
   end
@@ -40,6 +42,8 @@ defmodule Equinox.MessageDb.Store do
         def sync(stream, state, outcome, codec, fold) do
           Store.sync(unquote(write_conn), stream, state, outcome, codec, fold)
         end
+
+        defoverridable Equinox.Store
       end
     end
   end
