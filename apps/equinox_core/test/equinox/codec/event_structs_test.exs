@@ -1,17 +1,23 @@
 defmodule Equinox.Codec.EventStructsTest do
   use ExUnit.Case, async: true
 
-  alias Equinox.Events.TimelineEvent
+  alias Equinox.Events.{EventData, TimelineEvent}
   alias Equinox.Codec.EventStructs
-  alias Equinox.CodecStubs.TestStruct
+  alias Equinox.CodecStubs.{TestStruct, DowncastableTestStruct}
 
   describe "struct_to_event_data/1" do
     test "converts structs into string maps" do
       struct = %TestStruct{val1: 1, val2: 2}
 
-      assert event_data = EventStructs.struct_to_event_data(struct, Equinox.CodecStubs)
-      assert event_data.type == "TestStruct"
-      assert event_data.data == %{"val1" => 1, "val2" => 2}
+      assert %EventData{type: "TestStruct", data: %{"val1" => 1, "val2" => 2}} =
+               EventStructs.struct_to_event_data(struct, Equinox.CodecStubs)
+    end
+
+    test "downcasts struct before encoding if it implements Downcast protocol" do
+      struct = %DowncastableTestStruct{val1: 1, val2: 2}
+
+      assert %EventData{data: %{"val2" => 1}} =
+               EventStructs.struct_to_event_data(struct, Equinox.CodecStubs)
     end
 
     test "errors if given struct under different parent module" do
@@ -56,7 +62,7 @@ defmodule Equinox.Codec.EventStructsTest do
                EventStructs.timeline_event_to_struct(event, Equinox.CodecStubs)
     end
 
-    test "timeline_event_to_struct/1 upcasts resulting struct if it implements Upcast protocol" do
+    test "upcasts resulting struct if it implements Upcast protocol" do
       event =
         TimelineEvent.new(
           id: Equinox.UUID.generate(),
@@ -73,7 +79,7 @@ defmodule Equinox.Codec.EventStructsTest do
                EventStructs.timeline_event_to_struct(event, Equinox.CodecStubs)
     end
 
-    test "timeline_event_to_struct/1 errors if struct with given type does not exist" do
+    test "errors if struct with given type does not exist" do
       event =
         TimelineEvent.new(
           id: Equinox.UUID.generate(),
@@ -91,7 +97,7 @@ defmodule Equinox.Codec.EventStructsTest do
       end
     end
 
-    test "timeline_event_to_struct/1 errors if wrong parent module given" do
+    test "errors if wrong parent module given" do
       event =
         TimelineEvent.new(
           id: Equinox.UUID.generate(),
@@ -107,7 +113,7 @@ defmodule Equinox.Codec.EventStructsTest do
       assert_raise ArgumentError, fn -> EventStructs.timeline_event_to_struct(event, Enum) end
     end
 
-    test "timeline_event_to_struct/1 errors if required struct fields are missing" do
+    test "errors if required struct fields are missing" do
       event =
         TimelineEvent.new(
           id: Equinox.UUID.generate(),
@@ -125,7 +131,7 @@ defmodule Equinox.Codec.EventStructsTest do
       end
     end
 
-    test "timeline_event_to_struct/1 errors if unknown fields are present" do
+    test "errors if unknown fields are present" do
       event =
         TimelineEvent.new(
           id: Equinox.UUID.generate(),

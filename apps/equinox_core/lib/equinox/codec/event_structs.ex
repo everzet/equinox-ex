@@ -2,7 +2,7 @@ defmodule Equinox.Codec.EventStructs do
   defmacro __using__(_opts) do
     quote do
       @behaviour Equinox.Codec
-      alias Equinox.Codec.EventStructs.Upcast
+      alias Equinox.Codec.EventStructs.{Upcast, Downcast}
 
       @impl Equinox.Codec
       def encode(%{__struct__: struct} = event, _ctx) do
@@ -24,8 +24,17 @@ defmodule Equinox.Codec.EventStructs do
     def upcast(struct)
   end
 
+  defprotocol Downcast do
+    @fallback_to_any true
+    def downcast(struct)
+  end
+
   defimpl Upcast, for: Any do
     def upcast(struct), do: struct
+  end
+
+  defimpl Downcast, for: Any do
+    def downcast(struct), do: struct
   end
 
   def struct_to_event_data(%{__struct__: module} = event, parent_module) do
@@ -34,7 +43,13 @@ defmodule Equinox.Codec.EventStructs do
 
     if String.starts_with?(full_type, parent_type) do
       type = String.replace_leading(full_type, parent_type <> ".", "")
-      data = event |> Map.from_struct() |> Map.new(fn {k, v} -> {Atom.to_string(k), v} end)
+
+      data =
+        event
+        |> Downcast.downcast()
+        |> Map.from_struct()
+        |> Map.new(fn {k, v} -> {Atom.to_string(k), v} end)
+
       Equinox.Events.EventData.new(type: type, data: data)
     else
       raise ArgumentError, "Expected a struct under #{parent_type}, got #{full_type}"
