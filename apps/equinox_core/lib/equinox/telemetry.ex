@@ -20,6 +20,10 @@ defmodule Equinox.Telemetry do
         {:ok, decider} ->
           {{:ok, decider}, Map.put(meta, :synced_decider, decider)}
 
+        {:ok, result, decider} ->
+          {{:ok, result, decider},
+           meta |> Map.put(:synced_decider, decider) |> Map.put(:result, result)}
+
         {:error, error, loaded} ->
           {{:error, error, loaded},
            meta |> Map.put(:loaded_decider, loaded) |> Map.put(:error, error)}
@@ -32,8 +36,15 @@ defmodule Equinox.Telemetry do
 
     :telemetry.span([:equinox, :decider, :transact, :decision], meta, fn ->
       case fun.() do
-        {:ok, outcome} -> {{:ok, outcome}, Map.put(meta, :outcome, outcome)}
-        {:error, error} -> {{:error, error}, Map.put(meta, :error, error)}
+        {:ok, nil, outcome} ->
+          {{:ok, nil, outcome}, Map.put(meta, :outcome, outcome)}
+
+        {:ok, {:result, result}, outcome} ->
+          {{:ok, {:result, result}, outcome},
+           meta |> Map.put(:outcome, outcome) |> Map.put(:result, result)}
+
+        {:error, error} ->
+          {{:error, error}, Map.put(meta, :error, error)}
       end
     end)
   end
@@ -117,6 +128,10 @@ defmodule Equinox.Telemetry do
       case fun.() do
         {:ok, decider} ->
           {{:ok, decider}, Map.put(meta, :synced_decider, decider)}
+
+        {:ok, result, decider} ->
+          {{:ok, result, decider},
+           meta |> Map.put(:synced_decider, decider) |> Map.put(:result, result)}
 
         {:error, error, loaded} ->
           {{:error, error, loaded},

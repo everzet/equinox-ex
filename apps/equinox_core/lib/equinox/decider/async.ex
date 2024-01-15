@@ -77,13 +77,19 @@ defmodule Equinox.Decider.Async do
     end)
   end
 
-  @spec transact(t(), Decision.t(), Store.sync_context()) :: {:ok, t()} | {:error, term(), t()}
-  @spec transact(pid(), Decision.t(), Store.sync_context()) ::
+  @spec transact(t(), Decision.without_result(), Store.sync_context()) ::
+          {:ok, t()} | {:error, term(), t()}
+  @spec transact(t(), Decision.with_result(), Store.sync_context()) ::
+          {:ok, term(), t()} | {:error, term(), t()}
+  @spec transact(pid(), Decision.without_result(), Store.sync_context()) ::
           {:ok, pid()} | {:error, term(), pid()}
+  @spec transact(pid(), Decision.with_result(), Store.sync_context()) ::
+          {:ok, term(), pid()} | {:error, term(), pid()}
   def transact(async_or_pid, decision, context \\ %{}) do
     ensure_async_started(async_or_pid, fn server_name_or_pid ->
       case GenServer.call(server_name_or_pid, {:transact, decision, context}) do
         :ok -> {:ok, async_or_pid}
+        {:ok, result} -> {:ok, result, async_or_pid}
         {:error, error} -> {:error, error, async_or_pid}
       end
     end)
@@ -154,6 +160,10 @@ defmodule Equinox.Decider.Async do
     case transact_result do
       {:ok, updated_decider} ->
         {:reply, :ok, %{server_state | decider: updated_decider},
+         server_state.settings.lifetime.after_transact(updated_decider.state.value)}
+
+      {:ok, result, updated_decider} ->
+        {:reply, {:ok, result}, %{server_state | decider: updated_decider},
          server_state.settings.lifetime.after_transact(updated_decider.state.value)}
 
       {:error, error, loaded_decider} ->

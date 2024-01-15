@@ -224,6 +224,18 @@ defmodule Equinox.Decider.CommonTest do
         assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "RuntimeError"
       end
 
+      test "decision callbacks returning result and events propagate result after sync" do
+        stub(StoreMock, :load, fn _, _, _ -> {:ok, State.new(0, -1)} end)
+
+        expect(StoreMock, :sync, fn _, _, %{events: [1]}, _ -> {:ok, State.new(1, 0)} end)
+        expect(StoreMock, :sync, fn _, _, %{events: [2]}, _ -> {:ok, State.new(2, 1)} end)
+
+        decider = init(unquote(decider_mod))
+
+        assert {:ok, :one, decider} = Decider.transact(decider, fn 0 -> {:ok, :one, [1]} end)
+        assert {:ok, :two, _decider} = Decider.transact(decider, fn 1 -> {:two, [2]} end)
+      end
+
       test "decision callbacks returning nil or empty list do not trigger sync" do
         stub(StoreMock, :load, fn _, _, _ -> {:ok, State.new(0, -1)} end)
 

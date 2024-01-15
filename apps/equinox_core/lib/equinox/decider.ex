@@ -78,13 +78,13 @@ defmodule Equinox.Decider do
     |> start()
   end
 
-  @spec query(pid(), Query.t()) :: {any(), pid()}
+  @spec query(pid(), Query.t()) :: {term(), pid()}
   def query(pid, query) when is_pid(pid), do: Async.query(pid, query)
 
-  @spec query(Async.t(), Query.t()) :: {any(), Async.t()}
+  @spec query(Async.t(), Query.t()) :: {term(), Async.t()}
   def query(%Async{} = async, query), do: Async.query(async, query)
 
-  @spec query(t(), Query.t()) :: {any(), t()}
+  @spec query(t(), Query.t()) :: {term(), t()}
   def query(%__MODULE__{} = decider, query), do: make_query(decider, query)
 
   defp make_query(%__MODULE__{} = decider, query) do
@@ -96,15 +96,22 @@ defmodule Equinox.Decider do
 
   def transact(decider_or_async, decision, context \\ %{})
 
-  @spec transact(pid(), Decision.t(), Store.sync_context()) ::
+  @spec transact(pid(), Decision.without_result(), Store.sync_context()) ::
           {:ok, pid()} | {:error, term(), pid()}
+  @spec transact(pid(), Decision.with_result(), Store.sync_context()) ::
+          {:ok, term(), pid()} | {:error, term(), pid()}
   def transact(pid, decision, ctx) when is_pid(pid), do: Async.transact(pid, decision, ctx)
 
-  @spec transact(Async.t(), Decision.t(), Store.sync_context()) ::
+  @spec transact(Async.t(), Decision.without_result(), Store.sync_context()) ::
           {:ok, Async.t()} | {:error, term(), Async.t()}
+  @spec transact(Async.t(), Decision.with_result(), Store.sync_context()) ::
+          {:ok, term(), Async.t()} | {:error, term(), Async.t()}
   def transact(%Async{} = async, decision, ctx), do: Async.transact(async, decision, ctx)
 
-  @spec transact(t(), Decision.t(), Store.sync_context()) :: {:ok, t()} | {:error, term(), t()}
+  @spec transact(t(), Decision.without_result(), Store.sync_context()) ::
+          {:ok, t()} | {:error, term(), t()}
+  @spec transact(t(), Decision.with_result(), Store.sync_context()) ::
+          {:ok, term(), t()} | {:error, term(), t()}
   def transact(%__MODULE__{} = decider, decision, ctx), do: do_transact(decider, decision, ctx)
 
   defp do_transact(%__MODULE__{} = decider, decision, context) do
@@ -115,9 +122,12 @@ defmodule Equinox.Decider do
   end
 
   defp transact_with_resync(%__MODULE__{} = decider, decision, context, attempt \\ 0) do
-    with {:ok, decision_outcome} <- make_decision(decider, decision, context, attempt),
-         {:ok, synced_decider} <- sync_with_retry(decider, decision_outcome) do
-      {:ok, synced_decider}
+    with {:ok, result, outcome} <- make_decision(decider, decision, context, attempt),
+         {:ok, synced_decider} <- sync_with_retry(decider, outcome) do
+      case result do
+        {:result, result} -> {:ok, result, synced_decider}
+        nil -> {:ok, synced_decider}
+      end
     else
       {:error, %Decision.Error{} = decision_error} ->
         {:error, decision_error, decider}
@@ -138,8 +148,10 @@ defmodule Equinox.Decider do
 
   defp make_decision(%__MODULE__{} = decider, decision, context, attempt) do
     Telemetry.span_transact_decision(decider, decision, context, attempt, fn ->
-      with {:ok, events} <- Decision.execute(decision, decider.state.value) do
-        {:ok, Store.Outcome.new(events, context)}
+      case Decision.execute(decision, decider.state.value) do
+        {:ok, events} -> {:ok, nil, Store.Outcome.new(events, context)}
+        {:ok, result, events} -> {:ok, {:result, result}, Store.Outcome.new(events, context)}
+        {:error, error} -> {:error, error}
       end
     end)
   end
