@@ -3,26 +3,71 @@ defmodule Equinox.MessageDb.Store do
   alias Equinox.Store.{State, Outcome}
 
   defmodule Unoptimized do
-    defmacro __using__(opts) do
-      fetch_conn = Keyword.fetch!(opts, :fetch_conn)
-      write_conn = Keyword.fetch!(opts, :write_conn)
-      batch_size = Keyword.get(opts, :batch_size, 500)
+    defmodule Options do
+      @opts NimbleOptions.new!(
+              fetch_conn: [
+                type: :atom,
+                required: true,
+                doc: "Read connection module"
+              ],
+              write_conn: [
+                type: :atom,
+                required: true,
+                doc: "Write connection module"
+              ],
+              codec: [
+                type: :atom,
+                required: true,
+                doc: "Event (en|de)coding module that implements `Equinox.Codec` behaviour"
+              ],
+              fold: [
+                type: :atom,
+                required: true,
+                doc: "State generation module that implements `Equinox.Fold` behaviour"
+              ],
+              batch_size: [
+                type: :pos_integer,
+                default: 500,
+                doc: "Number of events to read at once"
+              ]
+            )
 
+      @type t :: [o()]
+      @type o :: unquote(NimbleOptions.option_typespec(@opts))
+
+      def validate!(opts), do: NimbleOptions.validate!(opts, @opts)
+      def docs, do: NimbleOptions.docs(@opts)
+    end
+
+    defmacro __using__(opts) do
       quote do
         @behaviour Equinox.Store
-
-        @fetch_conn unquote(fetch_conn)
-        @write_conn unquote(write_conn)
-        @batch_size unquote(batch_size)
+        @opts unquote(opts)
 
         alias Equinox.MessageDb
 
-        def load(stream, state, codec, fold) do
-          MessageDb.Store.load_unoptimized(@fetch_conn, stream, state, codec, fold, @batch_size)
+        def load(stream, state, opts) do
+          o = parse_options!(opts)
+
+          MessageDb.Store.load_unoptimized(
+            o[:fetch_conn],
+            stream,
+            state,
+            o[:codec],
+            o[:fold],
+            o[:batch_size]
+          )
         end
 
-        def sync(stream, state, outcome, codec, fold) do
-          MessageDb.Store.sync(@write_conn, stream, state, outcome, codec, fold)
+        def sync(stream, state, outcome, opts) do
+          o = parse_options!(opts)
+          MessageDb.Store.sync(o[:write_conn], stream, state, outcome, o[:codec], o[:fold])
+        end
+
+        def parse_options!(opts) do
+          @opts
+          |> Keyword.merge(opts)
+          |> Options.validate!()
         end
 
         defoverridable Equinox.Store
@@ -31,24 +76,65 @@ defmodule Equinox.MessageDb.Store do
   end
 
   defmodule LatestKnownEvent do
-    defmacro __using__(opts) do
-      fetch_conn = Keyword.fetch!(opts, :fetch_conn)
-      write_conn = Keyword.fetch!(opts, :write_conn)
+    defmodule Options do
+      @opts NimbleOptions.new!(
+              fetch_conn: [
+                type: :atom,
+                required: true,
+                doc: "Read connection module"
+              ],
+              write_conn: [
+                type: :atom,
+                required: true,
+                doc: "Write connection module"
+              ],
+              codec: [
+                type: :atom,
+                required: true,
+                doc: "Event (en|de)coding module that implements `Equinox.Codec` behaviour"
+              ],
+              fold: [
+                type: :atom,
+                required: true,
+                doc: "State generation module that implements `Equinox.Fold` behaviour"
+              ]
+            )
 
+      @type t :: [o()]
+      @type o :: unquote(NimbleOptions.option_typespec(@opts))
+
+      def validate!(opts), do: NimbleOptions.validate!(opts, @opts)
+      def docs, do: NimbleOptions.docs(@opts)
+    end
+
+    defmacro __using__(opts) do
       quote do
         @behaviour Equinox.Store
-
-        @fetch_conn unquote(fetch_conn)
-        @write_conn unquote(write_conn)
+        @opts unquote(opts)
 
         alias Equinox.MessageDb
 
-        def load(stream, state, codec, fold) do
-          MessageDb.Store.load_latest_known_event(@fetch_conn, stream, state, codec, fold)
+        def load(stream, state, opts) do
+          o = parse_options!(opts)
+
+          MessageDb.Store.load_latest_known_event(
+            o[:fetch_conn],
+            stream,
+            state,
+            o[:codec],
+            o[:fold]
+          )
         end
 
-        def sync(stream, state, outcome, codec, fold) do
-          MessageDb.Store.sync(@write_conn, stream, state, outcome, codec, fold)
+        def sync(stream, state, outcome, opts) do
+          o = parse_options!(opts)
+          MessageDb.Store.sync(o[:write_conn], stream, state, outcome, o[:codec], o[:fold])
+        end
+
+        def parse_options!(opts) do
+          @opts
+          |> Keyword.merge(opts)
+          |> Options.validate!()
         end
 
         defoverridable Equinox.Store

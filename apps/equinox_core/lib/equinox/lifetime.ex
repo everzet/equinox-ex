@@ -1,9 +1,9 @@
 defmodule Equinox.Lifetime do
-  alias Equinox.State
+  alias Equinox.Fold
 
   @type t :: module()
 
-  @callback after_init(State.value()) :: timeout()
-  @callback after_query(State.value()) :: timeout()
-  @callback after_transact(State.value()) :: timeout()
+  @callback after_init(Fold.result()) :: timeout()
+  @callback after_query(Fold.result()) :: timeout()
+  @callback after_transact(Fold.result()) :: timeout()
 end

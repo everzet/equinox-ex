@@ -1,5 +1,5 @@
 defmodule Equinox.Decider do
-  alias Equinox.{Store, Codec, Fold, Telemetry}
+  alias Equinox.{Store, Telemetry}
 
   alias Equinox.Decider.{
     Options,
@@ -11,14 +11,11 @@ defmodule Equinox.Decider do
     ExhaustedResyncAttempts
   }
 
-  @enforce_keys [:stream_name, :store, :codec, :fold]
+  @enforce_keys [:stream_name, :store]
   defstruct [
     :stream_name,
-    :state,
     :store,
-    :codec,
-    :fold,
-    :context,
+    :state,
     :max_load_attempts,
     :max_sync_attempts,
     :max_resync_attempts
@@ -26,16 +23,12 @@ defmodule Equinox.Decider do
 
   @type t :: %__MODULE__{
           stream_name: Store.stream_name(),
+          store: Store.t() | {Store.t(), Store.options()},
           state: nil | Store.State.t(),
-          store: Store.t(),
-          codec: Codec.t(),
-          fold: Fold.t(),
-          context: context(),
           max_load_attempts: pos_integer(),
           max_sync_attempts: pos_integer(),
           max_resync_attempts: non_neg_integer()
         }
-  @type context :: map()
 
   @spec for_stream(String.t(), Options.t()) :: t()
   def for_stream(stream_name, opts) do
@@ -101,22 +94,22 @@ defmodule Equinox.Decider do
     end)
   end
 
-  def transact(decider_or_async, decision, transact_context \\ %{})
+  def transact(decider_or_async, decision, context \\ %{})
 
-  @spec transact(pid(), Decision.t(), context()) :: {:ok, pid()} | {:error, term(), pid()}
+  @spec transact(pid(), Decision.t(), Store.sync_context()) ::
+          {:ok, pid()} | {:error, term(), pid()}
   def transact(pid, decision, ctx) when is_pid(pid), do: Async.transact(pid, decision, ctx)
 
-  @spec transact(Async.t(), Decision.t(), context()) ::
+  @spec transact(Async.t(), Decision.t(), Store.sync_context()) ::
           {:ok, Async.t()} | {:error, term(), Async.t()}
   def transact(%Async{} = async, decision, ctx), do: Async.transact(async, decision, ctx)
 
-  @spec transact(t(), Decision.t(), context()) :: {:ok, t()} | {:error, term(), t()}
+  @spec transact(t(), Decision.t(), Store.sync_context()) :: {:ok, t()} | {:error, term(), t()}
   def transact(%__MODULE__{} = decider, decision, ctx), do: do_transact(decider, decision, ctx)
 
-  defp do_transact(%__MODULE__{} = decider, decision, transact_context) do
-    Telemetry.span_decider_transact(decider, decision, transact_context, fn ->
+  defp do_transact(%__MODULE__{} = decider, decision, context) do
+    Telemetry.span_decider_transact(decider, decision, context, fn ->
       decider = if(not loaded?(decider), do: load(decider), else: decider)
-      context = Map.merge(decider.context, transact_context)
 
       case transact_with_resync(decider, decision, context) do
         {:ok, decider} -> {:ok, decider}
@@ -149,9 +142,8 @@ defmodule Equinox.Decider do
 
   defp make_decision(%__MODULE__{} = decider, decision, context, attempt) do
     Telemetry.span_transact_decision(decider, decision, context, attempt, fn ->
-      case Decision.execute(decision, decider.state.value) do
-        {:ok, new_events} -> {:ok, Store.Outcome.new(new_events, context)}
-        {:error, error} -> {:error, error}
+      with {:ok, events} <- Decision.execute(decision, decider.state.value) do
+        {:ok, Store.Outcome.new(events, context)}
       end
     end)
   end
@@ -164,7 +156,10 @@ defmodule Equinox.Decider do
 
   defp load_state(%__MODULE__{state: state} = decider, attempt) do
     Telemetry.span_load_state(decider, attempt, fn ->
-      decider.store.load(decider.stream_name, state, decider.codec, decider.fold)
+      case decider.store do
+        {store, opts} -> store.load(decider.stream_name, state, opts)
+        store when is_atom(store) -> store.load(decider.stream_name, state, [])
+      end
     end)
   end
 
@@ -186,15 +181,6 @@ defmodule Equinox.Decider do
     end
   end
 
-  defp sync_state(%__MODULE__{state: state} = decider, outcome, attempt) do
-    Telemetry.span_sync_state(decider, outcome, attempt, fn ->
-      case outcome.events do
-        [] -> {:ok, state}
-        _ -> decider.store.sync(decider.stream_name, state, outcome, decider.codec, decider.fold)
-      end
-    end)
-  end
-
   defp sync_with_retry(%__MODULE__{} = decider, outcome, attempt \\ 1) do
     with {:ok, synced_state} <- sync_state(decider, outcome, attempt) do
       {:ok, set_state(decider, synced_state)}
@@ -212,6 +198,16 @@ defmodule Equinox.Decider do
 
         sync_with_retry(decider, outcome, attempt + 1)
     end
+  end
+
+  defp sync_state(%__MODULE__{state: state} = decider, outcome, attempt) do
+    Telemetry.span_sync_state(decider, outcome, attempt, fn ->
+      case {outcome.events, decider.store} do
+        {[], _} -> {:ok, state}
+        {_, {store, opts}} -> store.sync(decider.stream_name, state, outcome, opts)
+        {_, store} when is_atom(store) -> store.sync(decider.stream_name, state, outcome, [])
+      end
+    end)
   end
 
   defp set_state(%__MODULE__{} = decider, new_state), do: %{decider | state: new_state}

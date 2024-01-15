@@ -1,7 +1,7 @@
 defmodule Equinox.Decider.Async do
   use GenServer, restart: :transient
 
-  alias Equinox.{Decider, Lifetime, Telemetry}
+  alias Equinox.{Decider, Store, Lifetime, Telemetry}
   alias Equinox.Decider.{Query, Decision}
   alias Equinox.Decider.Async.Options
 
@@ -77,8 +77,9 @@ defmodule Equinox.Decider.Async do
     end)
   end
 
-  @spec transact(t(), Decision.t(), Decider.context()) :: {:ok, t()} | {:error, term(), t()}
-  @spec transact(pid(), Decision.t(), Decider.context()) :: {:ok, pid()} | {:error, term(), pid()}
+  @spec transact(t(), Decision.t(), Store.sync_context()) :: {:ok, t()} | {:error, term(), t()}
+  @spec transact(pid(), Decision.t(), Store.sync_context()) ::
+          {:ok, pid()} | {:error, term(), pid()}
   def transact(async_or_pid, decision, context \\ %{}) do
     ensure_async_started(async_or_pid, fn server_name_or_pid ->
       case GenServer.call(server_name_or_pid, {:transact, decision, context}) do

@@ -53,6 +53,14 @@ defmodule ExampleApp.Payers do
     def delete_payer(_), do: %PayerDeleted{}
   end
 
+  defmodule Store do
+    use Equinox.MessageDb.Store.LatestKnownEvent,
+      fetch_conn: ExampleApp.MessageDb,
+      write_conn: ExampleApp.MessageDb,
+      codec: Events,
+      fold: Fold
+  end
+
   alias ExampleApp.CustomValidators
   alias Equinox.{UUID, Decider}
   alias Ecto.Changeset
@@ -94,12 +102,10 @@ defmodule ExampleApp.Payers do
     payer_id
     |> Stream.name()
     |> Decider.start(
-      supervisor: ExampleApp.PayersSupervisor,
-      registry: :global,
+      store: Store,
       lifetime: Equinox.Lifetime.StopAfter30sOfInactivity,
-      store: ExampleApp.EventStore.LatestKnownEvent,
-      codec: Events,
-      fold: Fold
+      registry: :global,
+      supervisor: ExampleApp.PayersSupervisor
     )
   end
 end

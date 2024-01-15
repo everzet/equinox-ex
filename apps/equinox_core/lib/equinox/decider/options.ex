@@ -1,24 +1,9 @@
 defmodule Equinox.Decider.Options do
   @opts NimbleOptions.new!(
           store: [
-            type: :atom,
+            type: {:or, [:atom, {:tuple, [:atom, :keyword_list]}]},
             required: true,
             doc: "Persistence module that implements `Equinox.Store` behaviour"
-          ],
-          codec: [
-            type: :atom,
-            required: true,
-            doc: "Event (en|de)coding module that implements `Equinox.Codec` behaviour"
-          ],
-          fold: [
-            type: :atom,
-            required: true,
-            doc: "State generation module that implements `Equinox.Fold` behaviour"
-          ],
-          context: [
-            type: :map,
-            default: %{},
-            doc: "Decider-wide context. Merged with context passed explicitly via transact"
           ],
           max_load_attempts: [
             type: :pos_integer,

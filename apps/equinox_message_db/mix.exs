@@ -31,6 +31,7 @@ defmodule Equinox.MessageDb.MixProject do
   defp deps do
     [
       {:equinox_core, in_umbrella: true},
+      {:nimble_options, "~> 1.1"},
       {:postgrex, "~> 0.17"},
       {:jason, "~> 1.0"},
       {:benchee, "~> 1.2", only: :dev}

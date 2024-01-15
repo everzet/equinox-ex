@@ -130,6 +130,15 @@ defmodule ExampleApp.Invoices do
     end
   end
 
+  defmodule Store do
+    use Equinox.MessageDb.Store.Unoptimized,
+      fetch_conn: ExampleApp.MessageDb,
+      write_conn: ExampleApp.MessageDb,
+      batch_size: 500,
+      codec: Events,
+      fold: Fold
+  end
+
   alias ExampleApp.CustomValidators
   alias Equinox.{UUID, Decider}
   alias Ecto.Changeset
@@ -188,12 +197,10 @@ defmodule ExampleApp.Invoices do
     invoice_id
     |> Stream.name()
     |> Decider.start(
-      supervisor: ExampleApp.InvoicesSupervisor,
-      registry: ExampleApp.InvoicesRegistry,
+      store: Store,
       lifetime: Equinox.Lifetime.StopAfter30sOfInactivity,
-      store: ExampleApp.EventStore.Unoptimized,
-      codec: Events,
-      fold: Fold
+      registry: ExampleApp.InvoicesRegistry,
+      supervisor: ExampleApp.InvoicesSupervisor
     )
   end
 end
