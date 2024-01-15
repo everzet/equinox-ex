@@ -110,11 +110,7 @@ defmodule Equinox.Decider do
   defp do_transact(%__MODULE__{} = decider, decision, context) do
     Telemetry.span_decider_transact(decider, decision, context, fn ->
       decider = if(not loaded?(decider), do: load(decider), else: decider)
-
-      case transact_with_resync(decider, decision, context) do
-        {:ok, decider} -> {:ok, decider}
-        {:error, error} -> {:error, error, decider}
-      end
+      transact_with_resync(decider, decision, context)
     end)
   end
 
@@ -124,7 +120,7 @@ defmodule Equinox.Decider do
       {:ok, synced_decider}
     else
       {:error, %Decision.Error{} = decision_error} ->
-        {:error, decision_error}
+        {:error, decision_error, decider}
 
       {:error, %Store.StreamVersionConflict{} = version_conflict} ->
         if attempt >= decider.max_resync_attempts do
