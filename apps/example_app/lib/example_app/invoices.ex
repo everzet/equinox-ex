@@ -1,10 +1,10 @@
 defmodule ExampleApp.Invoices do
   defmodule Stream do
-    alias Equinox.Stream.{StreamId, StreamName}
+    alias Equinox.Codec.{StreamId, StreamName}
 
     def category, do: "Invoice"
-    def id(invoice_id), do: StreamId.generate([invoice_id])
-    def name(invoice_id), do: StreamName.generate(category(), id(invoice_id))
+    def id(invoice_id), do: StreamId.encode(invoice_id)
+    def name(invoice_id), do: StreamName.encode(category(), id(invoice_id))
   end
 
   defmodule Events do

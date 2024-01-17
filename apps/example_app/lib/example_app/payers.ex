@@ -2,11 +2,11 @@ defmodule ExampleApp.Payers do
   alias ExampleApp.Payers.Events.PayerDeleted
 
   defmodule Stream do
-    alias Equinox.Stream.{StreamId, StreamName}
+    alias Equinox.Codec.{StreamId, StreamName}
 
     def category, do: "Payer"
-    def id(payer_id), do: StreamId.generate([payer_id])
-    def name(payer_id), do: StreamName.generate(category(), id(payer_id))
+    def id(payer_id), do: StreamId.encode(payer_id)
+    def name(payer_id), do: StreamName.encode(category(), id(payer_id))
   end
 
   defmodule Events do
