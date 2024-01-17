@@ -19,6 +19,11 @@ defmodule Equinox.Decider.Options do
             type: :non_neg_integer,
             default: 1,
             doc: "How many times should we try to resync the state on version conflict"
+          ],
+          context: [
+            type: :map,
+            default: %{},
+            doc: "Optional context to pass with events to `Equinox.Store.sync/4`"
           ]
         )
 

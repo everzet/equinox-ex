@@ -21,6 +21,11 @@ defmodule Equinox.Decider.Async.Options do
             type: :atom,
             required: true,
             doc: "Server lifetime spec module that implements `Equinox.Lifetime` behaviour"
+          ],
+          context: [
+            type: :map,
+            default: %{},
+            doc: "Optional context to pass with events to `Equinox.Store.sync/4`"
           ]
         )
 

@@ -12,8 +12,8 @@ defmodule Equinox.Telemetry do
     end)
   end
 
-  def span_decider_transact(decider, decision, context, fun) do
-    meta = %{original_decider: decider, decision_fun: decision, context: context}
+  def span_decider_transact(decider, decision, fun) do
+    meta = %{original_decider: decider, decision_fun: decision}
 
     :telemetry.span([:equinox, :decider, :transact], meta, fn ->
       case fun.() do
@@ -31,8 +31,8 @@ defmodule Equinox.Telemetry do
     end)
   end
 
-  def span_transact_decision(decider, decision, context, attempt, fun) do
-    meta = %{decider: decider, decision_fun: decision, context: context, attempt: attempt}
+  def span_transact_decision(decider, decision, attempt, fun) do
+    meta = %{decider: decider, decision_fun: decision, attempt: attempt}
 
     :telemetry.span([:equinox, :decider, :transact, :decision], meta, fn ->
       case fun.() do

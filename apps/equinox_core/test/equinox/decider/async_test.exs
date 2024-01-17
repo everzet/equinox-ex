@@ -60,6 +60,19 @@ defmodule Equinox.Decider.AsyncTest do
     end
   end
 
+  test "async context overrides initial decider context" do
+    async = init()
+    async = put_in(async.decider.context, %{value: :a})
+    async = put_in(async.context, %{value: :b})
+
+    stub(StoreMock, :load, fn _, _, _, _ -> {:ok, State.new(0, -1)} end)
+
+    expect(StoreMock, :sync, fn _, state, %{context: %{value: :b}}, _ -> {:ok, state} end)
+
+    async = Decider.Async.start(async)
+    Decider.transact(async, fn _ -> [1] end)
+  end
+
   describe "supervisor" do
     test "restarts process (which reloads state from store) when it crashes" do
       start_supervised!({DynamicSupervisor, strategy: :one_for_one, name: DeciderTestSupervisor})

@@ -112,9 +112,9 @@ defmodule Equinox.Decider.CommonTest do
           {:ok, State.new(5, 1)}
         end)
 
-        decider = init(unquote(decider_mod))
+        decider = init(unquote(decider_mod), context: %{value: 2})
 
-        assert {:ok, _} = Decider.transact(decider, fn 0 -> [2] end, %{value: 2})
+        assert {:ok, _} = Decider.transact(decider, fn 0 -> [2] end)
       end
 
       test "keeps track of state (stream) version during the sync process" do
@@ -301,7 +301,8 @@ defmodule Equinox.Decider.CommonTest do
       store: {StoreMock, allow_mocks_from: self()},
       max_load_attempts: Keyword.get(attrs, :max_load_attempts, 1),
       max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 1),
-      max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 0)
+      max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 0),
+      context: Keyword.get(attrs, :context, %{})
     )
   end
 
@@ -314,7 +315,8 @@ defmodule Equinox.Decider.CommonTest do
     |> Decider.start(
       supervisor: :disabled,
       registry: :disabled,
-      lifetime: LifetimeMock
+      lifetime: LifetimeMock,
+      context: Keyword.get(attrs, :context, %{})
     )
   end
 end

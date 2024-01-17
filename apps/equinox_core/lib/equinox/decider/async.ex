@@ -6,16 +6,18 @@ defmodule Equinox.Decider.Async do
   alias Equinox.Decider.Async.Options
 
   @enforce_keys [:supervisor, :registry, :lifetime]
-  defstruct [:server_name, :decider, :supervisor, :registry, :lifetime]
+  defstruct [:server_name, :decider, :supervisor, :registry, :lifetime, :context]
 
   @type t :: %__MODULE__{
           decider: Decider.t(),
           lifetime: Lifetime.t(),
           registry: registry(),
           supervisor: supervisor(),
-          server_name: server_name()
+          server_name: server_name(),
+          context: Store.sync_context()
         }
-  @type server_name :: nil | {:global, String.t()} | {:via, Registry, {module(), String.t()}}
+  @type server_name ::
+          nil | pid() | {:global, String.t()} | {:via, Registry, {module(), String.t()}}
   @type registry :: :disabled | :global | {:global, prefix :: String.t()} | module()
   @type supervisor :: :disabled | module()
 
@@ -77,18 +79,18 @@ defmodule Equinox.Decider.Async do
 
   @spec query(t(), Query.t()) :: {any(), t()}
   def query(async, query) do
-    ensure_async_started(async, fn server_name_or_pid ->
-      {GenServer.call(server_name_or_pid, {:query, query}), async}
+    ensure_async_started(async, fn async ->
+      {GenServer.call(async.server_name, {:query, query}), async}
     end)
   end
 
-  @spec transact(t(), Decision.without_result(), Store.sync_context()) ::
+  @spec transact(t(), Decision.without_result()) ::
           {:ok, t()} | {:error, term(), t()}
-  @spec transact(t(), Decision.with_result(), Store.sync_context()) ::
+  @spec transact(t(), Decision.with_result()) ::
           {:ok, term(), t()} | {:error, term(), t()}
-  def transact(async, decision, context \\ %{}) do
-    ensure_async_started(async, fn server_name_or_pid ->
-      case GenServer.call(server_name_or_pid, {:transact, decision, context}) do
+  def transact(async, decision) do
+    ensure_async_started(async, fn async ->
+      case GenServer.call(async.server_name, {:transact, decision, async.context}) do
         :ok -> {:ok, async}
         {:ok, result} -> {:ok, result, async}
         {:error, error} -> {:error, error, async}
@@ -96,25 +98,22 @@ defmodule Equinox.Decider.Async do
     end)
   end
 
-  defp ensure_async_started(%__MODULE__{server_name: nil, registry: :disabled}, _fun) do
-    raise AsyncError, "Failed to ensure process started: `registry` must be set"
+  defp ensure_async_started(%__MODULE__{server_name: nil} = async, fun) do
+    async |> start() |> fun.()
   end
 
-  defp ensure_async_started(%__MODULE__{server_name: pid}, fun) when is_pid(pid) do
+  defp ensure_async_started(%__MODULE__{server_name: pid} = async, fun) when is_pid(pid) do
     if not Process.alive?(pid) do
-      raise AsyncError, "Failed to ensure process started: process #{inspect(pid)} is dead"
+      ensure_async_started(%{async | server_name: nil}, fun)
     else
-      fun.(pid)
+      fun.(async)
     end
   end
 
-  defp ensure_async_started(%__MODULE__{server_name: server_name} = server, fun) do
-    fun.(server_name)
+  defp ensure_async_started(%__MODULE__{} = async, fun) do
+    fun.(async)
   catch
-    :exit, {:noproc, _} ->
-      with {:ok, _pid} <- start_server(server) do
-        fun.(server_name)
-      end
+    :exit, {:noproc, _} -> async |> start() |> fun.()
   end
 
   @impl GenServer
@@ -154,8 +153,8 @@ defmodule Equinox.Decider.Async do
   @impl GenServer
   def handle_call({:transact, decision, context}, _from, server_state) do
     transact_result =
-      Telemetry.span_async_transact(server_state, decision, context, fn ->
-        Decider.transact(server_state.decider, decision, context)
+      Telemetry.span_async_transact(server_state, context, decision, fn ->
+        Decider.transact(%{server_state.decider | context: context}, decision)
       end)
 
     case transact_result do
