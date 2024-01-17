@@ -40,14 +40,17 @@ defmodule Equinox.Decider.Async do
     %{async | server_name: server_name}
   end
 
-  @spec start(t()) :: t() | pid()
+  @spec start(t()) :: t()
   def start(%__MODULE__{} = async) do
     with {:ok, pid} <- start_server(async) do
-      if(async.server_name, do: async, else: pid)
+      update_in(async.server_name, fn
+        nil -> pid
+        val -> val
+      end)
     else
       {:error, {:already_started, _pid}} -> async
       {:error, error} when is_exception(error) -> raise AsyncError, Exception.message(error)
-      {:error, error} -> raise AsyncError, "Failed to start Decider.Async: #{inspect(error)}"
+      {:error, error} -> raise AsyncError, "Failed to start process: #{inspect(error)}"
     end
   end
 
@@ -61,7 +64,10 @@ defmodule Equinox.Decider.Async do
 
   @spec start_link(t()) :: GenServer.on_start()
   def start_link(%__MODULE__{} = async) do
-    GenServer.start_link(__MODULE__, async, name: async.server_name)
+    case async.server_name do
+      pid when is_pid(pid) -> raise AsyncError, "Process #{inspect(pid)} already started"
+      name -> GenServer.start_link(__MODULE__, async, name: name)
+    end
   end
 
   @spec start_supervised(t(), GenServer.server()) :: DynamicSupervisor.on_start_child()
@@ -70,10 +76,9 @@ defmodule Equinox.Decider.Async do
   end
 
   @spec query(t(), Query.t()) :: {any(), t()}
-  @spec query(pid(), Query.t()) :: {any(), pid()}
-  def query(async_or_pid, query) do
-    ensure_async_started(async_or_pid, fn server_name_or_pid ->
-      {GenServer.call(server_name_or_pid, {:query, query}), async_or_pid}
+  def query(async, query) do
+    ensure_async_started(async, fn server_name_or_pid ->
+      {GenServer.call(server_name_or_pid, {:query, query}), async}
     end)
   end
 
@@ -81,30 +86,26 @@ defmodule Equinox.Decider.Async do
           {:ok, t()} | {:error, term(), t()}
   @spec transact(t(), Decision.with_result(), Store.sync_context()) ::
           {:ok, term(), t()} | {:error, term(), t()}
-  @spec transact(pid(), Decision.without_result(), Store.sync_context()) ::
-          {:ok, pid()} | {:error, term(), pid()}
-  @spec transact(pid(), Decision.with_result(), Store.sync_context()) ::
-          {:ok, term(), pid()} | {:error, term(), pid()}
-  def transact(async_or_pid, decision, context \\ %{}) do
-    ensure_async_started(async_or_pid, fn server_name_or_pid ->
+  def transact(async, decision, context \\ %{}) do
+    ensure_async_started(async, fn server_name_or_pid ->
       case GenServer.call(server_name_or_pid, {:transact, decision, context}) do
-        :ok -> {:ok, async_or_pid}
-        {:ok, result} -> {:ok, result, async_or_pid}
-        {:error, error} -> {:error, error, async_or_pid}
+        :ok -> {:ok, async}
+        {:ok, result} -> {:ok, result, async}
+        {:error, error} -> {:error, error, async}
       end
     end)
   end
 
-  defp ensure_async_started(pid, fun) when is_pid(pid) do
+  defp ensure_async_started(%__MODULE__{server_name: nil, registry: :disabled}, _fun) do
+    raise AsyncError, "Failed to ensure process started: `registry` must be set"
+  end
+
+  defp ensure_async_started(%__MODULE__{server_name: pid}, fun) when is_pid(pid) do
     if not Process.alive?(pid) do
-      raise AsyncError, "Failed to ensure Decider.Async started: process #{inspect(pid)} is dead"
+      raise AsyncError, "Failed to ensure process started: process #{inspect(pid)} is dead"
     else
       fun.(pid)
     end
-  end
-
-  defp ensure_async_started(%__MODULE__{server_name: nil}, _fun) do
-    raise AsyncError, "Failed to ensure Decider.Async started: `registry` setting is missing"
   end
 
   defp ensure_async_started(%__MODULE__{server_name: server_name} = server, fun) do

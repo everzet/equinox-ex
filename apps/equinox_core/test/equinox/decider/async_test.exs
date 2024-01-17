@@ -13,8 +13,8 @@ defmodule Equinox.Decider.AsyncTest do
   describe "start/1" do
     test "spawns server and returns pid if registry is :disabled" do
       async = init(registry: :disabled)
-      pid = Decider.Async.start(async)
-      assert is_pid(pid)
+      async = Decider.Async.start(async)
+      assert is_pid(async.server_name)
     end
 
     test "spawns different servers every time if registry is :disabled" do
@@ -52,11 +52,11 @@ defmodule Equinox.Decider.AsyncTest do
 
       expect(StoreMock, :load, 0, fn _, _, _, _ -> raise RuntimeError end)
 
-      assert {:ok, pid} =
+      assert async =
                put_in(async.decider.state, State.new(:value, 2))
-               |> Decider.Async.start_server()
+               |> Decider.Async.start()
 
-      assert {:value, ^pid} = Decider.query(pid, & &1)
+      assert {:value, ^async} = Decider.query(async, & &1)
     end
   end
 
@@ -69,10 +69,11 @@ defmodule Equinox.Decider.AsyncTest do
 
       expect(StoreMock, :load, 2, fn _, _, _, _ -> {:ok, State.new(0, -1)} end)
 
-      {:ok, initial_pid} = Decider.Async.start_server(async)
-      assert GenServer.whereis(async.server_name) == initial_pid
+      async = Decider.Async.start(async)
+      initial_pid = GenServer.whereis(async.server_name)
+      assert Process.alive?(initial_pid)
 
-      capture_exit(fn -> Decider.transact(initial_pid, fn _ -> raise RuntimeError end) end)
+      capture_exit(fn -> Decider.transact(async, fn _ -> raise RuntimeError end) end)
       refute Process.alive?(initial_pid)
 
       Process.sleep(50)
@@ -202,16 +203,16 @@ defmodule Equinox.Decider.AsyncTest do
       stub(LifetimeMock, :after_init, fn _ -> :timer.seconds(10) end)
 
       expect(LifetimeMock, :after_query, fn _ -> 0 end)
-      {:ok, pid} = Decider.Async.start_server(async)
-      Decider.query(pid, & &1)
+      a = Decider.Async.start(async)
+      Decider.query(a, & &1)
       Process.sleep(50)
-      refute Process.alive?(pid)
+      refute Process.alive?(a.server_name)
 
       expect(LifetimeMock, :after_query, fn _ -> :timer.seconds(10) end)
-      {:ok, pid} = Decider.Async.start_server(async)
-      Decider.query(pid, & &1)
+      b = Decider.Async.start(async)
+      Decider.query(b, & &1)
       Process.sleep(50)
-      assert Process.alive?(pid)
+      assert Process.alive?(b.server_name)
     end
 
     test "after_transact lifetime controls how long process will wait for another query or transact until shutting down" do
@@ -221,16 +222,16 @@ defmodule Equinox.Decider.AsyncTest do
       stub(LifetimeMock, :after_init, fn _ -> :timer.seconds(10) end)
 
       expect(LifetimeMock, :after_transact, fn _ -> 0 end)
-      {:ok, pid} = Decider.Async.start_server(async)
-      {:ok, ^pid} = Decider.transact(pid, fn _ -> nil end)
+      a = Decider.Async.start(async)
+      {:ok, ^a} = Decider.transact(a, fn _ -> nil end)
       Process.sleep(50)
-      refute Process.alive?(pid)
+      refute Process.alive?(a.server_name)
 
       expect(LifetimeMock, :after_transact, fn _ -> :timer.seconds(10) end)
-      {:ok, pid} = Decider.Async.start_server(async)
-      {:ok, ^pid} = Decider.transact(pid, fn _ -> nil end)
+      b = Decider.Async.start(async)
+      {:ok, ^b} = Decider.transact(b, fn _ -> nil end)
       Process.sleep(50)
-      assert Process.alive?(pid)
+      assert Process.alive?(b.server_name)
     end
   end
 

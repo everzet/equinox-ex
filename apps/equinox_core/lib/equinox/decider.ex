@@ -78,9 +78,6 @@ defmodule Equinox.Decider do
     |> start()
   end
 
-  @spec query(pid(), Query.t()) :: {term(), pid()}
-  def query(pid, query) when is_pid(pid), do: Async.query(pid, query)
-
   @spec query(Async.t(), Query.t()) :: {term(), Async.t()}
   def query(%Async{} = async, query), do: Async.query(async, query)
 
@@ -95,12 +92,6 @@ defmodule Equinox.Decider do
   end
 
   def transact(decider_or_async, decision, context \\ %{})
-
-  @spec transact(pid(), Decision.without_result(), Store.sync_context()) ::
-          {:ok, pid()} | {:error, term(), pid()}
-  @spec transact(pid(), Decision.with_result(), Store.sync_context()) ::
-          {:ok, term(), pid()} | {:error, term(), pid()}
-  def transact(pid, decision, ctx) when is_pid(pid), do: Async.transact(pid, decision, ctx)
 
   @spec transact(Async.t(), Decision.without_result(), Store.sync_context()) ::
           {:ok, Async.t()} | {:error, term(), Async.t()}
