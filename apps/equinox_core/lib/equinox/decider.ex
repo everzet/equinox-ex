@@ -1,25 +1,14 @@
 defmodule Equinox.Decider do
   alias Equinox.{Store, Telemetry}
-
-  alias Equinox.Decider.{
-    Options,
-    Decision,
-    Query,
-    Async,
-    ExhaustedLoadAttempts,
-    ExhaustedSyncAttempts,
-    ExhaustedResyncAttempts
-  }
+  alias Equinox.Decider.{Options, Decision, Query, ResyncPolicy, Async}
 
   @enforce_keys [:stream_name, :store]
   defstruct [
     :stream_name,
     :store,
+    :context,
     :state,
-    :max_load_attempts,
-    :max_sync_attempts,
-    :max_resync_attempts,
-    :context
+    :resync_policy
   ]
 
   @type t :: %__MODULE__{
@@ -27,9 +16,7 @@ defmodule Equinox.Decider do
           store: Store.t() | {Store.t(), Store.options()},
           state: nil | Store.State.t(),
           context: Store.sync_context(),
-          max_load_attempts: pos_integer(),
-          max_sync_attempts: pos_integer(),
-          max_resync_attempts: non_neg_integer()
+          resync_policy: ResyncPolicy.t()
         }
 
   @spec for_stream(String.t(), Options.t()) :: t()
@@ -42,7 +29,7 @@ defmodule Equinox.Decider do
   def loaded?(%__MODULE__{state: state}), do: Store.State.initialized?(state)
 
   @spec load(t()) :: t()
-  def load(%__MODULE__{} = decider), do: load_with_retry(decider)
+  def load(%__MODULE__{} = decider), do: do_load(decider)
 
   @spec load(String.t(), Options.t()) :: t()
   def load(stream_name, opts) when is_bitstring(stream_name) do
@@ -114,7 +101,7 @@ defmodule Equinox.Decider do
 
   defp transact_with_resync(%__MODULE__{} = decider, decision, attempt \\ 0) do
     with {:ok, result, outcome} <- make_decision(decider, decision, attempt),
-         {:ok, synced_decider} <- sync_with_retry(decider, outcome) do
+         {:ok, synced_decider} <- do_sync(decider, outcome) do
       case result do
         {:result, result} -> {:ok, result, synced_decider}
         nil -> {:ok, synced_decider}
@@ -124,12 +111,7 @@ defmodule Equinox.Decider do
         {:error, decision_error, decider}
 
       {:error, %Store.StreamVersionConflict{} = version_conflict} ->
-        if attempt >= decider.max_resync_attempts do
-          raise ExhaustedResyncAttempts,
-            stream_name: decider.stream_name,
-            exception: version_conflict,
-            attempts: attempt
-        end
+        ResyncPolicy.validate!(decider.resync_policy, attempt, version_conflict)
 
         decider
         |> do_resync(attempt)
@@ -154,12 +136,22 @@ defmodule Equinox.Decider do
 
   defp do_resync(%__MODULE__{} = decider, attempt) do
     Telemetry.span_transact_resync(decider, attempt, fn ->
-      load_with_retry(decider)
+      do_load(decider)
     end)
   end
 
-  defp load_state(%__MODULE__{state: state} = decider, policy, attempt) do
-    Telemetry.span_load_state(decider, policy, attempt, fn ->
+  defp do_load(%__MODULE__{} = decider) do
+    policy = Store.LoadPolicy.default()
+
+    with {:ok, loaded_state} <- load_state(decider, policy) do
+      set_state(decider, loaded_state)
+    else
+      {:error, error, _partial_fold} -> raise error
+    end
+  end
+
+  defp load_state(%__MODULE__{state: state} = decider, policy) do
+    Telemetry.span_load_state(decider, policy, fn ->
       case decider.store do
         {store, opts} -> store.load(decider.stream_name, state, policy, opts)
         store when is_atom(store) -> store.load(decider.stream_name, state, [])
@@ -167,47 +159,17 @@ defmodule Equinox.Decider do
     end)
   end
 
-  defp load_with_retry(%__MODULE__{} = decider, attempt \\ 1) do
-    policy = Store.LoadPolicy.default()
-
-    with {:ok, loaded_state} <- load_state(decider, policy, attempt) do
-      set_state(decider, loaded_state)
-    else
-      {:error, maybe_recoverable_exception, partially_loaded_state} ->
-        if attempt >= decider.max_load_attempts do
-          raise ExhaustedLoadAttempts,
-            stream_name: decider.stream_name,
-            exception: maybe_recoverable_exception,
-            attempts: attempt
-        end
-
-        decider
-        |> set_state(partially_loaded_state)
-        |> load_with_retry(attempt + 1)
-    end
-  end
-
-  defp sync_with_retry(%__MODULE__{} = decider, outcome, attempt \\ 1) do
-    with {:ok, synced_state} <- sync_state(decider, outcome, attempt) do
+  defp do_sync(%__MODULE__{} = decider, outcome) do
+    with {:ok, synced_state} <- sync_state(decider, outcome) do
       {:ok, set_state(decider, synced_state)}
     else
-      {:error, %Store.StreamVersionConflict{} = version_conflict} ->
-        {:error, version_conflict}
-
-      {:error, maybe_recoverable_exception} ->
-        if attempt >= decider.max_sync_attempts do
-          raise ExhaustedSyncAttempts,
-            stream_name: decider.stream_name,
-            exception: maybe_recoverable_exception,
-            attempts: attempt
-        end
-
-        sync_with_retry(decider, outcome, attempt + 1)
+      {:error, %Store.StreamVersionConflict{} = error} -> {:error, error}
+      {:error, error} -> raise error
     end
   end
 
-  defp sync_state(%__MODULE__{state: state} = decider, outcome, attempt) do
-    Telemetry.span_sync_state(decider, outcome, attempt, fn ->
+  defp sync_state(%__MODULE__{state: state} = decider, outcome) do
+    Telemetry.span_sync_state(decider, outcome, fn ->
       case {outcome.events, decider.store} do
         {[], _} -> {:ok, state}
         {_, {store, opts}} -> store.sync(decider.stream_name, state, outcome, opts)

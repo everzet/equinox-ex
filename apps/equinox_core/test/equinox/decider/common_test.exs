@@ -6,7 +6,7 @@ defmodule Equinox.Decider.CommonTest do
 
   alias Equinox.{Store, Decider}
   alias Equinox.Store.State
-  alias Equinox.Decider.Decision
+  alias Equinox.Decider.{Decision, ResyncPolicy}
   alias Equinox.TestMocks.{StoreMock, LifetimeMock}
 
   setup :verify_on_exit!
@@ -25,48 +25,20 @@ defmodule Equinox.Decider.CommonTest do
         assert {7, ^decider} = Decider.query(decider, & &1)
       end
 
-      test "gracefully handles normal load errors (not exceptions) by retrying" do
+      test "raises error if Store generates one" do
         expect(StoreMock, :load, fn _, nil, _, _ ->
           {:error, %RuntimeError{}, State.new(:initial, -1)}
         end)
 
-        expect(StoreMock, :load, fn _, _, _, _ -> {:ok, State.new(:loaded, -1)} end)
-
-        decider = init(unquote(decider_mod), max_load_attempts: 2)
-
-        assert {:loaded, ^decider} = Decider.query(decider, & &1)
+        assert capture_crash(fn -> init(unquote(decider_mod)) end) =~ "RuntimeError"
       end
 
-      test "respects partially loaded state when retrying" do
-        expect(StoreMock, :load, fn _, nil, _, _ ->
-          {:error, %RuntimeError{}, State.new(:partial, 0)}
-        end)
-
-        expect(StoreMock, :load, fn _, %{value: :partial, version: 0}, _, _ ->
-          {:ok, State.new(:full, 1)}
-        end)
-
-        decider = init(unquote(decider_mod), max_load_attempts: 2)
-
-        assert {:full, ^decider} = Decider.query(decider, & &1)
-      end
-
-      test "does not retry past max_load_attempts setting" do
-        expect(StoreMock, :load, 2, fn _, _, _, _ ->
-          {:error, %RuntimeError{message: "some error"}, State.new(:initial, -1)}
-        end)
-
-        assert capture_crash(fn -> init(unquote(decider_mod), max_load_attempts: 2) end) =~
-                 "some error"
-      end
-
-      test "exceptions do not trigger load retries as they are assumed to be unrecoverable" do
+      test "exceptions are not captured" do
         expect(StoreMock, :load, 1, fn _, nil, _, _ ->
           raise RuntimeError, message: "fold exception"
         end)
 
-        assert capture_crash(fn -> init(unquote(decider_mod), max_load_attempts: 2) end) =~
-                 "fold exception"
+        assert capture_crash(fn -> init(unquote(decider_mod)) end) =~ "fold exception"
       end
     end
 
@@ -164,7 +136,7 @@ defmodule Equinox.Decider.CommonTest do
         assert {7, ^decider} = Decider.query(decider, & &1)
       end
 
-      test "does not try to resync the decision past max_resync_attempts setting" do
+      test "respects ResyncPolicy setting" do
         stub(StoreMock, :load, fn _, _, _, _ -> {:ok, State.new(0, -1)} end)
 
         expect(StoreMock, :sync, 1, fn _, %{version: -1}, _, _ ->
@@ -176,45 +148,17 @@ defmodule Equinox.Decider.CommonTest do
         assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "StreamVersionConflict"
       end
 
-      test "does retry failing loads during resync up to configured max_load_attempts" do
-        expect(StoreMock, :load, fn _, nil, _, _ -> {:ok, State.new(0, -1)} end)
-
-        expect(StoreMock, :sync, fn _, %{version: -1}, _, _ ->
-          {:error, %Store.StreamVersionConflict{}}
-        end)
-
-        expect(StoreMock, :load, 2, fn _, %{version: -1} = state, _, _ ->
-          {:error, %RuntimeError{}, state}
-        end)
-
-        decider = init(unquote(decider_mod), max_resync_attempts: 1, max_load_attempts: 2)
-
-        assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "RuntimeError"
-      end
-
-      test "handles general sync errors (not conflicts or exceptions) by retrying" do
-        stub(StoreMock, :load, fn _, _, _, _ -> {:ok, State.new(0, -1)} end)
-
-        expect(StoreMock, :sync, fn _, %{version: -1}, _, _ -> {:error, %RuntimeError{}} end)
-        expect(StoreMock, :sync, fn _, %{version: -1}, _, _ -> {:ok, State.new(3, 1)} end)
-
-        decider = init(unquote(decider_mod), max_sync_attempts: 2)
-
-        assert {:ok, decider} = Decider.transact(decider, fn _ -> 3 end)
-        assert {3, ^decider} = Decider.query(decider, & &1)
-      end
-
-      test "does not retry sync past max_sync_attempts setting" do
+      test "raises error if Store generates one" do
         stub(StoreMock, :load, fn _, _, _, _ -> {:ok, State.new(0, -1)} end)
 
         expect(StoreMock, :sync, 1, fn _, %{version: -1}, _, _ -> {:error, %RuntimeError{}} end)
 
-        decider = init(unquote(decider_mod), max_sync_attempts: 1)
+        decider = init(unquote(decider_mod))
 
-        assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~ "RuntimeError"
+        assert capture_crash(fn -> Decider.transact(decider, fn _ -> 3 end) end) =~ "RuntimeError"
       end
 
-      test "exceptions do not trigger sync retries as they are assumed to be unrecoverable" do
+      test "exceptions are not captured" do
         stub(StoreMock, :load, fn _, _, _, _ -> {:ok, State.new(0, -1)} end)
 
         expect(StoreMock, :sync, 1, fn _, %{version: -1}, _, _ -> raise RuntimeError end)
@@ -299,9 +243,7 @@ defmodule Equinox.Decider.CommonTest do
     |> Keyword.get(:stream_name, "Invoice-1")
     |> Decider.load(
       store: {StoreMock, allow_mocks_from: self()},
-      max_load_attempts: Keyword.get(attrs, :max_load_attempts, 1),
-      max_sync_attempts: Keyword.get(attrs, :max_sync_attempts, 1),
-      max_resync_attempts: Keyword.get(attrs, :max_resync_attempts, 0),
+      resync_policy: ResyncPolicy.max_attempts(Keyword.get(attrs, :max_resync_attempts, 0)),
       context: Keyword.get(attrs, :context, %{})
     )
   end

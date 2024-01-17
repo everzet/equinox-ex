@@ -58,8 +58,8 @@ defmodule Equinox.Telemetry do
     end)
   end
 
-  def span_load_state(decider, policy, attempt, fun) do
-    meta = %{decider: decider, policy: policy, attempt: attempt}
+  def span_load_state(decider, policy, fun) do
+    meta = %{decider: decider, policy: policy}
 
     :telemetry.span([:equinox, :decider, :load], meta, fn ->
       case fun.() do
@@ -73,8 +73,8 @@ defmodule Equinox.Telemetry do
     end)
   end
 
-  def span_sync_state(decider, outcome, attempt, fun) do
-    meta = %{decider: decider, outcome: outcome, attempt: attempt}
+  def span_sync_state(decider, outcome, fun) do
+    meta = %{decider: decider, outcome: outcome}
 
     :telemetry.span([:equinox, :decider, :sync], meta, fn ->
       case fun.() do

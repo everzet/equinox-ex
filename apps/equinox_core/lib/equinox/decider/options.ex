@@ -1,24 +1,17 @@
 defmodule Equinox.Decider.Options do
+  alias Equinox.Decider.ResyncPolicy
+
   @opts NimbleOptions.new!(
           store: [
             type: {:or, [:atom, {:tuple, [:atom, :keyword_list]}]},
             required: true,
             doc: "Persistence module that implements `Equinox.Store` behaviour"
           ],
-          max_load_attempts: [
-            type: :pos_integer,
-            default: 2,
-            doc: "How many times (in total) should we try to load the state on load errors"
-          ],
-          max_sync_attempts: [
-            type: :pos_integer,
-            default: 2,
-            doc: "How many times (in total) should we try to sync the state on write errors"
-          ],
-          max_resync_attempts: [
-            type: :non_neg_integer,
-            default: 1,
-            doc: "How many times should we try to resync the state on version conflict"
+          resync_policy: [
+            type: {:struct, ResyncPolicy},
+            default: ResyncPolicy.max_attempts(3),
+            doc:
+              "Retry / Attempts policy used to define policy for retrying based on the conflicting state when there's an Append conflict"
           ],
           context: [
             type: :map,
