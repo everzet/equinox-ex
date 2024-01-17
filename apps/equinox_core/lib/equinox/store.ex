@@ -1,5 +1,5 @@
 defmodule Equinox.Store do
-  alias Equinox.Store.{State, Outcome, StreamVersionConflict}
+  alias Equinox.Store.{State, LoadPolicy, Outcome, StreamVersionConflict}
 
   @type t :: module()
   @type stream_name :: String.t()
@@ -7,7 +7,7 @@ defmodule Equinox.Store do
   @type sync_context :: map()
   @type options :: keyword()
 
-  @callback load(stream_name(), nil | State.t(), options()) ::
+  @callback load(stream_name(), nil | State.t(), LoadPolicy.t(), options()) ::
               {:ok, State.t()}
               | {:error, Exception.t(), partial :: State.t()}
 

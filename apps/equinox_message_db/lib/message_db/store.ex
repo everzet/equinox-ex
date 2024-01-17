@@ -46,7 +46,7 @@ defmodule Equinox.MessageDb.Store do
 
         alias Equinox.MessageDb
 
-        def load(stream, state, opts) do
+        def load(stream, state, _policy, opts) do
           o = parse_options!(opts)
 
           MessageDb.Store.load_unoptimized(
@@ -114,7 +114,7 @@ defmodule Equinox.MessageDb.Store do
 
         alias Equinox.MessageDb
 
-        def load(stream, state, opts) do
+        def load(stream, state, _policy, opts) do
           o = parse_options!(opts)
 
           MessageDb.Store.load_latest_known_event(

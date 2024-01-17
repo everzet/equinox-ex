@@ -162,17 +162,19 @@ defmodule Equinox.Decider do
     end)
   end
 
-  defp load_state(%__MODULE__{state: state} = decider, attempt) do
-    Telemetry.span_load_state(decider, attempt, fn ->
+  defp load_state(%__MODULE__{state: state} = decider, policy, attempt) do
+    Telemetry.span_load_state(decider, policy, attempt, fn ->
       case decider.store do
-        {store, opts} -> store.load(decider.stream_name, state, opts)
+        {store, opts} -> store.load(decider.stream_name, state, policy, opts)
         store when is_atom(store) -> store.load(decider.stream_name, state, [])
       end
     end)
   end
 
   defp load_with_retry(%__MODULE__{} = decider, attempt \\ 1) do
-    with {:ok, loaded_state} <- load_state(decider, attempt) do
+    policy = Store.LoadPolicy.default()
+
+    with {:ok, loaded_state} <- load_state(decider, policy, attempt) do
       set_state(decider, loaded_state)
     else
       {:error, maybe_recoverable_exception, partially_loaded_state} ->
