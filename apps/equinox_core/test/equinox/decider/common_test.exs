@@ -7,8 +7,7 @@ defmodule Equinox.Decider.CommonTest do
   alias Equinox.Decider
   alias Equinox.Store.State
   alias Equinox.Decider.{Decision, LoadPolicy, ResyncPolicy}
-  alias Equinox.TestMocks.StoreMock
-
+  alias Equinox.StoreMock
 
   @stream "Invoice-1"
 
@@ -18,7 +17,7 @@ defmodule Equinox.Decider.CommonTest do
   Enum.each([Decider, Decider.Async], fn decider_mod ->
     describe "#{inspect(decider_mod)}.query/2" do
       test "loads state using store, passes it to a query function and returns its result" do
-        expect(StoreMock, :load, fn @stream, _, _ -> {:ok, State.new(:value, -1)} end)
+        expect(StoreMock, :load, fn @stream, _ -> {:ok, State.new(:value, -1)} end)
 
         decider = init(unquote(decider_mod), stream_name: @stream)
 
@@ -26,11 +25,11 @@ defmodule Equinox.Decider.CommonTest do
       end
 
       test "respects provided load policy" do
-        expect(StoreMock, :load, fn _, %{assumes_empty?: true}, _ ->
+        expect(StoreMock, :load, fn _, %{assumes_empty?: true} ->
           {:ok, State.new(:value, -1)}
         end)
 
-        expect(StoreMock, :load, fn _, %{assumes_empty?: false}, _ ->
+        expect(StoreMock, :load, fn _, %{assumes_empty?: false} ->
           {:ok, State.new(:value, -1)}
         end)
 
@@ -41,7 +40,7 @@ defmodule Equinox.Decider.CommonTest do
       end
 
       test "crashes if store returns error" do
-        expect(StoreMock, :load, fn _, _, _ -> {:error, %RuntimeError{}} end)
+        expect(StoreMock, :load, fn _, _ -> {:error, %RuntimeError{}} end)
 
         decider = init(unquote(decider_mod))
 
@@ -49,7 +48,7 @@ defmodule Equinox.Decider.CommonTest do
       end
 
       test "crashes if query function raises an exception" do
-        stub(StoreMock, :load, fn _, _, _ -> {:ok, State.new(:initial, -1)} end)
+        stub(StoreMock, :load, fn _, _ -> {:ok, State.new(:initial, -1)} end)
 
         decider = init(unquote(decider_mod))
 
@@ -60,9 +59,9 @@ defmodule Equinox.Decider.CommonTest do
 
     describe "#{inspect(decider_mod)}.transact/3" do
       test "executes decision callback and syncs the resulting outcome using provided store, codec and fold" do
-        expect(StoreMock, :load, fn @stream, _, _ -> {:ok, State.new(0, -1)} end)
+        expect(StoreMock, :load, fn @stream, _ -> {:ok, State.new(0, -1)} end)
 
-        expect(StoreMock, :sync, fn @stream, %{version: -1}, %{events: [2, 3]}, _ ->
+        expect(StoreMock, :sync, fn @stream, %{version: -1}, %{events: [2, 3]} ->
           {:ok, State.new(5, 1)}
         end)
 
@@ -72,11 +71,11 @@ defmodule Equinox.Decider.CommonTest do
       end
 
       test "respects provided load policy" do
-        stub(StoreMock, :sync, fn _, %{version: -1}, _, _ -> {:ok, State.new(5, 1)} end)
+        stub(StoreMock, :sync, fn _, %{version: -1}, _ -> {:ok, State.new(5, 1)} end)
 
-        expect(StoreMock, :load, fn _, %{assumes_empty?: true}, _ -> {:ok, State.new(0, -1)} end)
+        expect(StoreMock, :load, fn _, %{assumes_empty?: true} -> {:ok, State.new(0, -1)} end)
 
-        expect(StoreMock, :load, fn _, %{assumes_empty?: false}, _ -> {:ok, State.new(0, -1)} end)
+        expect(StoreMock, :load, fn _, %{assumes_empty?: false} -> {:ok, State.new(0, -1)} end)
 
         decider = init(unquote(decider_mod))
 
@@ -85,9 +84,9 @@ defmodule Equinox.Decider.CommonTest do
       end
 
       test "passes optional sync context all the way to the store via decision outcome" do
-        stub(StoreMock, :load, fn _, _, _ -> {:ok, State.new(0, -1)} end)
+        stub(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
 
-        expect(StoreMock, :sync, fn _, %{version: -1}, %{context: %{value: 2}}, _ ->
+        expect(StoreMock, :sync, fn _, %{version: -1}, %{context: %{value: 2}} ->
           {:ok, State.new(5, 1)}
         end)
 
@@ -97,9 +96,9 @@ defmodule Equinox.Decider.CommonTest do
       end
 
       test "keeps track of current state version during the sync process" do
-        stub(StoreMock, :load, fn _, _, _ -> {:ok, State.new(2, 100)} end)
+        stub(StoreMock, :load, fn _, _ -> {:ok, State.new(2, 100)} end)
 
-        expect(StoreMock, :sync, fn _, %{version: 100}, %{events: [3]}, _ ->
+        expect(StoreMock, :sync, fn _, %{version: 100}, %{events: [3]} ->
           {:ok, State.new(5, 1)}
         end)
 
@@ -112,7 +111,7 @@ defmodule Equinox.Decider.CommonTest do
         # Expectation:
 
         # 1. Initial load has no events, so state value is `0` and state version is `-1`
-        expect(StoreMock, :load, fn _, _, _ -> {:ok, State.new(0, -1)} end)
+        expect(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
         decider = init(unquote(decider_mod), resync: ResyncPolicy.max_attempts(1))
 
         # 2. In the meantime, someone else writes event `2` to the stream, stream version is now `0`
@@ -121,7 +120,7 @@ defmodule Equinox.Decider.CommonTest do
         decision = &(&1 + 3)
 
         # 4. We fail to sync the result of the decision due to the version conflict (-1 != 0)
-        expect(StoreMock, :sync, fn _, %{version: -1}, %{events: [3]}, _ ->
+        expect(StoreMock, :sync, fn _, %{version: -1}, %{events: [3]} ->
           {
             :conflict,
             # 5. We resync the stream and arrive at the new state value `2`, version `0`
@@ -132,7 +131,7 @@ defmodule Equinox.Decider.CommonTest do
         # 6. We redo the `+ 3` decision based on the new state value `2`, producing `2 + 3 = 5` event
 
         # 7. We successfully sync the result of the updated decision to the stream and produce new state
-        expect(StoreMock, :sync, fn _, %{version: 0}, %{events: [5]}, _ ->
+        expect(StoreMock, :sync, fn _, %{version: 0}, %{events: [5]} ->
           {:ok, State.new(7, 1)}
         end)
 
@@ -142,9 +141,9 @@ defmodule Equinox.Decider.CommonTest do
       end
 
       test "respects configured resync policy" do
-        stub(StoreMock, :load, fn _, _, _ -> {:ok, State.new(0, -1)} end)
+        stub(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
 
-        expect(StoreMock, :sync, 1, fn _, %{version: -1}, _, _ ->
+        expect(StoreMock, :sync, 1, fn _, %{version: -1}, _ ->
           {:conflict, fn -> raise RuntimeError end}
         end)
 
@@ -157,11 +156,11 @@ defmodule Equinox.Decider.CommonTest do
       end
 
       test "decision callbacks returning result and events propagate result after sync" do
-        expect(StoreMock, :load, fn _, _, _ -> {:ok, State.new(0, -1)} end)
-        expect(StoreMock, :sync, fn _, _, %{events: [1]}, _ -> {:ok, State.new(1, 0)} end)
+        expect(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
+        expect(StoreMock, :sync, fn _, _, %{events: [1]} -> {:ok, State.new(1, 0)} end)
 
-        expect(StoreMock, :load, fn _, _, _ -> {:ok, State.new(1, 0)} end)
-        expect(StoreMock, :sync, fn _, _, %{events: [2]}, _ -> {:ok, State.new(2, 1)} end)
+        expect(StoreMock, :load, fn _, _ -> {:ok, State.new(1, 0)} end)
+        expect(StoreMock, :sync, fn _, _, %{events: [2]} -> {:ok, State.new(2, 1)} end)
 
         decider = init(unquote(decider_mod))
 
@@ -170,9 +169,9 @@ defmodule Equinox.Decider.CommonTest do
       end
 
       test "decision callbacks returning nil or empty list do not trigger sync" do
-        stub(StoreMock, :load, fn _, _, _ -> {:ok, State.new(0, -1)} end)
+        stub(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
 
-        expect(StoreMock, :sync, 0, fn _, _, _, _ -> raise RuntimeError end)
+        expect(StoreMock, :sync, 0, fn _, _, _ -> raise RuntimeError end)
 
         decider = init(unquote(decider_mod))
 
@@ -181,9 +180,9 @@ defmodule Equinox.Decider.CommonTest do
       end
 
       test "decision callback errors are propagated back without triggering sync" do
-        stub(StoreMock, :load, fn _, _, _ -> {:ok, State.new(0, -1)} end)
+        stub(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
 
-        expect(StoreMock, :sync, 0, fn _, _, _, _ -> raise RuntimeError end)
+        expect(StoreMock, :sync, 0, fn _, _, _ -> raise RuntimeError end)
 
         decider = init(unquote(decider_mod))
 
@@ -192,9 +191,9 @@ defmodule Equinox.Decider.CommonTest do
       end
 
       test "crashes if store returns error" do
-        stub(StoreMock, :load, fn _, _, _ -> {:ok, State.new(0, -1)} end)
+        stub(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
 
-        expect(StoreMock, :sync, 1, fn _, %{version: -1}, _, _ -> {:error, %RuntimeError{}} end)
+        expect(StoreMock, :sync, 1, fn _, %{version: -1}, _ -> {:error, %RuntimeError{}} end)
 
         decider = init(unquote(decider_mod))
 
@@ -202,9 +201,9 @@ defmodule Equinox.Decider.CommonTest do
       end
 
       test "crashes if store raises an exception" do
-        stub(StoreMock, :load, fn _, _, _ -> {:ok, State.new(0, -1)} end)
+        stub(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
 
-        expect(StoreMock, :sync, 1, fn _, %{version: -1}, _, _ -> raise RuntimeError end)
+        expect(StoreMock, :sync, 1, fn _, %{version: -1}, _ -> raise RuntimeError end)
 
         decider = init(unquote(decider_mod), max_sync_attempts: 2)
 
@@ -212,9 +211,9 @@ defmodule Equinox.Decider.CommonTest do
       end
 
       test "crashes if decision raises an exception" do
-        stub(StoreMock, :load, fn _, _, _ -> {:ok, State.new(0, -1)} end)
+        stub(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
 
-        expect(StoreMock, :sync, 0, fn _, _, _, _ -> raise ArgumentError end)
+        expect(StoreMock, :sync, 0, fn _, _, _ -> raise ArgumentError end)
 
         decider = init(unquote(decider_mod))
 
@@ -251,7 +250,7 @@ defmodule Equinox.Decider.CommonTest do
     attrs
     |> Keyword.get(:stream_name, "Invoice-1")
     |> Decider.for_stream(
-      store: {StoreMock, allow_mocks_from: self()},
+      store: %StoreMock.Config{allow_from: self()},
       resync: Keyword.get(attrs, :resync, ResyncPolicy.max_attempts(0)),
       context: Keyword.get(attrs, :context, %{})
     )

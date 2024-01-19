@@ -7,7 +7,7 @@ defmodule Equinox.Decider.AsyncTest do
   alias Equinox.Decider
   alias Equinox.Decider.LifetimePolicy
   alias Equinox.Store.State
-  alias Equinox.TestMocks.StoreMock
+  alias Equinox.StoreMock
 
   setup :verify_on_exit!
 
@@ -54,9 +54,9 @@ defmodule Equinox.Decider.AsyncTest do
     async = put_in(async.decider.context, %{value: :a})
     async = put_in(async.context, %{value: :b})
 
-    stub(StoreMock, :load, fn _, _, _ -> {:ok, State.new(0, -1)} end)
+    stub(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
 
-    expect(StoreMock, :sync, fn _, state, %{context: %{value: :b}}, _ -> {:ok, state} end)
+    expect(StoreMock, :sync, fn _, state, %{context: %{value: :b}} -> {:ok, state} end)
 
     async = Decider.Async.start(async)
     Decider.transact(async, fn _ -> [1] end)
@@ -110,9 +110,9 @@ defmodule Equinox.Decider.AsyncTest do
       stream = "Invoice-1"
       async = init(stream_name: stream, registry: DeciderTestRegistry)
 
-      stub(StoreMock, :load, fn ^stream, _, _ -> {:ok, State.new(0, -1)} end)
+      stub(StoreMock, :load, fn ^stream, _ -> {:ok, State.new(0, -1)} end)
 
-      expect(StoreMock, :sync, fn ^stream, %{version: -1}, %{events: [2]}, _ ->
+      expect(StoreMock, :sync, fn ^stream, %{version: -1}, %{events: [2]} ->
         {:ok, State.new(2, 0)}
       end)
 
@@ -124,17 +124,17 @@ defmodule Equinox.Decider.AsyncTest do
 
       stream_1 = "Invoice-1"
       decider_1 = init(stream_name: stream_1, registry: DeciderTestRegistry)
-      expect(StoreMock, :load, fn ^stream_1, _, _ -> {:ok, State.new(0, -1)} end)
+      expect(StoreMock, :load, fn ^stream_1, _ -> {:ok, State.new(0, -1)} end)
 
-      expect(StoreMock, :sync, fn ^stream_1, %{version: -1}, %{events: [2]}, _ ->
+      expect(StoreMock, :sync, fn ^stream_1, %{version: -1}, %{events: [2]} ->
         {:ok, State.new(2, 0)}
       end)
 
       stream_2 = "Invoice-2"
       decider_2 = init(stream_name: stream_2, registry: DeciderTestRegistry)
-      expect(StoreMock, :load, fn ^stream_2, _, _ -> {:ok, State.new(0, -1)} end)
+      expect(StoreMock, :load, fn ^stream_2, _ -> {:ok, State.new(0, -1)} end)
 
-      expect(StoreMock, :sync, fn ^stream_2, %{version: -1}, %{events: [3]}, _ ->
+      expect(StoreMock, :sync, fn ^stream_2, %{version: -1}, %{events: [3]} ->
         {:ok, State.new(3, 0)}
       end)
 
@@ -146,7 +146,7 @@ defmodule Equinox.Decider.AsyncTest do
       stream = "Invoice-1"
       async = init(stream_name: stream, registry: :global)
 
-      stub(StoreMock, :load, fn _, _, _ -> {:ok, State.new(5, -1)} end)
+      stub(StoreMock, :load, fn _, _ -> {:ok, State.new(5, -1)} end)
 
       assert 5 = Decider.query(async, & &1)
 
@@ -158,7 +158,7 @@ defmodule Equinox.Decider.AsyncTest do
       stream = "Invoice-1"
       async = init(stream_name: stream, registry: {:global, "prefix-"})
 
-      stub(StoreMock, :load, fn _, _, _ -> {:ok, State.new(5, -1)} end)
+      stub(StoreMock, :load, fn _, _ -> {:ok, State.new(5, -1)} end)
 
       assert 5 = Decider.query(async, & &1)
 
@@ -169,7 +169,7 @@ defmodule Equinox.Decider.AsyncTest do
 
   describe "lifetime" do
     test "after_init lifetime controls how long process will wait for query or transact until shutting down" do
-      stub(StoreMock, :load, fn _, _, _ -> {:ok, State.new(0, -1)} end)
+      stub(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
 
       async = init(lifetime: %{LifetimePolicy.default() | after_init: 0})
       {:ok, pid} = Decider.Async.start_server(async)
@@ -183,7 +183,7 @@ defmodule Equinox.Decider.AsyncTest do
     end
 
     test "after_query lifetime controls how long process will wait for another query or transact until shutting down" do
-      stub(StoreMock, :load, fn _, _, _ -> {:ok, State.new(0, -1)} end)
+      stub(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
 
       async = init(lifetime: %{LifetimePolicy.default() | after_query: 0})
       a = Decider.Async.start(async)
@@ -199,7 +199,7 @@ defmodule Equinox.Decider.AsyncTest do
     end
 
     test "after_transact lifetime controls how long process will wait for another query or transact until shutting down" do
-      stub(StoreMock, :load, fn _, _, _ -> {:ok, State.new(0, -1)} end)
+      stub(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
 
       async = init(lifetime: %{LifetimePolicy.default() | after_transact: 0})
       async = Decider.Async.start(async)
@@ -232,7 +232,7 @@ defmodule Equinox.Decider.AsyncTest do
     attrs
     |> Keyword.get(:stream_name, "Invoice-1")
     |> Decider.async(
-      store: {StoreMock, allow_mocks_from: self()},
+      store: %StoreMock.Config{allow_from: self()},
       supervisor: Keyword.get(attrs, :supervisor, :disabled),
       registry: Keyword.get(attrs, :registry, :disabled),
       lifetime: Keyword.get(attrs, :lifetime, LifetimePolicy.default())

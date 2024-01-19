@@ -7,22 +7,14 @@ defmodule Equinox.Decider do
 
   @type t :: %__MODULE__{
           stream: Store.stream_name(),
-          store: {Store.t(), Store.options()},
+          store: Store.t(),
           resync: ResyncPolicy.t(),
           context: Store.EventsToSync.context()
         }
 
   @spec for_stream(String.t(), Options.t()) :: t()
   def for_stream(stream_name, opts) do
-    opts =
-      opts
-      |> Options.validate!()
-      |> Keyword.update!(:store, fn
-        {store, opts} -> {store, opts}
-        store -> {store, []}
-      end)
-
-    struct(__MODULE__, [{:stream, stream_name} | opts])
+    struct(__MODULE__, [{:stream, stream_name} | Options.validate!(opts)])
   end
 
   @spec async(t(), Async.Options.t()) :: Async.t()
@@ -90,8 +82,8 @@ defmodule Equinox.Decider do
     end
   end
 
-  defp load_state(%__MODULE__{store: {store, opts}, stream: stream}, policy) do
-    store.load(stream, policy, opts)
+  defp load_state(%__MODULE__{} = decider, policy) do
+    Store.load(decider.store, decider.stream, policy)
   end
 
   defp transact_with_resync(%__MODULE__{} = decider, state, decision, attempt \\ 0) do
@@ -118,9 +110,9 @@ defmodule Equinox.Decider do
     end
   end
 
-  defp sync_state(%__MODULE__{store: {store, opts}, stream: stream}, state, to_sync) do
+  defp sync_state(%__MODULE__{} = decider, state, to_sync) do
     if not Store.EventsToSync.empty?(to_sync) do
-      store.sync(stream, state, to_sync, opts)
+      Store.sync(decider.store, decider.stream, state, to_sync)
     else
       {:ok, state}
     end

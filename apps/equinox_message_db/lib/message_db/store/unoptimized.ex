@@ -1,4 +1,6 @@
 defmodule Equinox.MessageDb.Store.Unoptimized do
+  alias Equinox.MessageDb.Store.Unoptimized
+
   defmodule Options do
     @opts NimbleOptions.new!(
             conn: [
@@ -16,8 +18,8 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
               doc: "Database connection(s) to a leader and follower DBs"
             ],
             cache: [
-              type: :atom,
-              default: Equinox.Cache.NoCache,
+              type: :any,
+              default: Equinox.Cache.NoCache.config(),
               doc: "State caching module that implements `Equinox.Cache` behaviour"
             ],
             codec: [
@@ -40,90 +42,78 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
     @type t :: [o()]
     @type o :: unquote(NimbleOptions.option_typespec(@opts))
 
-    @spec docs() :: String.t()
     def docs, do: NimbleOptions.docs(@opts)
-
-    @spec validate!(t) :: t()
     def validate!(opts), do: NimbleOptions.validate!(opts, @opts)
+  end
 
-    @spec merge(t(), t()) :: t()
-    def merge(o1, o2), do: Keyword.merge(o1, o2)
+  @enforce_keys [:leader, :follower, :cache, :codec, :fold, :batch_size]
+  defstruct [:leader, :follower, :cache, :codec, :fold, :batch_size]
 
-    @spec conn(t(), :leader | :follower) :: module()
-    def conn(opts, type) do
-      case opts[:conn] do
-        list when is_list(list) -> list[type]
-        conn when is_atom(conn) -> conn
-        conn when is_struct(conn, DBConnection) -> conn
+  def config(opts) do
+    {conn, opts} = opts |> Options.validate!() |> Keyword.pop(:conn)
+
+    {leader, follower} =
+      case conn do
+        conn when is_list(conn) -> {conn[:leader], conn[:follower]}
+        conn -> {conn, conn}
+      end
+
+    struct(__MODULE__, [{:leader, leader}, {:follower, follower} | opts])
+  end
+
+  defimpl Equinox.Store do
+    alias Equinox.MessageDb.Store.Unoptimized
+
+    @impl Equinox.Store
+    def load(%Unoptimized{} = store, stream, policy) do
+      init = Equinox.Store.State.init(store.fold, -1)
+
+      if policy.assumes_empty? do
+        {:ok, init}
+      else
+        case Equinox.Cache.fetch(store.cache, stream, policy.max_cache_age) do
+          nil ->
+            conn = if(policy.requires_leader?, do: store.leader, else: store.follower)
+            do_load(conn, stream, init, store.cache, store.codec, store.fold, store.batch_size)
+
+          val ->
+            {:ok, val}
+        end
       end
     end
-  end
 
-  defmacro __using__(opts) do
-    quote do
-      @behaviour Equinox.Store
-      @opts unquote(opts)
-
-      alias Equinox.MessageDb.Store.Unoptimized
-
-      def sync(stream, state, to_sync, opts),
-        do: Unoptimized.sync(stream, state, to_sync, Options.merge(@opts, opts))
-
-      def load(stream, policy, opts),
-        do: Unoptimized.load(stream, policy, Options.merge(@opts, opts))
-
-      defoverridable Equinox.Store
+    @impl Equinox.Store
+    def sync(%Unoptimized{} = store, stream, state, to_sync) do
+      do_sync(
+        store.leader,
+        stream,
+        state,
+        to_sync,
+        store.cache,
+        store.codec,
+        store.fold,
+        store.batch_size
+      )
     end
-  end
 
-  @behaviour Equinox.Store
-
-  @impl Equinox.Store
-  def load(stream, policy, opts) do
-    opts = Options.validate!(opts)
-    init = Equinox.Store.State.init(opts[:fold], -1)
-
-    if policy.assumes_empty? do
-      {:ok, init}
-    else
-      case opts[:cache].fetch(stream, policy.max_cache_age) do
-        nil ->
-          opts
-          |> Options.conn(if(policy.requires_leader?, do: :leader, else: :follower))
-          |> do_load(stream, init, opts[:cache], opts[:codec], opts[:fold], opts[:batch_size])
-
-        val ->
-          {:ok, val}
+    defp do_load(conn, stream, state, cache, codec, fold, batch_size) do
+      case Equinox.MessageDb.Store.load_unoptimized(conn, stream, state, codec, fold, batch_size) do
+        {:ok, state} -> {:ok, tap(state, &Equinox.Cache.insert(cache, stream, &1))}
+        anything_else -> anything_else
       end
     end
-  end
 
-  @impl Equinox.Store
-  def sync(stream, state, to_sync, opts) do
-    opts = Options.validate!(opts)
+    defp do_sync(conn, stream, state, to_sync, cache, codec, fold, batch_size) do
+      case Equinox.MessageDb.Store.sync(conn, stream, state, to_sync, codec, fold) do
+        {:error, %Equinox.MessageDb.Writer.StreamVersionConflict{}} ->
+          {:conflict, fn -> do_load(conn, stream, state, cache, codec, fold, batch_size) end}
 
-    opts
-    |> Options.conn(:leader)
-    |> do_sync(stream, state, to_sync, opts[:cache], opts[:codec], opts[:fold], opts[:batch_size])
-  end
+        {:ok, new_state} ->
+          {:ok, tap(new_state, &Equinox.Cache.insert(cache, stream, &1))}
 
-  defp do_load(conn, stream, state, cache, codec, fold, batch_size) do
-    case Equinox.MessageDb.Store.load_unoptimized(conn, stream, state, codec, fold, batch_size) do
-      {:ok, state} -> {:ok, tap(state, &cache.insert(stream, &1))}
-      anything_else -> anything_else
-    end
-  end
-
-  defp do_sync(conn, stream, state, to_sync, cache, codec, fold, batch_size) do
-    case Equinox.MessageDb.Store.sync(conn, stream, state, to_sync, codec, fold) do
-      {:error, %Equinox.MessageDb.Writer.StreamVersionConflict{}} ->
-        {:conflict, fn -> do_load(conn, stream, state, cache, codec, fold, batch_size) end}
-
-      {:ok, new_state} ->
-        {:ok, tap(new_state, &cache.insert(stream, &1))}
-
-      anything_else ->
-        anything_else
+        anything_else ->
+          anything_else
+      end
     end
   end
 end

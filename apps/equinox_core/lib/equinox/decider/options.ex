@@ -3,9 +3,9 @@ defmodule Equinox.Decider.Options do
 
   @opts NimbleOptions.new!(
           store: [
-            type: {:or, [:atom, {:tuple, [:atom, :keyword_list]}]},
+            type: :any,
             required: true,
-            doc: "Persistence module that implements `Equinox.Store` behaviour"
+            doc: "An implementation of `Equinox.Store` protocol"
           ],
           resync: [
             type: {:struct, ResyncPolicy},

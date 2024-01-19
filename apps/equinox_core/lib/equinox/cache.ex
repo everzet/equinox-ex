@@ -1,9 +1,12 @@
-defmodule Equinox.Cache do
+defprotocol Equinox.Cache do
   alias Equinox.Store
 
-  @type t :: module()
-  @type max_age :: :infinity | non_neg_integer()
+  @type t :: any()
+  @type max_age :: non_neg_integer() | :infinity
 
-  @callback fetch(Store.stream_name(), max_age()) :: nil | State.t()
-  @callback insert(Store.stream_name(), State.t()) :: :ok
+  @spec fetch(t(), Store.stream_name(), max_age()) :: nil | Store.State.t()
+  def fetch(cache, stream_name, max_age)
+
+  @spec insert(t(), Store.stream_name(), Store.State.t()) :: :ok
+  def insert(cache, stream_name, state)
 end

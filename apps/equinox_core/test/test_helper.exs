@@ -9,8 +9,7 @@ defmodule DeciderProcessMocks do
   end
 
   def handle_event(_even_name, _event_measurements, %{decider: decider}, %{mocks: mocks}) do
-    with %{store: {_, store_options}} <- decider,
-         test_pid when is_pid(test_pid) <- store_options[:allow_mocks_from] do
+    with %{store: %Equinox.StoreMock.Config{allow_from: test_pid}} <- decider do
       for mock <- mocks do
         Mox.allow(mock, test_pid, self())
       end
@@ -20,7 +19,6 @@ defmodule DeciderProcessMocks do
   end
 end
 
-Mox.defmock(Equinox.TestMocks.StoreMock, for: Equinox.Store)
-DeciderProcessMocks.attach_mocks([Equinox.TestMocks.StoreMock])
+DeciderProcessMocks.attach_mocks([Equinox.StoreMock])
 
 ExUnit.start()

@@ -53,13 +53,6 @@ defmodule ExampleApp.Payers do
     def delete_payer(_), do: %PayerDeleted{}
   end
 
-  defmodule Store do
-    use Equinox.MessageDb.Store.LatestKnownEvent,
-      conn: ExampleApp.MessageDb,
-      codec: Events,
-      fold: Fold
-  end
-
   alias ExampleApp.CustomValidators
   alias Equinox.{UUID, Decider}
   alias Ecto.Changeset
@@ -101,7 +94,12 @@ defmodule ExampleApp.Payers do
     payer_id
     |> Stream.name()
     |> Decider.async(
-      store: Store,
+      store:
+        Equinox.MessageDb.Store.LatestKnownEvent.config(
+          conn: ExampleApp.MessageDb,
+          codec: Events,
+          fold: Fold
+        ),
       registry: :global,
       supervisor: ExampleApp.PayersSupervisor
     )
