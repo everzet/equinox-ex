@@ -34,6 +34,7 @@ defmodule Equinox.MessageDb.MixProject do
       {:nimble_options, "~> 1.1"},
       {:postgrex, "~> 0.17"},
       {:jason, "~> 1.0"},
+      {:mox, "~> 1.1", only: :test},
       {:benchee, "~> 1.2", only: :dev}
     ]
   end

@@ -132,9 +132,7 @@ defmodule ExampleApp.Invoices do
 
   defmodule Store do
     use Equinox.MessageDb.Store.Unoptimized,
-      fetch_conn: ExampleApp.MessageDb,
-      write_conn: ExampleApp.MessageDb,
-      batch_size: 500,
+      conn: ExampleApp.MessageDb,
       codec: Events,
       fold: Fold
   end

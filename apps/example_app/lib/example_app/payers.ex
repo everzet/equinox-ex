@@ -55,8 +55,7 @@ defmodule ExampleApp.Payers do
 
   defmodule Store do
     use Equinox.MessageDb.Store.LatestKnownEvent,
-      fetch_conn: ExampleApp.MessageDb,
-      write_conn: ExampleApp.MessageDb,
+      conn: ExampleApp.MessageDb,
       codec: Events,
       fold: Fold
   end

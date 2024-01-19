@@ -1,19 +1,18 @@
 defmodule Equinox.Decider.LoadPolicy do
-  defstruct max_age: 0, require_leader: false, assume_empty: false
+  alias Equinox.Cache
+
+  defstruct max_cache_age: 0, requires_leader?: false, assumes_empty?: false
 
   @type t :: %__MODULE__{
-          max_age: non_neg_integer() | :infinity,
-          require_leader: boolean(),
-          assume_empty: boolean()
+          max_cache_age: Cache.max_age(),
+          requires_leader?: boolean(),
+          assumes_empty?: boolean()
         }
 
   def default, do: require_load()
-  def require_load, do: %__MODULE__{max_age: 0}
-  def require_leader, do: %__MODULE__{max_age: 0, require_leader: true}
-  def any_cached_value, do: %__MODULE__{max_age: :inifinity}
-  def allow_stale(max_age), do: %__MODULE__{max_age: max_age}
-  def assume_empty, do: %__MODULE__{assume_empty: true}
-
-  def resync(%__MODULE__{max_age: 0, assume_empty: false} = load), do: load
-  def resync(%__MODULE__{}), do: require_load()
+  def require_load, do: %__MODULE__{max_cache_age: 0}
+  def require_leader, do: %__MODULE__{requires_leader?: true, max_cache_age: 0}
+  def any_cached_value, do: %__MODULE__{max_cache_age: :inifinity}
+  def allow_stale(max_cache_age), do: %__MODULE__{max_cache_age: max_cache_age}
+  def assume_empty, do: %__MODULE__{assumes_empty?: true}
 end

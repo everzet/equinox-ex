@@ -60,7 +60,7 @@ defmodule Equinox.MessageDb.StoreTest do
                Store.sync(conn, "num-1", @state, EventsToSync.new([2, 3, 4]), @codec, @fold)
 
       assert {:ok, %State{value: 9, version: 2}} =
-               Store.load_unoptimized(conn, "num-1", nil, @codec, @fold, 100)
+               Store.load_unoptimized(conn, "num-1", @state, @codec, @fold, 100)
     end
 
     test_in_isolation "loads from initial state", %{conn: conn} do
@@ -111,7 +111,7 @@ defmodule Equinox.MessageDb.StoreTest do
                Store.sync(conn, "num-1", @state, EventsToSync.new([2, 3, 4]), @codec, @fold)
 
       assert {:ok, %State{value: 4, version: 2}} =
-               Store.load_latest_known_event(conn, "num-1", nil, @codec, @fold)
+               Store.load_latest_known_event(conn, "num-1", @state, @codec, @fold)
     end
 
     test_in_isolation "loads from initial state", %{conn: conn} do

@@ -9,13 +9,14 @@ defmodule Equinox.Decider.CommonTest do
   alias Equinox.Decider.{Decision, LoadPolicy, ResyncPolicy}
   alias Equinox.TestMocks.StoreMock
 
+
+  @stream "Invoice-1"
+
   setup :verify_on_exit!
 
-  # We test all versions of decider with same test suite
+  # We test all versions of decider with the same test suite
   Enum.each([Decider, Decider.Async], fn decider_mod ->
     describe "#{inspect(decider_mod)}.query/2" do
-      @stream "Invoice-1"
-
       test "loads state using store, passes it to a query function and returns its result" do
         expect(StoreMock, :load, fn @stream, _, _ -> {:ok, State.new(:value, -1)} end)
 
@@ -25,11 +26,11 @@ defmodule Equinox.Decider.CommonTest do
       end
 
       test "respects provided load policy" do
-        expect(StoreMock, :load, fn _, %{assume_empty: true}, _ ->
+        expect(StoreMock, :load, fn _, %{assumes_empty?: true}, _ ->
           {:ok, State.new(:value, -1)}
         end)
 
-        expect(StoreMock, :load, fn _, %{assume_empty: false}, _ ->
+        expect(StoreMock, :load, fn _, %{assumes_empty?: false}, _ ->
           {:ok, State.new(:value, -1)}
         end)
 
@@ -58,8 +59,6 @@ defmodule Equinox.Decider.CommonTest do
     end
 
     describe "#{inspect(decider_mod)}.transact/3" do
-      @stream "Invoice-1"
-
       test "executes decision callback and syncs the resulting outcome using provided store, codec and fold" do
         expect(StoreMock, :load, fn @stream, _, _ -> {:ok, State.new(0, -1)} end)
 
@@ -75,9 +74,9 @@ defmodule Equinox.Decider.CommonTest do
       test "respects provided load policy" do
         stub(StoreMock, :sync, fn _, %{version: -1}, _, _ -> {:ok, State.new(5, 1)} end)
 
-        expect(StoreMock, :load, fn _, %{assume_empty: true}, _ -> {:ok, State.new(0, -1)} end)
+        expect(StoreMock, :load, fn _, %{assumes_empty?: true}, _ -> {:ok, State.new(0, -1)} end)
 
-        expect(StoreMock, :load, fn _, %{assume_empty: false}, _ -> {:ok, State.new(0, -1)} end)
+        expect(StoreMock, :load, fn _, %{assumes_empty?: false}, _ -> {:ok, State.new(0, -1)} end)
 
         decider = init(unquote(decider_mod))
 
