@@ -22,10 +22,10 @@ defmodule MessageDb.Store.CommonTest do
     def fold(vals, _), do: Enum.at(vals, -1)
   end
 
-  defp config(store_mod, opts) do
+  defp new(store_mod, opts) do
     [cache: %CacheMock.Config{}, codec: Codec, fold: Fold]
     |> Keyword.merge(opts)
-    |> store_mod.config()
+    |> store_mod.new()
   end
 
   setup :verify_on_exit!
@@ -43,60 +43,60 @@ defmodule MessageDb.Store.CommonTest do
 
     describe "#{inspect(store_mod)}.load/3" do
       test_in_isolation "uses the default connection if it's the only one", %{conn: conn} do
-        config(unquote(store_mod), conn: conn)
+        new(unquote(store_mod), conn: conn)
         |> Store.sync(@stream, @orig, EventsToSync.new([2, 3]))
 
         assert {:ok, %State{value: 3}} =
-                 config(unquote(store_mod), conn: conn)
+                 new(unquote(store_mod), conn: conn)
                  |> Store.load(@stream, LoadPolicy.default())
       end
 
       test_in_isolation "uses follower connection by default", %{conn: conn} do
-        config(unquote(store_mod), conn: conn)
+        new(unquote(store_mod), conn: conn)
         |> Store.sync(@stream, @orig, EventsToSync.new([2, 3]))
 
         assert {:ok, %State{value: 3}} =
-                 config(unquote(store_mod), conn: [follower: conn, leader: :"?"])
+                 new(unquote(store_mod), conn: [follower: conn, leader: :"?"])
                  |> Store.load(@stream, LoadPolicy.default())
       end
 
       test_in_isolation "uses leader connection if policy requires leader", %{conn: conn} do
-        config(unquote(store_mod), conn: conn)
+        new(unquote(store_mod), conn: conn)
         |> Store.sync(@stream, @orig, EventsToSync.new([2, 3]))
 
         assert {:ok, %State{value: 3}} =
-                 config(unquote(store_mod), conn: [leader: conn, follower: :"?"])
+                 new(unquote(store_mod), conn: [leader: conn, follower: :"?"])
                  |> Store.load(@stream, LoadPolicy.require_leader())
       end
 
       test_in_isolation "returns empty state without load if policy assumes empty", %{conn: conn} do
-        config(unquote(store_mod), conn: conn)
+        new(unquote(store_mod), conn: conn)
         |> Store.sync(@stream, @orig, EventsToSync.new([2, 3]))
 
         assert {:ok, %State{value: nil}} =
-                 config(unquote(store_mod), conn: conn)
+                 new(unquote(store_mod), conn: conn)
                  |> Store.load(@stream, LoadPolicy.assume_empty())
       end
 
       test_in_isolation "returns cached value without load if matches policy", %{conn: conn} do
-        config(unquote(store_mod), conn: conn)
+        new(unquote(store_mod), conn: conn)
         |> Store.sync(@stream, @orig, EventsToSync.new([2, 3]))
 
         expect(CacheMock, :fetch, fn @stream, 5_000 -> State.new(2, 0) end)
 
         assert {:ok, %State{value: 2}} =
-                 config(unquote(store_mod), conn: conn)
+                 new(unquote(store_mod), conn: conn)
                  |> Store.load(@stream, LoadPolicy.allow_stale(5_000))
       end
 
       test_in_isolation "always caches loaded value", %{conn: conn} do
-        config(unquote(store_mod), conn: conn)
+        new(unquote(store_mod), conn: conn)
         |> Store.sync(@stream, @orig, EventsToSync.new([2, 3]))
 
         expect(CacheMock, :insert, fn @stream, %State{value: 3} -> :ok end)
 
         assert {:ok, _} =
-                 config(unquote(store_mod), conn: conn)
+                 new(unquote(store_mod), conn: conn)
                  |> Store.load(@stream, LoadPolicy.default())
       end
     end
@@ -104,20 +104,20 @@ defmodule MessageDb.Store.CommonTest do
     describe "#{inspect(store_mod)}.sync/4" do
       test_in_isolation "always uses leader connection", %{conn: conn} do
         {:ok, state} =
-          config(unquote(store_mod), conn: conn)
+          new(unquote(store_mod), conn: conn)
           |> Store.sync(@stream, @orig, EventsToSync.new([2]))
 
         {:ok, %State{value: 3}} =
-          config(unquote(store_mod), conn: [leader: conn, follower: :"?"])
+          new(unquote(store_mod), conn: [leader: conn, follower: :"?"])
           |> Store.sync(@stream, state, EventsToSync.new([3]))
       end
 
       test_in_isolation "returns conflict with reload function to use upstream", %{conn: conn} do
-        config(unquote(store_mod), conn: conn)
+        new(unquote(store_mod), conn: conn)
         |> Store.sync(@stream, @orig, EventsToSync.new([2]))
 
         assert {:conflict, reload_fun} =
-                 config(unquote(store_mod), conn: conn)
+                 new(unquote(store_mod), conn: conn)
                  |> Store.sync(@stream, @orig, EventsToSync.new([3]))
 
         # we are inside a wrapper transaction that is now in a failed state -
@@ -131,7 +131,7 @@ defmodule MessageDb.Store.CommonTest do
         expect(CacheMock, :insert, fn @stream, %State{value: 2} -> :ok end)
 
         assert {:ok, _} =
-                 config(unquote(store_mod), conn: conn)
+                 new(unquote(store_mod), conn: conn)
                  |> Store.sync(@stream, @orig, EventsToSync.new([2]))
       end
     end

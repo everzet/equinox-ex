@@ -54,7 +54,7 @@ defmodule ExampleApp.Payers do
   end
 
   alias ExampleApp.CustomValidators
-  alias Equinox.{UUID, Decider}
+  alias Equinox.{UUID, Decider, MessageDb.Store}
   alias Ecto.Changeset
 
   def update_profile(payer_id, params) do
@@ -95,7 +95,7 @@ defmodule ExampleApp.Payers do
     |> Stream.name()
     |> Decider.async(
       store:
-        Equinox.MessageDb.Store.LatestKnownEvent.config(
+        Store.LatestKnownEvent.new(
           conn: ExampleApp.MessageDb,
           codec: Events,
           fold: Fold
