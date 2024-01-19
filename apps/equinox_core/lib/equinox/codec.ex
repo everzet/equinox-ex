@@ -4,6 +4,6 @@ defmodule Equinox.Codec do
   @type t :: module()
   @type context :: map()
 
-  @callback decode(TimelineEvent.t()) :: DomainEvent.t()
+  @callback decode(TimelineEvent.t()) :: nil | DomainEvent.t()
   @callback encode(DomainEvent.t(), context()) :: EventData.t()
 end

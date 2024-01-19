@@ -1,6 +1,5 @@
 defmodule Equinox.MessageDb.Writer do
   alias Equinox.Events.EventData
-  alias Equinox.Store.StreamVersionConflict
 
   @type stream_name :: String.t()
   @type expected_version :: -1 | non_neg_integer()
@@ -11,6 +10,18 @@ defmodule Equinox.MessageDb.Writer do
                  message_id: nil
 
     @type t :: %__MODULE__{message: String.t(), message_id: nil | String.t()}
+  end
+
+  defmodule StreamVersionConflict do
+    alias Equinox.Store
+
+    defexception [:message, :stream_name, :stream_version]
+
+    @type t :: %__MODULE__{
+            message: String.t(),
+            stream_name: nil | Store.stream_name(),
+            stream_version: nil | -1 | non_neg_integer()
+          }
   end
 
   @spec write_messages(Postgrex.conn(), stream_name(), list(EventData.t()), expected_version()) ::

@@ -12,14 +12,14 @@ defmodule ExampleAppHttp.App do
 
   get "/payers/:payer_id" do
     case Payers.read_profile(payer_id) do
-      {nil, _} -> send_resp(conn, 404, "not found")
-      {profile, _} -> json_resp(conn, 200, profile)
+      nil -> send_resp(conn, 404, "not found")
+      profile -> json_resp(conn, 200, profile)
     end
   end
 
   put "/payers/:payer_id" do
     case Payers.update_profile(payer_id, conn.body_params) do
-      {:ok, _} -> send_resp(conn, 204, "ok")
+      :ok -> send_resp(conn, 204, "ok")
       {:error, %Changeset{errors: errors}} -> json_resp(conn, 400, %{error: inspect(errors)})
       {:error, term} -> json_resp(conn, 400, %{error: inspect(term)})
     end
@@ -27,7 +27,7 @@ defmodule ExampleAppHttp.App do
 
   delete "/payers/:payer_id" do
     case Payers.delete_payer(payer_id) do
-      {:ok, _} -> send_resp(conn, 204, "ok")
+      :ok -> send_resp(conn, 204, "ok")
       {:error, term} -> json_resp(conn, 400, %{error: inspect(term)})
     end
   end
@@ -36,7 +36,7 @@ defmodule ExampleAppHttp.App do
     invoice_id = UUID.generate()
 
     case Invoices.raise(invoice_id, conn.body_params) do
-      {:ok, _} -> json_resp(conn, 201, %{id: invoice_id})
+      :ok -> json_resp(conn, 201, %{id: invoice_id})
       {:error, %Changeset{errors: errors}} -> json_resp(conn, 400, %{error: inspect(errors)})
       {:error, term} -> json_resp(conn, 400, %{error: inspect(term)})
     end
@@ -44,8 +44,8 @@ defmodule ExampleAppHttp.App do
 
   get "/invoices/:invoice_id" do
     case Invoices.read_invoice(invoice_id) do
-      {nil, _} -> send_resp(conn, 404, "not found")
-      {invoice, _} -> json_resp(conn, 200, invoice)
+      nil -> send_resp(conn, 404, "not found")
+      invoice -> json_resp(conn, 200, invoice)
     end
   end
 

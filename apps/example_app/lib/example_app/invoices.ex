@@ -196,9 +196,9 @@ defmodule ExampleApp.Invoices do
   defp resolve(invoice_id) do
     invoice_id
     |> Stream.name()
-    |> Decider.start(
+    |> Decider.async(
       store: Store,
-      lifetime: Equinox.Lifetime.StopAfter30sOfInactivity,
+      lifetime: Decider.LifetimePolicy.max_inactivity(:timer.seconds(5)),
       registry: ExampleApp.InvoicesRegistry,
       supervisor: ExampleApp.InvoicesSupervisor
     )

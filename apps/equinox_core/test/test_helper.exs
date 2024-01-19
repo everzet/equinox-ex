@@ -21,11 +21,6 @@ defmodule DeciderProcessMocks do
 end
 
 Mox.defmock(Equinox.TestMocks.StoreMock, for: Equinox.Store)
-Mox.defmock(Equinox.TestMocks.LifetimeMock, for: Equinox.Lifetime)
-
-DeciderProcessMocks.attach_mocks([
-  Equinox.TestMocks.StoreMock,
-  Equinox.TestMocks.LifetimeMock
-])
+DeciderProcessMocks.attach_mocks([Equinox.TestMocks.StoreMock])
 
 ExUnit.start()

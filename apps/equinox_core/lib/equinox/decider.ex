@@ -1,41 +1,28 @@
 defmodule Equinox.Decider do
-  alias Equinox.{Store, Telemetry}
-  alias Equinox.Decider.{Options, Decision, Query, ResyncPolicy, Async}
+  alias Equinox.Store
+  alias Equinox.Decider.{Options, Decision, Query, LoadPolicy, ResyncPolicy, Async}
 
-  @enforce_keys [:stream_name, :store]
-  defstruct [
-    :stream_name,
-    :store,
-    :context,
-    :state,
-    :resync_policy
-  ]
+  @enforce_keys [:stream, :store, :resync, :context]
+  defstruct [:stream, :store, :resync, :context]
 
   @type t :: %__MODULE__{
-          stream_name: Store.stream_name(),
-          store: Store.t() | {Store.t(), Store.options()},
-          state: nil | Store.State.t(),
-          context: Store.sync_context(),
-          resync_policy: ResyncPolicy.t()
+          stream: Store.stream_name(),
+          store: {Store.t(), Store.options()},
+          resync: ResyncPolicy.t(),
+          context: Store.EventsToSync.context()
         }
 
   @spec for_stream(String.t(), Options.t()) :: t()
   def for_stream(stream_name, opts) do
-    opts = Options.validate!(opts)
-    struct(__MODULE__, [{:stream_name, stream_name} | opts])
-  end
+    opts =
+      opts
+      |> Options.validate!()
+      |> Keyword.update!(:store, fn
+        {store, opts} -> {store, opts}
+        store -> {store, []}
+      end)
 
-  @spec loaded?(t()) :: boolean()
-  def loaded?(%__MODULE__{state: state}), do: Store.State.initialized?(state)
-
-  @spec load(t()) :: t()
-  def load(%__MODULE__{} = decider), do: do_load(decider)
-
-  @spec load(String.t(), Options.t()) :: t()
-  def load(stream_name, opts) when is_bitstring(stream_name) do
-    stream_name
-    |> for_stream(opts)
-    |> load()
+    struct(__MODULE__, [{:stream, stream_name} | opts])
   end
 
   @spec async(t(), Async.Options.t()) :: Async.t()
@@ -67,116 +54,75 @@ defmodule Equinox.Decider do
     |> start()
   end
 
-  @spec query(Async.t(), Query.t()) :: {term(), Async.t()}
-  def query(%Async{} = async, query), do: Async.query(async, query)
+  @spec query(Async.t(), Query.t(), LoadPolicy.t()) :: term()
+  @spec query(t(), Query.t(), LoadPolicy.t()) :: term()
+  def query(decider, query, load \\ LoadPolicy.default())
 
-  @spec query(t(), Query.t()) :: {term(), t()}
-  def query(%__MODULE__{} = decider, query), do: make_query(decider, query)
+  def query(%Async{} = async, query, load), do: Async.query(async, query, load)
 
-  defp make_query(%__MODULE__{} = decider, query) do
-    Telemetry.span_decider_query(decider, query, fn ->
-      decider = if(not loaded?(decider), do: load(decider), else: decider)
-      {Query.execute(query, decider.state.value), decider}
-    end)
+  def query(%__MODULE__{} = decider, query, load) do
+    with {:ok, loaded_state} <- load_state(decider, load) do
+      Query.execute(query, loaded_state.value)
+    else
+      {:error, unrecoverable_error} -> raise unrecoverable_error
+    end
   end
 
-  @spec transact(Async.t(), Decision.without_result()) ::
-          {:ok, Async.t()} | {:error, term(), Async.t()}
-  @spec transact(Async.t(), Decision.with_result()) ::
-          {:ok, term(), Async.t()} | {:error, term(), Async.t()}
-  def transact(%Async{} = async, decision), do: Async.transact(async, decision)
-
+  @spec transact(Async.t(), Decision.without_result(), LoadPolicy.t()) ::
+          :ok | {:error, term()}
+  @spec transact(Async.t(), Decision.with_result(), LoadPolicy.t()) ::
+          {:ok, term()} | {:error, term()}
   @spec transact(t(), Decision.without_result()) ::
-          {:ok, t()} | {:error, term(), t()}
+          :ok | {:error, term()}
   @spec transact(t(), Decision.with_result()) ::
-          {:ok, term(), t()} | {:error, term(), t()}
-  def transact(%__MODULE__{} = decider, decision), do: do_transact(decider, decision)
+          {:ok, term()} | {:error, term()}
+  def transact(decider, decision, load \\ LoadPolicy.default())
 
-  defp do_transact(%__MODULE__{} = decider, decision) do
-    Telemetry.span_decider_transact(decider, decision, fn ->
-      decider = if(not loaded?(decider), do: load(decider), else: decider)
-      transact_with_resync(decider, decision)
-    end)
-  end
+  def transact(%Async{} = async, decision, load), do: Async.transact(async, decision, load)
 
-  defp transact_with_resync(%__MODULE__{} = decider, decision, attempt \\ 0) do
-    with {:ok, result, outcome} <- make_decision(decider, decision, attempt),
-         {:ok, synced_decider} <- do_sync(decider, outcome) do
-      case result do
-        {:result, result} -> {:ok, result, synced_decider}
-        nil -> {:ok, synced_decider}
-      end
+  def transact(%__MODULE__{} = decider, decision, load) do
+    with {:ok, state} <- load_state(decider, load),
+         {:ok, result} <- transact_with_resync(decider, state, decision) do
+      result
     else
-      {:error, %Decision.Error{} = decision_error} ->
-        {:error, decision_error, decider}
-
-      {:error, %Store.StreamVersionConflict{} = version_conflict} ->
-        ResyncPolicy.validate!(decider.resync_policy, attempt, version_conflict)
-
-        decider
-        |> do_resync(attempt)
-        |> transact_with_resync(decision, attempt + 1)
+      {:error, %Decision.Error{} = decision_error} -> {:error, decision_error}
+      {:error, unrecoverable_error} -> raise unrecoverable_error
     end
   end
 
-  defp make_decision(%__MODULE__{} = decider, decision, attempt) do
-    Telemetry.span_transact_decision(decider, decision, attempt, fn ->
-      case Decision.execute(decision, decider.state.value) do
-        {:ok, events} ->
-          {:ok, nil, Store.Outcome.new(events, decider.context)}
-
-        {:ok, result, events} ->
-          {:ok, {:result, result}, Store.Outcome.new(events, decider.context)}
-
-        {:error, error} ->
-          {:error, error}
-      end
-    end)
+  defp load_state(%__MODULE__{store: {store, opts}, stream: stream}, policy) do
+    store.load(stream, policy, opts)
   end
 
-  defp do_resync(%__MODULE__{} = decider, attempt) do
-    Telemetry.span_transact_resync(decider, attempt, fn ->
-      do_load(decider)
-    end)
-  end
-
-  defp do_load(%__MODULE__{} = decider) do
-    policy = Store.LoadPolicy.default()
-
-    with {:ok, loaded_state} <- load_state(decider, policy) do
-      set_state(decider, loaded_state)
+  defp transact_with_resync(%__MODULE__{} = decider, state, decision, attempt \\ 0) do
+    with {:ok, result, to_sync} <- make_decision(state, decision, decider.context),
+         {:ok, _synced_state} <- sync_state(decider, state, to_sync) do
+      {:ok, result}
     else
-      {:error, error, _partial_fold} -> raise error
+      {:error, error} ->
+        {:error, error}
+
+      {:conflict, resync_fun} ->
+        with :ok <- ResyncPolicy.validate_attempt(decider.resync, attempt),
+             {:ok, resynced_state} <- resync_fun.() do
+          transact_with_resync(decider, resynced_state, decision, attempt + 1)
+        end
     end
   end
 
-  defp load_state(%__MODULE__{state: state} = decider, policy) do
-    Telemetry.span_load_state(decider, policy, fn ->
-      case decider.store do
-        {store, opts} -> store.load(decider.stream_name, state, policy, opts)
-        store when is_atom(store) -> store.load(decider.stream_name, state, [])
-      end
-    end)
-  end
-
-  defp do_sync(%__MODULE__{} = decider, outcome) do
-    with {:ok, synced_state} <- sync_state(decider, outcome) do
-      {:ok, set_state(decider, synced_state)}
-    else
-      {:error, %Store.StreamVersionConflict{} = error} -> {:error, error}
-      {:error, error} -> raise error
+  defp make_decision(state, decision, context) do
+    case Decision.execute(decision, state.value) do
+      {:ok, events} -> {:ok, :ok, Store.EventsToSync.new(events, context)}
+      {:ok, result, events} -> {:ok, {:ok, result}, Store.EventsToSync.new(events, context)}
+      {:error, error} -> {:error, error}
     end
   end
 
-  defp sync_state(%__MODULE__{state: state} = decider, outcome) do
-    Telemetry.span_sync_state(decider, outcome, fn ->
-      case {outcome.events, decider.store} do
-        {[], _} -> {:ok, state}
-        {_, {store, opts}} -> store.sync(decider.stream_name, state, outcome, opts)
-        {_, store} when is_atom(store) -> store.sync(decider.stream_name, state, outcome, [])
-      end
-    end)
+  defp sync_state(%__MODULE__{store: {store, opts}, stream: stream}, state, to_sync) do
+    if not Store.EventsToSync.empty?(to_sync) do
+      store.sync(stream, state, to_sync, opts)
+    else
+      {:ok, state}
+    end
   end
-
-  defp set_state(%__MODULE__{} = decider, new_state), do: %{decider | state: new_state}
 end

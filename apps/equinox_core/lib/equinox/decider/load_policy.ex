@@ -1,4 +1,4 @@
-defmodule Equinox.Store.LoadPolicy do
+defmodule Equinox.Decider.LoadPolicy do
   defstruct max_age: 0, require_leader: false, assume_empty: false
 
   @type t :: %__MODULE__{
@@ -9,8 +9,11 @@ defmodule Equinox.Store.LoadPolicy do
 
   def default, do: require_load()
   def require_load, do: %__MODULE__{max_age: 0}
-  def require_leader, do: %__MODULE__{require_leader: true}
+  def require_leader, do: %__MODULE__{max_age: 0, require_leader: true}
   def any_cached_value, do: %__MODULE__{max_age: :inifinity}
   def allow_stale(max_age), do: %__MODULE__{max_age: max_age}
   def assume_empty, do: %__MODULE__{assume_empty: true}
+
+  def resync(%__MODULE__{max_age: 0, assume_empty: false} = load), do: load
+  def resync(%__MODULE__{}), do: require_load()
 end

@@ -7,9 +7,9 @@ defmodule Equinox.Decider.Options do
             required: true,
             doc: "Persistence module that implements `Equinox.Store` behaviour"
           ],
-          resync_policy: [
+          resync: [
             type: {:struct, ResyncPolicy},
-            default: ResyncPolicy.max_attempts(3),
+            default: ResyncPolicy.default(),
             doc:
               "Retry / Attempts policy used to define policy for retrying based on the conflicting state when there's an Append conflict"
           ],

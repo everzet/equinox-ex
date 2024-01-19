@@ -101,9 +101,8 @@ defmodule ExampleApp.Payers do
   defp resolve(payer_id) do
     payer_id
     |> Stream.name()
-    |> Decider.start(
+    |> Decider.async(
       store: Store,
-      lifetime: Equinox.Lifetime.StopAfter30sOfInactivity,
       registry: :global,
       supervisor: ExampleApp.PayersSupervisor
     )

@@ -1,4 +1,6 @@
 defmodule Equinox.Decider.Async.Options do
+  alias Equinox.Decider.LifetimePolicy
+
   @opts NimbleOptions.new!(
           supervisor: [
             type: {:or, [:atom, {:in, [:disabled]}]},
@@ -18,9 +20,9 @@ defmodule Equinox.Decider.Async.Options do
             doc: "Name of the Registry (or :global) under which our decider should be listed"
           ],
           lifetime: [
-            type: :atom,
-            required: true,
-            doc: "Server lifetime spec module that implements `Equinox.Lifetime` behaviour"
+            type: {:struct, LifetimePolicy},
+            default: LifetimePolicy.default(),
+            doc: "Decider server lifetime policy"
           ],
           context: [
             type: :map,

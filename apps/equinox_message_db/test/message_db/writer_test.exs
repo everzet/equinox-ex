@@ -1,7 +1,6 @@
 defmodule Equinox.MessageDb.WriterTest do
   use Equinox.MessageDb.ConnCase
 
-  alias Equinox.Store
   alias Equinox.Events.EventData
   alias Equinox.MessageDb.Writer
 
@@ -40,7 +39,7 @@ defmodule Equinox.MessageDb.WriterTest do
     test_in_isolation "failing to write message with wrong expected_version", %{conn: conn} do
       message = EventData.new(type: "SomeMessageType")
 
-      assert {:error, %Store.StreamVersionConflict{stream_name: @stream, stream_version: -1}} =
+      assert {:error, %Writer.StreamVersionConflict{stream_name: @stream, stream_version: -1}} =
                Writer.write_messages(conn, @stream, [message], 999)
     end
   end
