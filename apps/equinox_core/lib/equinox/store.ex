@@ -5,12 +5,12 @@ defprotocol Equinox.Store do
   @type t :: any()
   @type stream_name :: String.t()
 
-  @spec load(t(), String.t(), LoadPolicy.t()) ::
+  @spec load(t(), stream_name(), LoadPolicy.t()) ::
           {:ok, State.t()}
           | {:error, Exception.t()}
   def load(store, stream_name, load_policy)
 
-  @spec sync(t(), String.t(), State.t(), EventsToSync.t()) ::
+  @spec sync(t(), stream_name(), State.t(), EventsToSync.t()) ::
           {:ok, State.t()}
           | {:error, Exception.t()}
           | {:conflict, resync :: (-> {:ok, State.t()} | {:error, Exception.t()})}

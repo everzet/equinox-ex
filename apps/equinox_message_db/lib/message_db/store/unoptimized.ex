@@ -73,8 +73,8 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
       else
         case Equinox.Cache.fetch(store.cache, stream, policy.max_cache_age) do
           nil ->
-            conn = if(policy.requires_leader?, do: store.leader, else: store.follower)
-            do_load(conn, stream, init, store.cache, store.codec, store.fold, store.batch_size)
+            if(policy.requires_leader?, do: store.leader, else: store.follower)
+            |> do_load(stream, init, store.cache, store.codec, store.fold, store.batch_size)
 
           val ->
             {:ok, val}
