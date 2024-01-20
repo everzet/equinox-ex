@@ -8,8 +8,10 @@ defmodule Equinox.Cache.LRU do
     def fetch(cache, stream_name, max_age) do
       case :ets.lookup(cache.name, stream_name) do
         [{_, _ttl_key, stream_state, insert_time}] ->
-          GenServer.cast(cache.name, {:touch, stream_name})
-          unless(age(insert_time) > max_age, do: stream_state)
+          unless insert_time + max_age > System.monotonic_time() do
+            GenServer.cast(cache.name, {:touch, stream_name})
+            stream_state
+          end
 
         [] ->
           nil
@@ -20,8 +22,6 @@ defmodule Equinox.Cache.LRU do
     def insert(cache, stream_name, state) do
       GenServer.call(cache.name, {:insert, stream_name, state})
     end
-
-    defp age(insert_time), do: System.monotonic_time() - insert_time
   end
 
   defmodule Options do
@@ -77,27 +77,27 @@ defmodule Equinox.Cache.LRU do
 
   @impl GenServer
   def handle_call({:insert, stream_name, stream_state}, _from, state) do
-    delete_ttl(state, stream_name)
-    ttl_key = insert_ttl(state, stream_name)
-    insert_cache(state, stream_name, ttl_key, stream_state)
+    insert_cache(state, stream_name, stream_state)
     evict_oversize(state)
     {:reply, :ok, state}
   end
 
   @impl GenServer
   def handle_cast({:touch, stream_name}, state) do
-    delete_ttl(state, stream_name)
-    ttl_key = insert_ttl(state, stream_name)
-    update_ttl_key(state, stream_name, ttl_key)
+    touch_cache(state, stream_name)
     {:noreply, state}
   end
 
-  defp insert_cache(%{cache_table: cache}, stream_name, ttl_key, stream_state) do
+  defp insert_cache(%{cache_table: cache} = state, stream_name, stream_state) do
+    delete_ttl(state, stream_name)
+    ttl_key = insert_ttl(state, stream_name)
     :ets.insert(cache, {stream_name, ttl_key, stream_state, System.monotonic_time()})
   end
 
-  defp update_ttl_key(%{cache_table: cache}, stream_name, ttl_key) do
-    :ets.update_element(cache, stream_name, [{2, ttl_key}])
+  defp touch_cache(%{cache_table: cache} = state, stream_name) do
+    delete_ttl(state, stream_name)
+    new_ttl_key = insert_ttl(state, stream_name)
+    :ets.update_element(cache, stream_name, [{2, new_ttl_key}])
   end
 
   defp insert_ttl(%{ttl_table: ttl_table}, stream_name) do
