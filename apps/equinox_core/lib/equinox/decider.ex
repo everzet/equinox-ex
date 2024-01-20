@@ -1,6 +1,6 @@
 defmodule Equinox.Decider do
   alias Equinox.{Store, Store.EventsToSync}
-  alias Equinox.Decider.{Options, Decision, Query, LoadPolicy, ResyncPolicy, Async}
+  alias Equinox.Decider.{Decision, Query, LoadPolicy, ResyncPolicy, Async}
 
   @enforce_keys [:stream, :store, :resync, :context]
   defstruct [:stream, :store, :resync, :context]
@@ -11,6 +11,36 @@ defmodule Equinox.Decider do
           resync: ResyncPolicy.t(),
           context: EventsToSync.context()
         }
+
+  defmodule Options do
+    alias Equinox.Decider.ResyncPolicy
+
+    @opts NimbleOptions.new!(
+            store: [
+              type: :any,
+              required: true,
+              doc: "An implementation of `Equinox.Store` protocol"
+            ],
+            resync: [
+              type: {:struct, ResyncPolicy},
+              default: ResyncPolicy.default(),
+              doc:
+                "Retry / Attempts policy used to define policy for retrying based on the conflicting state when there's an Append conflict"
+            ],
+            context: [
+              type: :map,
+              default: %{},
+              doc: "Optional context to pass along with events to `Equinox.Store.sync/4`"
+            ]
+          )
+
+    @type t :: [o()]
+    @type o :: unquote(NimbleOptions.option_typespec(@opts))
+
+    def validate!(opts), do: NimbleOptions.validate!(opts, @opts)
+    def docs, do: NimbleOptions.docs(@opts)
+    def keys, do: Keyword.keys(@opts.schema)
+  end
 
   @spec for_stream(String.t(), Options.t()) :: t()
   def for_stream(stream_name, opts) do

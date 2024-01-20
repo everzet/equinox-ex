@@ -3,7 +3,6 @@ defmodule Equinox.Decider.Async do
 
   alias Equinox.{Decider, Store, Telemetry}
   alias Equinox.Decider.{Query, Decision, LoadPolicy, LifetimePolicy}
-  alias Equinox.Decider.Async.Options
 
   @enforce_keys [:decider, :supervisor, :lifetime, :context]
   defstruct [:server, :decider, :supervisor, :lifetime, :context]
@@ -27,6 +26,47 @@ defmodule Equinox.Decider.Async do
   defmodule AsyncError do
     defexception [:message]
     @type t :: %__MODULE__{message: String.t()}
+  end
+
+  defmodule Options do
+    alias Equinox.Decider.LifetimePolicy
+
+    @opts NimbleOptions.new!(
+            supervisor: [
+              type: {:or, [:atom, {:in, [:disabled]}]},
+              required: true,
+              doc: "Name of the DynamicSupervisor which should parent the decider process"
+            ],
+            registry: [
+              type:
+                {:or,
+                 [
+                   :atom,
+                   {:in, [:global]},
+                   {:tuple, [{:in, [:global]}, :string]},
+                   {:in, [:disabled]}
+                 ]},
+              required: true,
+              doc: "Name of the Registry (or :global) under which our decider should be listed"
+            ],
+            lifetime: [
+              type: {:struct, LifetimePolicy},
+              default: LifetimePolicy.default(),
+              doc: "Decider server lifetime policy"
+            ],
+            context: [
+              type: :map,
+              default: %{},
+              doc: "Optional context to pass along with events to `Equinox.Store.sync/4`"
+            ]
+          )
+
+    @type t :: [o]
+    @type o :: unquote(NimbleOptions.option_typespec(@opts))
+
+    def validate!(opts), do: NimbleOptions.validate!(opts, @opts)
+    def docs, do: NimbleOptions.docs(@opts)
+    def keys, do: Keyword.keys(@opts.schema)
   end
 
   @spec wrap_decider(Decider.t(), Options.t()) :: t()
