@@ -19,7 +19,7 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
             ],
             cache: [
               type: :any,
-              default: Equinox.Cache.NoCache.new(),
+              default: Equinox.Cache.NoCache.config(),
               doc: "State caching module that implements `Equinox.Cache` behaviour"
             ],
             codec: [
@@ -49,7 +49,7 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
   @enforce_keys [:leader, :follower, :cache, :codec, :fold, :batch_size]
   defstruct [:leader, :follower, :cache, :codec, :fold, :batch_size]
 
-  def new(opts) do
+  def config(opts) do
     {conn, opts} = opts |> Options.validate!() |> Keyword.pop(:conn)
 
     {leader, follower} =

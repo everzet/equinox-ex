@@ -131,7 +131,7 @@ defmodule ExampleApp.Invoices do
   end
 
   alias ExampleApp.CustomValidators
-  alias Equinox.{UUID, Decider, Decider.LoadPolicy, MessageDb.Store}
+  alias Equinox.{UUID, Decider, Decider.LoadPolicy, MessageDb}
   alias Ecto.Changeset
 
   def raise(invoice_id, params) do
@@ -189,9 +189,9 @@ defmodule ExampleApp.Invoices do
     |> Stream.name()
     |> Decider.async(
       store:
-        Store.LatestKnownEvent.new(
-          conn: ExampleApp.MessageDb,
-          cache: Equinox.Cache.NoCache.new(),
+        MessageDb.Store.LatestKnownEvent.config(
+          conn: ExampleApp.MessageDbConn,
+          cache: Equinox.Cache.NoCache.config(),
           codec: Events,
           fold: Fold
         ),

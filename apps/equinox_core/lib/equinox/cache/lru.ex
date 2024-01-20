@@ -1,7 +1,7 @@
 defmodule Equinox.Cache.LRU do
   defstruct [:name]
 
-  def new(name), do: %__MODULE__{name: name}
+  def named(name), do: %__MODULE__{name: name}
 
   defimpl Equinox.Cache do
     @impl Equinox.Cache

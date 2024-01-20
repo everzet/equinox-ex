@@ -18,7 +18,7 @@ defmodule ExampleApp.Application do
       if Mix.env() != :test do
         children ++
           [
-            {Equinox.MessageDb.Connection, name: ExampleApp.MessageDb, pool_size: 20},
+            {Equinox.MessageDb.Connection, name: ExampleApp.MessageDbConn, pool_size: 20},
             {Bandit, plug: ExampleAppHttp.App, port: 6789}
           ]
       else

@@ -1,7 +1,7 @@
 defmodule Equinox.Cache.NoCache do
   defstruct []
 
-  def new, do: %__MODULE__{}
+  def config, do: %__MODULE__{}
 
   defimpl Equinox.Cache do
     @impl Equinox.Cache
