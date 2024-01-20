@@ -195,9 +195,9 @@ defmodule ExampleApp.Invoices do
           codec: Events,
           fold: Fold
         ),
-      lifetime: Decider.LifetimePolicy.max_inactivity(:timer.seconds(5)),
-      registry: ExampleApp.InvoicesRegistry,
-      supervisor: ExampleApp.InvoicesSupervisor
+      lifetime: Decider.LifetimePolicy.max_inactivity(:timer.seconds(1)),
+      registry: ExampleApp.Invoices.Registry,
+      supervisor: ExampleApp.Invoices.Supervisor
     )
   end
 end

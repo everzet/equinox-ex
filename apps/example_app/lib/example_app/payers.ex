@@ -97,11 +97,12 @@ defmodule ExampleApp.Payers do
       store:
         Store.LatestKnownEvent.new(
           conn: ExampleApp.MessageDb,
+          cache: Equinox.Cache.LRU.new(ExampleApp.Payers.Cache),
           codec: Events,
           fold: Fold
         ),
       registry: :global,
-      supervisor: ExampleApp.PayersSupervisor
+      supervisor: ExampleApp.Payers.Supervisor
     )
   end
 end

@@ -8,9 +8,10 @@ defmodule ExampleApp.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      {DynamicSupervisor, name: ExampleApp.InvoicesSupervisor, strategy: :one_for_one},
-      {DynamicSupervisor, name: ExampleApp.PayersSupervisor, strategy: :one_for_one},
-      {Registry, name: ExampleApp.InvoicesRegistry, keys: :unique}
+      {DynamicSupervisor, name: ExampleApp.Payers.Supervisor, strategy: :one_for_one},
+      {Equinox.Cache.LRU, name: ExampleApp.Payers.Cache, max_size: 100_000, max_memory: 10_000},
+      {DynamicSupervisor, name: ExampleApp.Invoices.Supervisor, strategy: :one_for_one},
+      {Registry, name: ExampleApp.Invoices.Registry, keys: :unique}
     ]
 
     children =
