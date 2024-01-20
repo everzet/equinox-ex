@@ -1,5 +1,5 @@
 defmodule Equinox.Decider do
-  alias Equinox.Store
+  alias Equinox.{Store, Store.EventsToSync}
   alias Equinox.Decider.{Options, Decision, Query, LoadPolicy, ResyncPolicy, Async}
 
   @enforce_keys [:stream, :store, :resync, :context]
@@ -9,7 +9,7 @@ defmodule Equinox.Decider do
           stream: Store.stream_name(),
           store: Store.t(),
           resync: ResyncPolicy.t(),
-          context: Store.EventsToSync.context()
+          context: EventsToSync.context()
         }
 
   @spec for_stream(String.t(), Options.t()) :: t()
@@ -45,6 +45,10 @@ defmodule Equinox.Decider do
     |> async(both_opts)
     |> start()
   end
+
+  @spec update_context(t(), (EventsToSync.context() -> EventsToSync.context())) :: t()
+  @spec update_context(Async.t(), (EventsToSync.context() -> EventsToSync.context())) :: Async.t()
+  def update_context(decider, update_fun), do: update_in(decider.context, update_fun)
 
   @spec query(Async.t(), Query.t(), LoadPolicy.t()) :: term()
   @spec query(t(), Query.t(), LoadPolicy.t()) :: term()
@@ -104,14 +108,14 @@ defmodule Equinox.Decider do
 
   defp make_decision(state, decision, context) do
     case Decision.execute(decision, state.value) do
-      {:ok, events} -> {:ok, :ok, Store.EventsToSync.new(events, context)}
-      {:ok, result, events} -> {:ok, {:ok, result}, Store.EventsToSync.new(events, context)}
+      {:ok, events} -> {:ok, :ok, EventsToSync.new(events, context)}
+      {:ok, result, events} -> {:ok, {:ok, result}, EventsToSync.new(events, context)}
       {:error, error} -> {:error, error}
     end
   end
 
   defp sync_state(%__MODULE__{} = decider, state, to_sync) do
-    if not Store.EventsToSync.empty?(to_sync) do
+    if not EventsToSync.empty?(to_sync) do
       Store.sync(decider.store, decider.stream, state, to_sync)
     else
       {:ok, state}

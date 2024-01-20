@@ -51,8 +51,8 @@ defmodule Equinox.Decider.AsyncTest do
 
   test "async context overrides initial decider context" do
     async = init()
-    async = put_in(async.decider.context, %{value: :a})
-    async = put_in(async.context, %{value: :b})
+    async = %{async | decider: Decider.update_context(async.decider, fn _ -> %{value: :a} end)}
+    async = Decider.update_context(async, fn _ -> %{value: :b} end)
 
     stub(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
 
