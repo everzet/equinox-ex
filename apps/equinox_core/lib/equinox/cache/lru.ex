@@ -114,10 +114,10 @@ defmodule Equinox.Cache.LRU do
   end
 
   defp evict_oversize(%{cache_table: cache, ttl_table: ttls} = settings) do
-    size = :ets.info(cache, :size)
-    memory = :ets.info(cache, :memory) * :erlang.system_info(:wordsize)
+    cache_size = :ets.info(cache, :size)
+    cache_memory = :ets.info(cache, :memory) * :erlang.system_info(:wordsize)
 
-    if size > settings.max_size or memory > settings.max_memory do
+    if cache_size > settings.max_size or cache_memory > settings.max_memory do
       oldest_ttl_key = :ets.first(ttls)
       [{_, oldest_cache_key}] = :ets.lookup(ttls, oldest_ttl_key)
       :ets.delete(ttls, oldest_ttl_key)
