@@ -41,14 +41,12 @@ defmodule Equinox.Cache.LRU do
     def get(cache, stream_name, max_age) do
       case :ets.lookup(cache.name, stream_name) do
         [{_, _ttl_key, stream_state, insert_time}] ->
-          cache_age = System.monotonic_time() - insert_time
-
-          case max_age do
-            :infinity ->
+          case {max_age, System.monotonic_time(:millisecond) - insert_time} do
+            {:infinity, _cache_age} ->
               GenServer.cast(cache.name, {:touch, stream_name})
               stream_state
 
-            max_age when cache_age <= max_age ->
+            {max_age, cache_age} when max_age > cache_age ->
               GenServer.cast(cache.name, {:touch, stream_name})
               stream_state
 
@@ -100,7 +98,7 @@ defmodule Equinox.Cache.LRU do
   defp insert_cache(%{cache_table: cache} = state, stream_name, stream_state) do
     delete_ttl(state, stream_name)
     ttl_key = insert_ttl(state, stream_name)
-    :ets.insert(cache, {stream_name, ttl_key, stream_state, System.monotonic_time()})
+    :ets.insert(cache, {stream_name, ttl_key, stream_state, System.monotonic_time(:millisecond)})
   end
 
   defp touch_cache(%{cache_table: cache} = state, stream_name) do

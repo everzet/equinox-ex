@@ -139,7 +139,7 @@ defmodule Equinox.Codec.EventStructsTest do
           stream_name: "testStream-42",
           position: 0,
           global_position: 0,
-          data: %{"val1" => 1, "val2" => 2, "val3" => 3},
+          data: %{"val1" => 1, "val2" => 2, "unknown_val3" => 3},
           metadata: nil,
           time: NaiveDateTime.utc_now()
         )
