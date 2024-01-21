@@ -1,12 +1,12 @@
 defmodule Equinox.Decider.ResyncPolicy do
-  @enforce_keys [:max_attempts]
-  defstruct [:max_attempts]
-  @type t :: %__MODULE__{max_attempts: non_neg_integer()}
-
   defmodule ExhaustedResyncAttempts do
     defexception [:message]
     @type t :: %__MODULE__{message: String.t()}
   end
+
+  @enforce_keys [:max_attempts]
+  defstruct [:max_attempts]
+  @type t :: %__MODULE__{max_attempts: non_neg_integer()}
 
   def default, do: max_attempts(3)
   def max_attempts(max_attempts), do: %__MODULE__{max_attempts: max_attempts}

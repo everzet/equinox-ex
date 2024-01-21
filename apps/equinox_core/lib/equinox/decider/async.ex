@@ -4,29 +4,6 @@ defmodule Equinox.Decider.Async do
   alias Equinox.{Decider, Telemetry}
   alias Equinox.Decider.{Query, Decision, LoadPolicy, LifetimePolicy}
 
-  @enforce_keys [:decider, :supervisor, :lifetime]
-  defstruct [:server, :decider, :supervisor, :lifetime]
-
-  @type t :: %__MODULE__{
-          server: server(),
-          decider: Decider.t(),
-          supervisor: supervisor(),
-          lifetime: LifetimePolicy.t()
-        }
-  @type server ::
-          nil
-          | pid()
-          | {:global, String.t()}
-          | {:via, Registry, {module(), String.t()}}
-  @type supervisor ::
-          :disabled
-          | module()
-
-  defmodule AsyncError do
-    defexception [:message]
-    @type t :: %__MODULE__{message: String.t()}
-  end
-
   defmodule Options do
     alias Equinox.Decider.LifetimePolicy
 
@@ -62,6 +39,29 @@ defmodule Equinox.Decider.Async do
     def docs, do: NimbleOptions.docs(@opts)
     def keys, do: Keyword.keys(@opts.schema)
   end
+
+  defmodule AsyncError do
+    defexception [:message]
+    @type t :: %__MODULE__{message: String.t()}
+  end
+
+  @enforce_keys [:decider, :supervisor, :lifetime]
+  defstruct [:server, :decider, :supervisor, :lifetime]
+
+  @type t :: %__MODULE__{
+          server: server(),
+          decider: Decider.t(),
+          supervisor: supervisor(),
+          lifetime: LifetimePolicy.t()
+        }
+  @type server ::
+          nil
+          | pid()
+          | {:global, String.t()}
+          | {:via, Registry, {module(), String.t()}}
+  @type supervisor ::
+          :disabled
+          | module()
 
   @spec wrap_decider(Decider.t(), Options.t()) :: t()
   def wrap_decider(%Decider{} = decider, opts) do

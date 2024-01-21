@@ -2,16 +2,6 @@ defmodule Equinox.Decider do
   alias Equinox.{Store, Telemetry}
   alias Equinox.Decider.{Decision, Query, LoadPolicy, ResyncPolicy, Async}
 
-  @enforce_keys [:stream, :store, :load, :resync]
-  defstruct [:stream, :store, :load, :resync]
-
-  @type t :: %__MODULE__{
-          stream: Store.stream_name(),
-          store: Store.t(),
-          load: LoadPolicy.t(),
-          resync: ResyncPolicy.t()
-        }
-
   defmodule Options do
     alias Equinox.Decider.ResyncPolicy
 
@@ -42,6 +32,16 @@ defmodule Equinox.Decider do
     def docs, do: NimbleOptions.docs(@opts)
     def keys, do: Keyword.keys(@opts.schema)
   end
+
+  @enforce_keys [:stream, :store, :load, :resync]
+  defstruct [:stream, :store, :load, :resync]
+
+  @type t :: %__MODULE__{
+          stream: Store.stream_name(),
+          store: Store.t(),
+          load: LoadPolicy.t(),
+          resync: ResyncPolicy.t()
+        }
 
   @spec for_stream(String.t(), Options.t()) :: t()
   def for_stream(stream_name, opts) do

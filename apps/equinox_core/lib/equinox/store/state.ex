@@ -2,6 +2,7 @@ defmodule Equinox.Store.State do
   alias Equinox.Fold
 
   defstruct [:value, :version]
+
   @type t :: %__MODULE__{value: Fold.result(), version: stream_version()}
   @type stream_version :: term()
 
