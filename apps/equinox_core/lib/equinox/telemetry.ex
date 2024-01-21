@@ -24,7 +24,7 @@ defmodule Equinox.Telemetry do
   def span_decider_transact(decider, decision, load, fun) do
     meta = %{decider: decider, decision_fun: decision, load_policy: load}
 
-    :telemetry.span([:equinox, :decider, :transact, :decision], meta, fn ->
+    :telemetry.span([:equinox, :decider, :transact], meta, fn ->
       case fun.() do
         {:error, err} -> {{:error, err}, Map.merge(meta, %{error: err})}
         res -> {res, Map.merge(meta, %{result: res})}
@@ -47,7 +47,7 @@ defmodule Equinox.Telemetry do
   def span_decider_transact_decision(decider, state, decision, fun) do
     meta = %{decider: decider, state: state, decision_fun: decision}
 
-    :telemetry.span([:equinox, :decider, :transact, :decision], meta, fn ->
+    :telemetry.span([:equinox, :decider, :transact, :attempt, :decision], meta, fn ->
       case fun.() do
         {:ok, res, evt} -> {{:ok, res, evt}, Map.merge(meta, %{result: res, events: evt})}
         {:error, error} -> {{:error, error}, Map.merge(meta, %{error: error})}
