@@ -9,12 +9,12 @@ defmodule Equinox.Telemetry do
   end
 
   def span_decider_query(decider, query, load, fun) do
-    meta = %{decider: decider, query_fun: query, load_policy: load}
+    meta = %{decider: decider, query: query, load_policy: load}
     :telemetry.span([:equinox, :decider, :query], meta, fn -> {fun.(), meta} end)
   end
 
   def span_decider_query_execute(decider, state, query, fun) do
-    meta = %{decider: decider, state: state, query_fun: query}
+    meta = %{decider: decider, state: state, query: query}
 
     :telemetry.span([:equinox, :decider, :query, :execute], meta, fn ->
       then(fun.(), &{&1, Map.put(meta, :result, &1)})
@@ -22,7 +22,7 @@ defmodule Equinox.Telemetry do
   end
 
   def span_decider_transact(decider, decision, load, fun) do
-    meta = %{decider: decider, decision_fun: decision, load_policy: load}
+    meta = %{decider: decider, decision: decision, load_policy: load}
 
     :telemetry.span([:equinox, :decider, :transact], meta, fn ->
       case fun.() do
@@ -33,7 +33,7 @@ defmodule Equinox.Telemetry do
   end
 
   def span_decider_transact_attempt(decider, state, decision, attempt, fun) do
-    meta = %{decider: decider, state: state, decision_fun: decision, attempt: attempt}
+    meta = %{decider: decider, state: state, decision: decision, attempt: attempt}
 
     :telemetry.span([:equinox, :decider, :transact, :attempt], meta, fn ->
       case fun.() do
@@ -45,7 +45,7 @@ defmodule Equinox.Telemetry do
   end
 
   def span_decider_transact_decision(decider, state, decision, fun) do
-    meta = %{decider: decider, state: state, decision_fun: decision}
+    meta = %{decider: decider, state: state, decision: decision}
 
     :telemetry.span([:equinox, :decider, :transact, :attempt, :decision], meta, fn ->
       case fun.() do
