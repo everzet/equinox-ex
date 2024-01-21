@@ -8,19 +8,17 @@ defmodule ExampleApp.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      {DynamicSupervisor, name: ExampleApp.Payers.Supervisor, strategy: :one_for_one},
-      {Equinox.Cache.LRU, name: ExampleApp.Payers.Cache, max_size: 100_000, max_memory: 10_000},
-      {DynamicSupervisor, name: ExampleApp.Invoices.Supervisor, strategy: :one_for_one},
-      {Registry, name: ExampleApp.Invoices.Registry, keys: :unique}
+      ExampleApp.Payers,
+      ExampleApp.Invoices
     ]
 
     children =
       if Mix.env() != :test do
-        children ++
-          [
-            {Equinox.MessageDb.Connection, name: ExampleApp.MessageDbConn, pool_size: 20},
-            {Bandit, plug: ExampleAppHttp.App, port: 6789}
-          ]
+        [
+          {Equinox.MessageDb.Connection, name: ExampleApp.MessageDbConn, pool_size: 20},
+          {Bandit, plug: ExampleAppHttp.App, port: 6789}
+          | children
+        ]
       else
         children
       end

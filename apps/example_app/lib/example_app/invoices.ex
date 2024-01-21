@@ -130,9 +130,23 @@ defmodule ExampleApp.Invoices do
     end
   end
 
+  use Supervisor
+
   alias ExampleApp.CustomValidators
   alias Equinox.{UUID, Decider, Decider.LoadPolicy, MessageDb}
   alias Ecto.Changeset
+
+  def start_link(init_arg), do: Supervisor.start_link(__MODULE__, init_arg, name: __MODULE__)
+
+  @impl true
+  def init(_arg) do
+    children = [
+      {Registry, name: ExampleApp.Invoices.Registry, keys: :unique},
+      {DynamicSupervisor, name: ExampleApp.Invoices.Supervisor, strategy: :one_for_one}
+    ]
+
+    Supervisor.init(children, strategy: :rest_for_one)
+  end
 
   def raise(invoice_id, params) do
     with changeset <- invoice_change(params),

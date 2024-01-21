@@ -53,9 +53,23 @@ defmodule ExampleApp.Payers do
     def delete_payer(_), do: %PayerDeleted{}
   end
 
+  use Supervisor
+
   alias ExampleApp.CustomValidators
   alias Equinox.{UUID, Decider, MessageDb}
   alias Ecto.Changeset
+
+  def start_link(init_arg), do: Supervisor.start_link(__MODULE__, init_arg, name: __MODULE__)
+
+  @impl Supervisor
+  def init(_arg) do
+    children = [
+      {DynamicSupervisor, name: ExampleApp.Payers.Supervisor, strategy: :one_for_one},
+      {Equinox.Cache.LRU, name: ExampleApp.Payers.Cache, max_size: 100_000, max_memory: 10_000}
+    ]
+
+    Supervisor.init(children, strategy: :rest_for_one)
+  end
 
   def update_profile(payer_id, params) do
     with changeset <- profile_change(params),
