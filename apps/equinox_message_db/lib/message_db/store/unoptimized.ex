@@ -71,7 +71,7 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
       if policy.assumes_empty? do
         {:ok, init}
       else
-        case Equinox.Cache.fetch(store.cache, stream, policy.max_cache_age) do
+        case Equinox.Cache.get(store.cache, stream, policy.max_cache_age) do
           nil ->
             if(policy.requires_leader?, do: store.leader, else: store.follower)
             |> do_load(stream, init, store.cache, store.codec, store.fold, store.batch_size)
@@ -98,7 +98,7 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
 
     defp do_load(conn, stream, state, cache, codec, fold, batch_size) do
       case Equinox.MessageDb.Store.load_unoptimized(conn, stream, state, codec, fold, batch_size) do
-        {:ok, state} -> {:ok, tap(state, &Equinox.Cache.insert(cache, stream, &1))}
+        {:ok, state} -> {:ok, tap(state, &Equinox.Cache.put(cache, stream, &1))}
         anything_else -> anything_else
       end
     end
@@ -109,7 +109,7 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
           {:conflict, fn -> do_load(conn, stream, state, cache, codec, fold, batch_size) end}
 
         {:ok, new_state} ->
-          {:ok, tap(new_state, &Equinox.Cache.insert(cache, stream, &1))}
+          {:ok, tap(new_state, &Equinox.Cache.put(cache, stream, &1))}
 
         anything_else ->
           anything_else

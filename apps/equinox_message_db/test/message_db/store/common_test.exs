@@ -36,8 +36,8 @@ defmodule MessageDb.Store.CommonTest do
     @orig State.init(Fold, -1)
 
     setup do
-      stub(CacheMock, :fetch, fn @stream, 0 -> nil end)
-      stub(CacheMock, :insert, fn @stream, %State{} -> :ok end)
+      stub(CacheMock, :get, fn @stream, 0 -> nil end)
+      stub(CacheMock, :put, fn @stream, %State{} -> :ok end)
       :ok
     end
 
@@ -82,7 +82,7 @@ defmodule MessageDb.Store.CommonTest do
         new(unquote(store_mod), conn: conn)
         |> Store.sync(@stream, @orig, EventsToSync.new([2, 3]))
 
-        expect(CacheMock, :fetch, fn @stream, 5_000 -> State.new(2, 0) end)
+        expect(CacheMock, :get, fn @stream, 5_000 -> State.new(2, 0) end)
 
         assert {:ok, %State{value: 2}} =
                  new(unquote(store_mod), conn: conn)
@@ -93,7 +93,7 @@ defmodule MessageDb.Store.CommonTest do
         new(unquote(store_mod), conn: conn)
         |> Store.sync(@stream, @orig, EventsToSync.new([2, 3]))
 
-        expect(CacheMock, :insert, fn @stream, %State{value: 3} -> :ok end)
+        expect(CacheMock, :put, fn @stream, %State{value: 3} -> :ok end)
 
         assert {:ok, _} =
                  new(unquote(store_mod), conn: conn)
@@ -128,7 +128,7 @@ defmodule MessageDb.Store.CommonTest do
       end
 
       test_in_isolation "stores synced state in cache", %{conn: conn} do
-        expect(CacheMock, :insert, fn @stream, %State{value: 2} -> :ok end)
+        expect(CacheMock, :put, fn @stream, %State{value: 2} -> :ok end)
 
         assert {:ok, _} =
                  new(unquote(store_mod), conn: conn)

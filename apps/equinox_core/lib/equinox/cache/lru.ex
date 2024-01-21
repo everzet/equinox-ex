@@ -5,7 +5,7 @@ defmodule Equinox.Cache.LRU do
 
   defimpl Equinox.Cache do
     @impl Equinox.Cache
-    def fetch(cache, stream_name, max_age) do
+    def get(cache, stream_name, max_age) do
       case :ets.lookup(cache.name, stream_name) do
         [{_, _ttl_key, stream_state, insert_time}] ->
           cache_age = System.monotonic_time() - insert_time
@@ -29,7 +29,7 @@ defmodule Equinox.Cache.LRU do
     end
 
     @impl Equinox.Cache
-    def insert(cache, stream_name, state) do
+    def put(cache, stream_name, state) do
       GenServer.call(cache.name, {:insert, stream_name, state})
     end
   end

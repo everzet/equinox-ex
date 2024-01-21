@@ -1,12 +1,12 @@
 defmodule Equinox.CacheMock.Config do
   defstruct mod: Equinox.CacheMock
 
-  @callback fetch(any(), any()) :: any()
-  @callback insert(any(), any()) :: any()
+  @callback get(any(), any()) :: any()
+  @callback put(any(), any()) :: any()
 
   defimpl Equinox.Cache do
-    def fetch(cache, stream, max_age), do: cache.mod.fetch(stream, max_age)
-    def insert(cache, stream, state), do: cache.mod.insert(stream, state)
+    def get(cache, stream, max_age), do: cache.mod.get(stream, max_age)
+    def put(cache, stream, state), do: cache.mod.put(stream, state)
   end
 end
 
