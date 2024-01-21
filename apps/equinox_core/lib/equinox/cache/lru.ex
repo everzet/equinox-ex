@@ -25,7 +25,6 @@ defmodule Equinox.Cache.LRU do
 
     def validate!(opts), do: NimbleOptions.validate!(opts, @opts)
     def docs, do: NimbleOptions.docs(@opts)
-    def keys, do: Keyword.keys(@opts.schema)
   end
 
   defstruct [:name]
