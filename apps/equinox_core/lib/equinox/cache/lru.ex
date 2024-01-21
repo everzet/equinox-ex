@@ -80,7 +80,7 @@ defmodule Equinox.Cache.LRU do
     }
 
     :ets.new(state.ttl_table, [:named_table, :ordered_set, :private])
-    :ets.new(state.cache_table, [:named_table, :set, :public])
+    :ets.new(state.cache_table, [:named_table, :set, :public, {:read_concurrency, true}])
 
     {:ok, state}
   end
