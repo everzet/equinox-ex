@@ -89,7 +89,7 @@ defmodule Equinox.Decider do
   def query(%__MODULE__{} = decider, query, load_policy) do
     Telemetry.span_decider_query(decider, query, load_policy, fn ->
       with {:ok, state} <- load_state(decider, load_policy || decider.load) do
-        make_query(decider, state, query)
+        execute_query(decider, state, query)
       else
         {:error, unrecoverable_error} -> raise unrecoverable_error
       end
@@ -126,7 +126,7 @@ defmodule Equinox.Decider do
     end)
   end
 
-  defp make_query(%__MODULE__{} = decider, state, query) do
+  defp execute_query(%__MODULE__{} = decider, state, query) do
     Telemetry.span_decider_query_execute(decider, state, query, fn ->
       Query.execute(query, state.value)
     end)
@@ -150,14 +150,14 @@ defmodule Equinox.Decider do
 
   defp attempt_to_transact(%__MODULE__{} = decider, state, decision, attempt) do
     Telemetry.span_decider_transact_attempt(decider, state, decision, attempt, fn ->
-      with {:ok, result, events} <- make_decision(decider, state, decision),
+      with {:ok, result, events} <- execute_decision(decider, state, decision),
            {:ok, _synced_state} <- sync_state(decider, state, events) do
         {:ok, result}
       end
     end)
   end
 
-  defp make_decision(%__MODULE__{} = decider, state, decision) do
+  defp execute_decision(%__MODULE__{} = decider, state, decision) do
     Telemetry.span_decider_transact_decision(decider, state, decision, fn ->
       Decision.execute(decision, state.value)
     end)
