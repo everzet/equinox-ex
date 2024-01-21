@@ -77,15 +77,16 @@ defmodule Equinox.Decider do
     |> start()
   end
 
-  @spec query(Async.t(), Query.t(), nil | LoadPolicy.t()) :: term()
-  @spec query(t(), Query.t(), nil | LoadPolicy.t()) :: term()
-  def query(decider, query, load \\ nil)
+  @spec query(t() | Async.t(), Query.t(), nil | LoadPolicy.t()) :: Query.result()
+  def query(decider, query, load_policy \\ nil)
 
-  def query(%Async{} = async, query, load), do: Async.query(async, query, load)
+  def query(%Async{} = async, query, load_policy) do
+    Async.query(async, query, load_policy)
+  end
 
-  def query(%__MODULE__{} = decider, query, load) do
-    Telemetry.span_decider_query(decider, query, load, fn ->
-      with {:ok, state} <- load_state(decider, load || decider.load) do
+  def query(%__MODULE__{} = decider, query, load_policy) do
+    Telemetry.span_decider_query(decider, query, load_policy, fn ->
+      with {:ok, state} <- load_state(decider, load_policy || decider.load) do
         make_query(decider, state, query)
       else
         {:error, unrecoverable_error} -> raise unrecoverable_error
@@ -93,21 +94,21 @@ defmodule Equinox.Decider do
     end)
   end
 
-  @spec transact(Async.t(), Decision.without_result(), nil | LoadPolicy.t()) ::
-          :ok | {:error, term()}
-  @spec transact(Async.t(), Decision.with_result(), nil | LoadPolicy.t()) ::
-          {:ok, term()} | {:error, term()}
-  @spec transact(t(), Decision.without_result(), nil | LoadPolicy.t()) ::
-          :ok | {:error, term()}
-  @spec transact(t(), Decision.with_result(), nil | LoadPolicy.t()) ::
-          {:ok, term()} | {:error, term()}
-  def transact(decider, decision, load \\ nil)
+  @spec transact(t() | Async.t(), Decision.without_result(), nil | LoadPolicy.t()) ::
+          :ok
+          | {:error, Decision.Error.t()}
+  @spec transact(t() | Async.t(), Decision.with_result(), nil | LoadPolicy.t()) ::
+          {:ok, Decision.result()}
+          | {:error, Decision.Error.t()}
+  def transact(decider, decision, load_policy \\ nil)
 
-  def transact(%Async{} = async, decision, load), do: Async.transact(async, decision, load)
+  def transact(%Async{} = async, decision, load_policy) do
+    Async.transact(async, decision, load_policy)
+  end
 
-  def transact(%__MODULE__{} = decider, decision, load) do
-    Telemetry.span_decider_transact(decider, decision, load, fn ->
-      with {:ok, state} <- load_state(decider, load || decider.load),
+  def transact(%__MODULE__{} = decider, decision, load_policy) do
+    Telemetry.span_decider_transact(decider, decision, load_policy, fn ->
+      with {:ok, state} <- load_state(decider, load_policy || decider.load),
            {:ok, result} <- transact_with_resync(decider, state, decision) do
         result
       else
@@ -120,6 +121,12 @@ defmodule Equinox.Decider do
   defp load_state(%__MODULE__{} = decider, policy) do
     Telemetry.span_decider_load(decider, policy, fn ->
       Store.load(decider.store, decider.stream, policy)
+    end)
+  end
+
+  defp make_query(%__MODULE__{} = decider, state, query) do
+    Telemetry.span_decider_query_execute(decider, state, query, fn ->
+      Query.execute(query, state.value)
     end)
   end
 
@@ -145,12 +152,6 @@ defmodule Equinox.Decider do
            {:ok, _synced_state} <- sync_state(decider, state, events) do
         {:ok, result}
       end
-    end)
-  end
-
-  defp make_query(%__MODULE__{} = decider, state, query) do
-    Telemetry.span_decider_query_execute(decider, state, query, fn ->
-      Query.execute(query, state.value)
     end)
   end
 

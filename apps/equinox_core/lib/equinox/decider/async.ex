@@ -114,20 +114,22 @@ defmodule Equinox.Decider.Async do
     DynamicSupervisor.start_child(supervisor, {__MODULE__, async})
   end
 
-  @spec query(t(), Query.t(), LoadPolicy.t(), timeout()) :: term()
-  def query(async, query, load \\ LoadPolicy.default(), timeout \\ :timer.seconds(5)) do
+  @spec query(t(), Query.t(), nil | LoadPolicy.t(), timeout()) :: Query.result()
+  def query(async, query, load_policy \\ nil, operation_timeout \\ :timer.seconds(5)) do
     ensure_async_started(async, fn async ->
-      GenServer.call(async.server, {:query, query, load}, timeout)
+      GenServer.call(async.server, {:query, query, load_policy}, operation_timeout)
     end)
   end
 
-  @spec transact(t(), Decision.without_result(), LoadPolicy.t(), timeout()) ::
-          :ok | {:error, term()}
-  @spec transact(t(), Decision.with_result(), LoadPolicy.t(), timeout()) ::
-          {:ok, term()} | {:error, term()}
-  def transact(async, decision, load \\ LoadPolicy.default(), timeout \\ :timer.seconds(5)) do
+  @spec transact(t(), Decision.without_result(), nil | LoadPolicy.t(), timeout()) ::
+          :ok
+          | {:error, Decision.Error.t()}
+  @spec transact(t(), Decision.with_result(), nil | LoadPolicy.t(), timeout()) ::
+          {:ok, Decision.result()}
+          | {:error, Decision.Error.t()}
+  def transact(async, decision, load_policy \\ nil, operation_timeout \\ :timer.seconds(5)) do
     ensure_async_started(async, fn async ->
-      GenServer.call(async.server, {:transact, decision, load}, timeout)
+      GenServer.call(async.server, {:transact, decision, load_policy}, operation_timeout)
     end)
   end
 

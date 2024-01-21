@@ -35,10 +35,7 @@ defmodule Equinox.Decider.CommonTest do
       end
 
       test "respects load policy overrides" do
-        decider = init(unquote(decider_mod))
-
-        expect(StoreMock, :load, fn _, %{assumes_empty?: true} -> {:ok, State.new(:val, -1)} end)
-        assert :val = Decider.query(decider, & &1, LoadPolicy.assume_empty())
+        decider = init(unquote(decider_mod), load: LoadPolicy.assume_empty())
 
         expect(StoreMock, :load, fn _, %{assumes_empty?: false} -> {:ok, State.new(:val, -1)} end)
         assert :val = Decider.query(decider, & &1, LoadPolicy.require_load())
@@ -89,10 +86,7 @@ defmodule Equinox.Decider.CommonTest do
 
       test "respects load policy overrides" do
         stub(StoreMock, :sync, fn _, %{version: -1}, _ -> {:ok, State.new(5, 1)} end)
-        decider = init(unquote(decider_mod))
-
-        expect(StoreMock, :load, fn _, %{assumes_empty?: true} -> {:ok, State.new(0, -1)} end)
-        assert :ok = Decider.transact(decider, fn 0 -> [2] end, LoadPolicy.assume_empty())
+        decider = init(unquote(decider_mod), load: LoadPolicy.assume_empty())
 
         expect(StoreMock, :load, fn _, %{assumes_empty?: false} -> {:ok, State.new(0, -1)} end)
         assert :ok = Decider.transact(decider, fn 0 -> [2] end, LoadPolicy.require_load())

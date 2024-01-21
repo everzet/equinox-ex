@@ -1,24 +1,23 @@
 defmodule Equinox.Decider.Decision do
-  alias Equinox.Fold
-  alias Equinox.Events.DomainEvent
-  alias Equinox.Store.EventsToSync
+  alias Equinox.{Fold, Events.DomainEvent, Store.EventsToSync}
 
-  @type without_result_fun ::
+  @type fun_without_result ::
           (Fold.result() ->
              nil
              | DomainEvent.t()
              | list(DomainEvent.t())
-             | {:ok, DomainEvent.t() | list(DomainEvent.t())}
+             | {:ok, nil | DomainEvent.t() | list(DomainEvent.t())}
              | {:error, term()})
-  @type without_result :: without_result_fun() | {without_result_fun() | EventsToSync.context()}
 
-  @type with_result_fun ::
+  @type result :: term()
+  @type fun_with_result ::
           (Fold.result() ->
-             {result :: term(), DomainEvent.t() | list(DomainEvent.t())}
-             | {:ok, result :: term(), DomainEvent.t() | list(DomainEvent.t())}
+             {result(), nil | DomainEvent.t() | list(DomainEvent.t())}
+             | {:ok, result(), nil | DomainEvent.t() | list(DomainEvent.t())}
              | {:error, term()})
-  @type with_result :: with_result_fun() | {with_result_fun() | EventsToSync.context()}
 
+  @type without_result :: fun_without_result() | {fun_without_result(), EventsToSync.context()}
+  @type with_result :: fun_with_result() | {fun_with_result(), EventsToSync.context()}
   @type t :: without_result() | with_result()
 
   defmodule Error do
@@ -36,24 +35,20 @@ defmodule Equinox.Decider.Decision do
   @spec execute(with_result(), Fold.result()) ::
           {:ok, {:ok, term()}, EventsToSync.t()}
           | {:error, Error.t()}
-  def execute({decision, context}, state) do
+  def execute(decision, state) do
+    {decision, context} =
+      case decision do
+        {decision, context} -> {decision, context}
+        decision -> {decision, %{}}
+      end
+
     case decision.(state) do
       {:error, error} -> {:error, Error.exception(error)}
-      {:ok, event_or_events} -> {:ok, :ok, wrap(event_or_events, context)}
-      {:ok, result, event_or_events} -> {:ok, {:ok, result}, wrap(event_or_events, context)}
-      {result, event_or_events} -> {:ok, {:ok, result}, wrap(event_or_events, context)}
-      nil_or_event_or_events -> {:ok, :ok, wrap(nil_or_event_or_events, context)}
+      {:ok, events} -> {:ok, :ok, wrap(events, context)}
+      {:ok, result, events} -> {:ok, {:ok, result}, wrap(events, context)}
+      {result, events} -> {:ok, {:ok, result}, wrap(events, context)}
+      events -> {:ok, :ok, wrap(events, context)}
     end
-  end
-
-  @spec execute(without_result_fun(), Fold.result()) ::
-          {:ok, :ok, EventsToSync.t()}
-          | {:error, Error.t()}
-  @spec execute(with_result_fun(), Fold.result()) ::
-          {:ok, {:ok, term()}, EventsToSync.t()}
-          | {:error, Error.t()}
-  def execute(decision, state) do
-    execute({decision, %{}}, state)
   end
 
   defp wrap(nil_or_event_or_events, context) do
