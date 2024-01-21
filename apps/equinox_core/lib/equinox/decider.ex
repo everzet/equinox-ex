@@ -84,8 +84,8 @@ defmodule Equinox.Decider do
   def query(%Async{} = async, query, load), do: Async.query(async, query, load)
 
   def query(%__MODULE__{} = decider, query, load) do
-    with {:ok, loaded_state} <- load_state(decider, load || decider.load) do
-      Query.execute(query, loaded_state.value)
+    with {:ok, state} <- load_state(decider, load || decider.load) do
+      Query.execute(query, state.value)
     else
       {:error, unrecoverable_error} -> raise unrecoverable_error
     end
