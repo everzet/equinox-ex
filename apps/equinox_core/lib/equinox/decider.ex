@@ -2,12 +2,13 @@ defmodule Equinox.Decider do
   alias Equinox.{Store, Store.EventsToSync}
   alias Equinox.Decider.{Decision, Query, LoadPolicy, ResyncPolicy, Async}
 
-  @enforce_keys [:stream, :store, :resync]
-  defstruct [:stream, :store, :resync]
+  @enforce_keys [:stream, :store, :load, :resync]
+  defstruct [:stream, :store, :load, :resync]
 
   @type t :: %__MODULE__{
           stream: Store.stream_name(),
           store: Store.t(),
+          load: LoadPolicy.t(),
           resync: ResyncPolicy.t()
         }
 
@@ -19,6 +20,12 @@ defmodule Equinox.Decider do
               type: :any,
               required: true,
               doc: "An implementation of `Equinox.Store` protocol"
+            ],
+            load: [
+              type: {:struct, LoadPolicy},
+              default: LoadPolicy.default(),
+              doc:
+                "Load policy used to define policy for loading the aggregate state before querying / transacting"
             ],
             resync: [
               type: {:struct, ResyncPolicy},
@@ -70,34 +77,34 @@ defmodule Equinox.Decider do
     |> start()
   end
 
-  @spec query(Async.t(), Query.t(), LoadPolicy.t()) :: term()
-  @spec query(t(), Query.t(), LoadPolicy.t()) :: term()
-  def query(decider, query, load \\ LoadPolicy.default())
+  @spec query(Async.t(), Query.t(), nil | LoadPolicy.t()) :: term()
+  @spec query(t(), Query.t(), nil | LoadPolicy.t()) :: term()
+  def query(decider, query, load \\ nil)
 
   def query(%Async{} = async, query, load), do: Async.query(async, query, load)
 
   def query(%__MODULE__{} = decider, query, load) do
-    with {:ok, loaded_state} <- load_state(decider, load) do
+    with {:ok, loaded_state} <- load_state(decider, load || decider.load) do
       Query.execute(query, loaded_state.value)
     else
       {:error, unrecoverable_error} -> raise unrecoverable_error
     end
   end
 
-  @spec transact(Async.t(), Decision.without_result(), LoadPolicy.t()) ::
+  @spec transact(Async.t(), Decision.without_result(), nil | LoadPolicy.t()) ::
           :ok | {:error, term()}
-  @spec transact(Async.t(), Decision.with_result(), LoadPolicy.t()) ::
+  @spec transact(Async.t(), Decision.with_result(), nil | LoadPolicy.t()) ::
           {:ok, term()} | {:error, term()}
-  @spec transact(t(), Decision.without_result()) ::
+  @spec transact(t(), Decision.without_result(), nil | LoadPolicy.t()) ::
           :ok | {:error, term()}
-  @spec transact(t(), Decision.with_result()) ::
+  @spec transact(t(), Decision.with_result(), nil | LoadPolicy.t()) ::
           {:ok, term()} | {:error, term()}
-  def transact(decider, decision, load \\ LoadPolicy.default())
+  def transact(decider, decision, load \\ nil)
 
   def transact(%Async{} = async, decision, load), do: Async.transact(async, decision, load)
 
   def transact(%__MODULE__{} = decider, decision, load) do
-    with {:ok, state} <- load_state(decider, load),
+    with {:ok, state} <- load_state(decider, load || decider.load),
          {:ok, result} <- transact_with_resync(decider, state, decision) do
       result
     else

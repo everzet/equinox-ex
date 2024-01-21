@@ -24,19 +24,24 @@ defmodule Equinox.Decider.CommonTest do
         assert :value = Decider.query(decider, & &1)
       end
 
-      test "respects provided load policy" do
-        expect(StoreMock, :load, fn _, %{assumes_empty?: true} ->
-          {:ok, State.new(:value, -1)}
-        end)
+      test "respects load policy setting" do
+        decider = init(unquote(decider_mod), load: LoadPolicy.assume_empty())
+        expect(StoreMock, :load, fn _, %{assumes_empty?: true} -> {:ok, State.new(:val, -1)} end)
+        assert :val = Decider.query(decider, & &1)
 
-        expect(StoreMock, :load, fn _, %{assumes_empty?: false} ->
-          {:ok, State.new(:value, -1)}
-        end)
+        decider = init(unquote(decider_mod), load: LoadPolicy.require_load())
+        expect(StoreMock, :load, fn _, %{assumes_empty?: false} -> {:ok, State.new(:val, -1)} end)
+        assert :val = Decider.query(decider, & &1)
+      end
 
+      test "respects load policy overrides" do
         decider = init(unquote(decider_mod))
 
-        assert :value = Decider.query(decider, & &1, LoadPolicy.assume_empty())
-        assert :value = Decider.query(decider, & &1, LoadPolicy.require_load())
+        expect(StoreMock, :load, fn _, %{assumes_empty?: true} -> {:ok, State.new(:val, -1)} end)
+        assert :val = Decider.query(decider, & &1, LoadPolicy.assume_empty())
+
+        expect(StoreMock, :load, fn _, %{assumes_empty?: false} -> {:ok, State.new(:val, -1)} end)
+        assert :val = Decider.query(decider, & &1, LoadPolicy.require_load())
       end
 
       test "crashes if store returns error" do
@@ -70,16 +75,26 @@ defmodule Equinox.Decider.CommonTest do
         assert :ok = Decider.transact(decider, fn 0 -> [2, 3] end)
       end
 
-      test "respects provided load policy" do
+      test "respects load policy setting" do
         stub(StoreMock, :sync, fn _, %{version: -1}, _ -> {:ok, State.new(5, 1)} end)
 
+        decider = init(unquote(decider_mod), load: LoadPolicy.assume_empty())
         expect(StoreMock, :load, fn _, %{assumes_empty?: true} -> {:ok, State.new(0, -1)} end)
+        assert :ok = Decider.transact(decider, fn 0 -> [2] end)
 
+        decider = init(unquote(decider_mod), laod: LoadPolicy.require_load())
         expect(StoreMock, :load, fn _, %{assumes_empty?: false} -> {:ok, State.new(0, -1)} end)
+        assert :ok = Decider.transact(decider, fn 0 -> [2] end)
+      end
 
+      test "respects load policy overrides" do
+        stub(StoreMock, :sync, fn _, %{version: -1}, _ -> {:ok, State.new(5, 1)} end)
         decider = init(unquote(decider_mod))
 
+        expect(StoreMock, :load, fn _, %{assumes_empty?: true} -> {:ok, State.new(0, -1)} end)
         assert :ok = Decider.transact(decider, fn 0 -> [2] end, LoadPolicy.assume_empty())
+
+        expect(StoreMock, :load, fn _, %{assumes_empty?: false} -> {:ok, State.new(0, -1)} end)
         assert :ok = Decider.transact(decider, fn 0 -> [2] end, LoadPolicy.require_load())
       end
 
@@ -252,6 +267,7 @@ defmodule Equinox.Decider.CommonTest do
     |> Keyword.get(:stream_name, "Invoice-1")
     |> Decider.for_stream(
       store: %StoreMock.Config{allow_from: self()},
+      load: Keyword.get(attrs, :load, LoadPolicy.require_load()),
       resync: Keyword.get(attrs, :resync, ResyncPolicy.max_attempts(0))
     )
   end
