@@ -177,6 +177,12 @@ defmodule Equinox.Decider.CommonTest do
 
         assert :ok = Decider.transact(decider, fn 0 -> nil end)
         assert :ok = Decider.transact(decider, fn 0 -> [] end)
+        assert :ok = Decider.transact(decider, fn 0 -> {:ok, nil} end)
+        assert :ok = Decider.transact(decider, fn 0 -> {:ok, []} end)
+        assert {:ok, :res} = Decider.transact(decider, fn 0 -> {:res, nil} end)
+        assert {:ok, :res} = Decider.transact(decider, fn 0 -> {:res, []} end)
+        assert {:ok, :res} = Decider.transact(decider, fn 0 -> {:ok, :res, nil} end)
+        assert {:ok, :res} = Decider.transact(decider, fn 0 -> {:ok, :res, []} end)
       end
 
       test "decision callback errors are wrapped into Decision.Error and propagated back without sync" do

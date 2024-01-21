@@ -62,16 +62,10 @@ defmodule Equinox.Decider.Decision do
 
     case decision.(state) do
       {:error, error} -> {:error, Error.exception(error)}
-      {:ok, events} -> {:ok, :ok, wrap(events, context)}
-      {:ok, result, events} -> {:ok, {:ok, result}, wrap(events, context)}
-      {result, events} -> {:ok, {:ok, result}, wrap(events, context)}
-      events -> {:ok, :ok, wrap(events, context)}
+      {:ok, events} -> {:ok, :ok, EventsToSync.new(events, context)}
+      {:ok, result, events} -> {:ok, {:ok, result}, EventsToSync.new(events, context)}
+      {result, events} -> {:ok, {:ok, result}, EventsToSync.new(events, context)}
+      events -> {:ok, :ok, EventsToSync.new(events, context)}
     end
-  end
-
-  defp wrap(nil_or_event_or_events, context) do
-    nil_or_event_or_events
-    |> List.wrap()
-    |> EventsToSync.new(context)
   end
 end

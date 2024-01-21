@@ -6,8 +6,8 @@ defmodule Equinox.Store.EventsToSync do
   @type t :: %__MODULE__{events: Enumerable.t(DomainEvent.t()), context: context()}
   @type context :: map()
 
-  @spec new(Enumerable.t(DomainEvent.t()), context()) :: t()
-  def new(events, context \\ %{}), do: %__MODULE__{events: events, context: context}
+  @spec new(nil | DomainEvent.t() | list(DomainEvent.t()), context()) :: t()
+  def new(events, context \\ %{}), do: %__MODULE__{events: List.wrap(events), context: context}
 
   @spec empty?(t()) :: boolean()
   def empty?(%__MODULE__{events: []}), do: true
