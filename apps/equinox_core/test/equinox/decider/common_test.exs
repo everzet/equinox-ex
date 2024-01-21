@@ -269,10 +269,8 @@ defmodule Equinox.Decider.CommonTest do
   end
 
   defp init(Decider.Async, attrs) do
-    init(Decider, attrs)
-    |> Decider.async(
-      supervisor: :disabled,
-      registry: :disabled
-    )
+    Decider
+    |> init(attrs)
+    |> Decider.async()
   end
 end

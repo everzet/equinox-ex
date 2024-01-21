@@ -10,7 +10,7 @@ defmodule Equinox.Decider.Async do
     @opts NimbleOptions.new!(
             supervisor: [
               type: {:or, [:atom, {:in, [:disabled]}]},
-              required: true,
+              default: :disabled,
               doc: "Name of the DynamicSupervisor which should parent the decider process"
             ],
             registry: [
@@ -22,7 +22,7 @@ defmodule Equinox.Decider.Async do
                    {:tuple, [{:in, [:global]}, :string]},
                    {:in, [:disabled]}
                  ]},
-              required: true,
+              default: :disabled,
               doc: "Name of the Registry (or :global) under which our decider should be listed"
             ],
             lifetime: [

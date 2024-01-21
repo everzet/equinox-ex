@@ -49,9 +49,11 @@ defmodule Equinox.Decider do
   end
 
   @spec async(t(), Async.Options.t()) :: Async.t()
+  @spec async(String.t(), [Options.o() | Async.Options.o()]) :: Async.t()
+  def async(stream_name_or_decider, opts \\ [])
+
   def async(%__MODULE__{} = decider, opts), do: Async.wrap_decider(decider, opts)
 
-  @spec async(String.t(), [Options.o() | Async.Options.o()]) :: Async.t()
   def async(stream_name, opts) when is_bitstring(stream_name) do
     {decider_opts, async_opts} = Keyword.split(opts, Options.keys())
 
