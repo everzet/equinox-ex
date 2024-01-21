@@ -13,7 +13,12 @@ defmodule Equinox.Cache.LRU do
                 "Maximum number of stored items. Every time this number reached - the least touched item is evicted"
             ],
             max_memory: [
-              type: :pos_integer,
+              type:
+                {:or,
+                 [
+                   :pos_integer,
+                   {:tuple, [:pos_integer, {:in, [:bytes, :kb, :mb, :gb]}]}
+                 ]},
               required: true,
               doc:
                 "Maximum total consumed memory in bytes. Every time this number reached - the least touched item is evicted"
@@ -73,7 +78,13 @@ defmodule Equinox.Cache.LRU do
       cache_table: opts[:name],
       ttl_table: :"#{opts[:name]}.TTL",
       max_size: opts[:max_size],
-      max_memory: opts[:max_memory]
+      max_memory:
+        case opts[:max_memory] do
+          bytes when is_integer(bytes) -> bytes
+          {kb, :kb} -> kb * 1_000
+          {mb, :mb} -> mb * 1_000 * 1_000
+          {gb, :gb} -> gb * 1_000 * 1_000 * 1_000
+        end
     }
 
     :ets.new(state.ttl_table, [:named_table, :ordered_set, :private])

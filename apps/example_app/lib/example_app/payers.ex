@@ -65,7 +65,7 @@ defmodule ExampleApp.Payers do
   def init(_arg) do
     children = [
       {DynamicSupervisor, name: ExampleApp.Payers.Supervisor, strategy: :one_for_one},
-      {Equinox.Cache.LRU, name: ExampleApp.Payers.Cache, max_size: 10_000, max_memory: 10_000}
+      {Equinox.Cache.LRU, name: ExampleApp.Payers.Cache, max_size: 100_000, max_memory: {50, :mb}}
     ]
 
     Supervisor.init(children, strategy: :rest_for_one)
