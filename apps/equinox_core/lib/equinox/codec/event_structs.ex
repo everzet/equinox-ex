@@ -5,8 +5,10 @@ defmodule Equinox.Codec.EventStructs do
       alias Equinox.Codec.EventStructs.{Upcast, Downcast}
 
       @impl Equinox.Codec
-      def encode(%{__struct__: struct} = event, _ctx) do
-        Equinox.Codec.EventStructs.struct_to_event_data(event, __MODULE__)
+      def encode(%{__struct__: struct} = event, context) do
+        event
+        |> Equinox.Codec.EventStructs.struct_to_event_data(__MODULE__)
+        |> Map.put(:metadata, context[:metadata])
       end
 
       @impl Equinox.Codec
