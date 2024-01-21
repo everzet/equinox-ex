@@ -138,7 +138,7 @@ defmodule ExampleApp.Invoices do
 
   def start_link(init_arg), do: Supervisor.start_link(__MODULE__, init_arg, name: __MODULE__)
 
-  @impl true
+  @impl Supervisor
   def init(_arg) do
     children = [
       {Registry, name: ExampleApp.Invoices.Registry, keys: :unique},
