@@ -81,16 +81,18 @@ defmodule Equinox.Decider.Async do
 
   @spec start(t()) :: t()
   def start(%__MODULE__{} = async) do
-    with {:ok, pid} <- start_server(async) do
-      update_in(async.server, fn
-        nil -> pid
-        val -> val
-      end)
-    else
-      {:error, {:already_started, _pid}} -> async
-      {:error, error} when is_exception(error) -> raise AsyncError, Exception.message(error)
-      {:error, error} -> raise AsyncError, "Failed to start process: #{inspect(error)}"
-    end
+    Telemetry.span_async_start(async, fn ->
+      with {:ok, pid} <- start_server(async) do
+        update_in(async.server, fn
+          nil -> pid
+          val -> val
+        end)
+      else
+        {:error, {:already_started, _pid}} -> async
+        {:error, error} when is_exception(error) -> raise AsyncError, Exception.message(error)
+        {:error, error} -> raise AsyncError, "Failed to start process: #{inspect(error)}"
+      end
+    end)
   end
 
   @spec start_server(t()) :: GenServer.on_start() | DynamicSupervisor.on_start_child()

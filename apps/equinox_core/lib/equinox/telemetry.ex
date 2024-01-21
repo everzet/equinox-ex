@@ -67,14 +67,22 @@ defmodule Equinox.Telemetry do
     end)
   end
 
+  def span_async_start(async, fun) do
+    meta = %{aync: async}
+
+    :telemetry.span([:equinox, :decider, :async, :start], meta, fn ->
+      fun.() |> then(&{&1, %{async: &1}})
+    end)
+  end
+
   def async_server_init(server_state) do
     :telemetry.execute(
-      [:equinox, :decider, :async, :init],
+      [:equinox, :decider, :async, :server, :init],
       %{
         system_time: System.system_time(),
         monotonic_time: server_state.init_time
       },
-      server_state
+      %{state: server_state}
     )
   end
 
@@ -82,13 +90,13 @@ defmodule Equinox.Telemetry do
     shutdown_time = System.monotonic_time()
 
     :telemetry.execute(
-      [:equinox, :decider, :async, :shutdown],
+      [:equinox, :decider, :async, :server, :shutdown],
       %{
         system_time: System.system_time(),
         monotonic_time: shutdown_time,
         duration: shutdown_time - server_state.init_time
       },
-      Map.put(server_state, :reason, reason)
+      %{state: server_state, reason: reason}
     )
   end
 end
