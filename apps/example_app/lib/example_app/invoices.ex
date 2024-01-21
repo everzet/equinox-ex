@@ -82,7 +82,7 @@ defmodule ExampleApp.Invoices do
           {:error, :invoice_finalized}
 
         %Invoice{status: :raised} = invoice ->
-          if not Invoice.raised_with?(invoice, data) do
+          unless Invoice.raised_with?(invoice, data) do
             {:error, :invoice_already_raised}
           end
       end
@@ -97,7 +97,7 @@ defmodule ExampleApp.Invoices do
           {:error, :invoice_finalized}
 
         %Invoice{status: :raised} = invoice ->
-          if not Invoice.payment_received?(invoice, data.reference) do
+          unless Invoice.payment_received?(invoice, data.reference) do
             struct!(PaymentReceived, data)
           end
       end

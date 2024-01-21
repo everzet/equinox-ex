@@ -162,7 +162,7 @@ defmodule Equinox.Decider do
   end
 
   defp sync_state(%__MODULE__{} = decider, state, events) do
-    if not Store.EventsToSync.empty?(events) do
+    unless Store.EventsToSync.empty?(events) do
       Telemetry.span_decider_sync(decider, state, events, fn ->
         Store.sync(decider.store, decider.stream, state, events)
       end)

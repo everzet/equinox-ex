@@ -43,7 +43,7 @@ defmodule ExampleApp.Payers do
           struct!(PayerProfileUpdated, data)
 
         map ->
-          if not Map.equal?(map, data) do
+          unless Map.equal?(map, data) do
             struct!(PayerProfileUpdated, data)
           end
       end
