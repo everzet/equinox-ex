@@ -83,16 +83,17 @@ defmodule Equinox.Decider.CommonTest do
         assert :ok = Decider.transact(decider, fn 0 -> [2] end, LoadPolicy.require_load())
       end
 
-      test "passes optional sync context all the way to the store via decision outcome" do
+      test "passes optional context all the way to the store via decision wrap" do
         stub(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
 
         expect(StoreMock, :sync, fn _, %{version: -1}, %{context: %{value: 2}} ->
           {:ok, State.new(5, 1)}
         end)
 
-        decider = init(unquote(decider_mod), context: %{value: 2})
+        decider = init(unquote(decider_mod))
+        with_value = &{&1, %{value: &2}}
 
-        assert :ok = Decider.transact(decider, fn 0 -> [2] end)
+        assert :ok = Decider.transact(decider, fn 0 -> [2] end |> with_value.(2))
       end
 
       test "keeps track of current state version during the sync process" do
@@ -251,8 +252,7 @@ defmodule Equinox.Decider.CommonTest do
     |> Keyword.get(:stream_name, "Invoice-1")
     |> Decider.for_stream(
       store: %StoreMock.Config{allow_from: self()},
-      resync: Keyword.get(attrs, :resync, ResyncPolicy.max_attempts(0)),
-      context: Keyword.get(attrs, :context, %{})
+      resync: Keyword.get(attrs, :resync, ResyncPolicy.max_attempts(0))
     )
   end
 
@@ -260,8 +260,7 @@ defmodule Equinox.Decider.CommonTest do
     init(Decider, attrs)
     |> Decider.async(
       supervisor: :disabled,
-      registry: :disabled,
-      context: Keyword.get(attrs, :context, %{})
+      registry: :disabled
     )
   end
 end

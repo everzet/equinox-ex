@@ -1,18 +1,17 @@
 defmodule Equinox.Decider.Async do
   use GenServer, restart: :transient
 
-  alias Equinox.{Decider, Store, Telemetry}
+  alias Equinox.{Decider, Telemetry}
   alias Equinox.Decider.{Query, Decision, LoadPolicy, LifetimePolicy}
 
-  @enforce_keys [:decider, :supervisor, :lifetime, :context]
-  defstruct [:server, :decider, :supervisor, :lifetime, :context]
+  @enforce_keys [:decider, :supervisor, :lifetime]
+  defstruct [:server, :decider, :supervisor, :lifetime]
 
   @type t :: %__MODULE__{
           server: server(),
           decider: Decider.t(),
           supervisor: supervisor(),
-          lifetime: LifetimePolicy.t(),
-          context: Store.EventsToSync.context()
+          lifetime: LifetimePolicy.t()
         }
   @type server ::
           nil
@@ -53,11 +52,6 @@ defmodule Equinox.Decider.Async do
               type: {:struct, LifetimePolicy},
               default: LifetimePolicy.default(),
               doc: "Decider server lifetime policy"
-            ],
-            context: [
-              type: :map,
-              default: %{},
-              doc: "Optional context to pass along with events to `Equinox.Store.sync/4`"
             ]
           )
 
@@ -133,7 +127,7 @@ defmodule Equinox.Decider.Async do
           {:ok, term()} | {:error, term()}
   def transact(async, decision, load \\ LoadPolicy.default(), timeout \\ :timer.seconds(5)) do
     ensure_async_started(async, fn async ->
-      GenServer.call(async.server, {:transact, decision, async.context, load}, timeout)
+      GenServer.call(async.server, {:transact, decision, load}, timeout)
     end)
   end
 
@@ -164,13 +158,12 @@ defmodule Equinox.Decider.Async do
   end
 
   @impl GenServer
-  def handle_call({:query, query, load}, _from, async) do
-    {:reply, Decider.query(async.decider, query, load), async, async.lifetime.after_query}
+  def handle_call({:query, query, load}, _from, %{decider: decider} = async) do
+    {:reply, Decider.query(decider, query, load), async, async.lifetime.after_query}
   end
 
   @impl GenServer
-  def handle_call({:transact, decision, context, load}, _from, async) do
-    decider = %{async.decider | context: context}
+  def handle_call({:transact, decision, load}, _from, %{decider: decider} = async) do
     {:reply, Decider.transact(decider, decision, load), async, async.lifetime.after_transact}
   end
 
