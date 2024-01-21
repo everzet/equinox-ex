@@ -51,7 +51,7 @@ defmodule Equinox.Decider.Decision do
           {:ok, :ok, EventsToSync.t()}
           | {:error, Error.t()}
   @spec execute(with_result(), Fold.result()) ::
-          {:ok, {:ok, term()}, EventsToSync.t()}
+          {:ok, {:ok, result()}, EventsToSync.t()}
           | {:error, Error.t()}
   def execute(decision, state) do
     {decision, context} =
