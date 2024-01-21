@@ -153,23 +153,25 @@ defmodule Equinox.Decider.Async do
 
   @impl GenServer
   def init(%__MODULE__{} = async) do
-    Telemetry.async_server_init(async)
-    {:ok, async, async.lifetime.after_init}
+    init_time = System.monotonic_time()
+    state = async |> Map.from_struct() |> Map.put(:init_time, init_time)
+    Telemetry.async_server_init(state)
+    {:ok, state, state.lifetime.after_init}
   end
 
   @impl GenServer
-  def handle_call({:query, query, load}, _from, %{decider: decider} = async) do
-    {:reply, Decider.query(decider, query, load), async, async.lifetime.after_query}
+  def handle_call({:query, query, load}, _from, %{decider: decider} = state) do
+    {:reply, Decider.query(decider, query, load), state, state.lifetime.after_query}
   end
 
   @impl GenServer
-  def handle_call({:transact, decision, load}, _from, %{decider: decider} = async) do
-    {:reply, Decider.transact(decider, decision, load), async, async.lifetime.after_transact}
+  def handle_call({:transact, decision, load}, _from, %{decider: decider} = state) do
+    {:reply, Decider.transact(decider, decision, load), state, state.lifetime.after_transact}
   end
 
   @impl GenServer
-  def handle_info(:timeout, server_state) do
-    Telemetry.async_server_stop(server_state, :timeout)
-    {:stop, :normal, server_state}
+  def handle_info(:timeout, state) do
+    Telemetry.async_server_shutdown(state, :timeout)
+    {:stop, :normal, state}
   end
 end
