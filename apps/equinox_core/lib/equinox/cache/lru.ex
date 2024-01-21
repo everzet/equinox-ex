@@ -8,9 +8,19 @@ defmodule Equinox.Cache.LRU do
     def fetch(cache, stream_name, max_age) do
       case :ets.lookup(cache.name, stream_name) do
         [{_, _ttl_key, stream_state, insert_time}] ->
-          unless insert_time + max_age > System.monotonic_time() do
-            GenServer.cast(cache.name, {:touch, stream_name})
-            stream_state
+          cache_age = System.monotonic_time() - insert_time
+
+          case max_age do
+            :infinity ->
+              GenServer.cast(cache.name, {:touch, stream_name})
+              stream_state
+
+            max_age when cache_age <= max_age ->
+              GenServer.cast(cache.name, {:touch, stream_name})
+              stream_state
+
+            _ ->
+              nil
           end
 
         [] ->

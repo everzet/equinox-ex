@@ -94,6 +94,7 @@ defmodule ExampleApp.Payers do
     payer_id
     |> Stream.name()
     |> Decider.async(
+      load: Decider.LoadPolicy.any_cached_value(),
       store:
         MessageDb.Store.LatestKnownEvent.config(
           conn: ExampleApp.MessageDbConn,
