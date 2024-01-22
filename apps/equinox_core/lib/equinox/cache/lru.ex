@@ -7,8 +7,8 @@ defmodule Equinox.Cache.LRU do
               doc: "Name of the cache process and ETS table"
             ],
             max_size: [
-              type: :pos_integer,
-              required: true,
+              type: {:or, [:pos_integer, {:in, [:infinity]}]},
+              default: :infinity,
               doc:
                 "Maximum number of stored items. Every time this number reached - the least touched item is evicted"
             ],
@@ -17,9 +17,10 @@ defmodule Equinox.Cache.LRU do
                 {:or,
                  [
                    :pos_integer,
-                   {:tuple, [:pos_integer, {:in, [:bytes, :kb, :mb, :gb]}]}
+                   {:tuple, [:pos_integer, {:in, [:kb, :mb, :gb]}]},
+                   {:in, [:infinity]}
                  ]},
-              required: true,
+              default: :infinity,
               doc:
                 "Maximum total consumed memory in bytes. Every time this number reached - the least touched item is evicted"
             ]
@@ -80,6 +81,7 @@ defmodule Equinox.Cache.LRU do
       max_size: opts[:max_size],
       max_memory:
         case opts[:max_memory] do
+          :infinity -> :infinity
           bytes when is_integer(bytes) -> bytes
           {kb, :kb} -> kb * 1_000
           {mb, :mb} -> mb * 1_000 * 1_000
@@ -132,10 +134,7 @@ defmodule Equinox.Cache.LRU do
   end
 
   defp evict_oversize(%{cache_table: cache, ttl_table: ttls} = settings) do
-    cache_size = :ets.info(cache, :size)
-    cache_memory = :ets.info(cache, :memory) * :erlang.system_info(:wordsize)
-
-    if cache_size > settings.max_size or cache_memory > settings.max_memory do
+    if exhausted_max_size?(settings) or exhausted_max_memory?(settings) do
       case :ets.first(ttls) do
         :"$end_of_table" ->
           nil
@@ -147,5 +146,17 @@ defmodule Equinox.Cache.LRU do
           evict_oversize(settings)
       end
     end
+  end
+
+  defp exhausted_max_size?(%{max_size: :infinity}), do: false
+
+  defp exhausted_max_size?(%{cache_table: cache, max_size: max_size}) do
+    :ets.info(cache, :size) > max_size
+  end
+
+  defp exhausted_max_memory?(%{max_memory: :infinity}), do: false
+
+  defp exhausted_max_memory?(%{cache_table: cache, max_memory: max_memory}) do
+    :ets.info(cache, :memory) * :erlang.system_info(:wordsize) > max_memory
   end
 end
