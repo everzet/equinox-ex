@@ -18,19 +18,19 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
               doc: "Database connection(s) to a leader and follower DBs"
             ],
             cache: [
-              type: :any,
-              default: Equinox.Cache.NoCache.config(),
-              doc: "State caching module that implements `Equinox.Cache` behaviour"
+              type: {:or, [:any, :mfa]},
+              default: Equinox.Cache.NoCache.new(),
+              doc: "Implementation of `Equinox.Cache` protocol or function returning one"
             ],
             codec: [
-              type: :atom,
+              type: {:or, [:atom, :mfa]},
               required: true,
-              doc: "Event (en|de)coding module that implements `Equinox.Codec` behaviour"
+              doc: "Module implementing `Equinox.Codec` behaviour or function returning one"
             ],
             fold: [
-              type: :atom,
+              type: {:or, [:atom, :mfa]},
               required: true,
-              doc: "State producing module that implements `Equinox.Fold` behaviour"
+              doc: "Module implementing `Equinox.Fold` behaviour or function returning one"
             ],
             batch_size: [
               type: :pos_integer,
@@ -43,23 +43,36 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
     @type o :: unquote(NimbleOptions.option_typespec(@opts))
 
     def docs, do: NimbleOptions.docs(@opts)
-    def validate!(opts), do: NimbleOptions.validate!(opts, @opts)
+
+    def validate!(opts) do
+      opts
+      |> NimbleOptions.validate!(@opts)
+      |> Keyword.update!(:cache, &apply_mfa/1)
+      |> Keyword.update!(:codec, &apply_mfa/1)
+      |> Keyword.update!(:fold, &apply_mfa/1)
+      |> normalize_conn()
+    end
+
+    defp apply_mfa({m, f, a}), do: apply(m, f, a)
+    defp apply_mfa(not_mfa), do: not_mfa
+
+    defp normalize_conn(opts) do
+      {conn, opts} = Keyword.pop!(opts, :conn)
+
+      {leader, follower} =
+        case conn do
+          conn when is_list(conn) -> {conn[:leader], conn[:follower]}
+          conn -> {conn, conn}
+        end
+
+      [{:leader, leader}, {:follower, follower} | opts]
+    end
   end
 
   @enforce_keys [:leader, :follower, :cache, :codec, :fold, :batch_size]
   defstruct [:leader, :follower, :cache, :codec, :fold, :batch_size]
 
-  def config(opts) do
-    {conn, opts} = opts |> Options.validate!() |> Keyword.pop(:conn)
-
-    {leader, follower} =
-      case conn do
-        conn when is_list(conn) -> {conn[:leader], conn[:follower]}
-        conn -> {conn, conn}
-      end
-
-    struct(__MODULE__, [{:leader, leader}, {:follower, follower} | opts])
-  end
+  def new(opts), do: struct(__MODULE__, Options.validate!(opts))
 
   defimpl Equinox.Store do
     alias Equinox.MessageDb.Store.Unoptimized

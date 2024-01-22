@@ -35,7 +35,7 @@ defmodule Equinox.Cache.LRU do
 
   defstruct [:name]
 
-  def named(name), do: %__MODULE__{name: name}
+  def new(name: name), do: %__MODULE__{name: name}
 
   def start_link(opts) do
     Options.validate!(opts)

@@ -25,7 +25,7 @@ defmodule MessageDb.Store.CommonTest do
   defp new(store_mod, opts) do
     [cache: %CacheMock.Config{}, codec: Codec, fold: Fold]
     |> Keyword.merge(opts)
-    |> store_mod.config()
+    |> store_mod.new()
   end
 
   setup :verify_on_exit!

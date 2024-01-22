@@ -5,20 +5,20 @@ defmodule Equinox.Cache.LRUTest do
 
   test "returns nothing if there is no cache" do
     start_supervised!({LRU, name: TestCache, max_size: 10, max_memory: 100_000})
-    cache = LRU.named(TestCache)
+    cache = LRU.new(name: TestCache)
     assert Cache.get(cache, "Invoice-1", :infinity) == nil
   end
 
   test "returns cache if there is fresh one" do
     start_supervised!({LRU, name: TestCache, max_size: 10, max_memory: 100_000})
-    cache = LRU.named(TestCache)
+    cache = LRU.new(name: TestCache)
     Cache.put(cache, "Invoice-1", State.new(:val, 10))
     assert %State{value: :val} = Cache.get(cache, "Invoice-1", :infinity)
   end
 
   test "cache older than required max_age is not returned" do
     start_supervised!({LRU, name: TestCache, max_size: 1, max_memory: 100_000})
-    cache = LRU.named(TestCache)
+    cache = LRU.new(name: TestCache)
 
     Cache.put(cache, "Invoice-1", State.new(:val1, 10))
     Process.sleep(5)
@@ -29,14 +29,14 @@ defmodule Equinox.Cache.LRUTest do
 
   test "specifying max_age = 0 means cache is never returned" do
     start_supervised!({LRU, name: TestCache, max_size: 1, max_memory: 100_000})
-    cache = LRU.named(TestCache)
+    cache = LRU.new(name: TestCache)
     Cache.put(cache, "Invoice-1", State.new(:val1, 10))
     assert Cache.get(cache, "Invoice-1", 0) == nil
   end
 
   test "evicts oldest cache value if it breaks the size limit" do
     start_supervised!({LRU, name: TestCache, max_size: 2, max_memory: 100_000})
-    cache = LRU.named(TestCache)
+    cache = LRU.new(name: TestCache)
 
     Cache.put(cache, "Invoice-1", State.new(:val1, 10))
     Cache.put(cache, "Invoice-2", State.new(:val2, 10))
@@ -49,7 +49,7 @@ defmodule Equinox.Cache.LRUTest do
 
   test "re-putting value puts it at the bottom of eviction list" do
     start_supervised!({LRU, name: TestCache, max_size: 2, max_memory: 100_000})
-    cache = LRU.named(TestCache)
+    cache = LRU.new(name: TestCache)
 
     Cache.put(cache, "Invoice-1", State.new(:val1, 10))
     Cache.put(cache, "Invoice-2", State.new(:val2, 10))
@@ -63,7 +63,7 @@ defmodule Equinox.Cache.LRUTest do
 
   test "getting value puts it at the bottom of eviction list" do
     start_supervised!({LRU, name: TestCache, max_size: 2, max_memory: 100_000})
-    cache = LRU.named(TestCache)
+    cache = LRU.new(name: TestCache)
 
     Cache.put(cache, "Invoice-1", State.new(:val1, 10))
     Cache.put(cache, "Invoice-2", State.new(:val2, 10))

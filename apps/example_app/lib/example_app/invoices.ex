@@ -203,12 +203,11 @@ defmodule ExampleApp.Invoices do
     |> Stream.name()
     |> Decider.async(
       store:
-        MessageDb.Store.LatestKnownEvent.config(
-          conn: ExampleApp.MessageDbConn,
-          cache: Equinox.Cache.NoCache.config(),
-          codec: Events,
-          fold: Fold
-        ),
+        {MessageDb.Store.LatestKnownEvent,
+         conn: ExampleApp.MessageDbConn,
+         cache: {Equinox.Cache.NoCache, []},
+         codec: Events,
+         fold: Fold},
       lifetime: Decider.LifetimePolicy.max_inactivity(:timer.seconds(1)),
       registry: ExampleApp.Invoices.Registry,
       supervisor: ExampleApp.Invoices.Supervisor

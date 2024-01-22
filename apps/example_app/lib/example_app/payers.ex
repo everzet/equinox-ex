@@ -110,12 +110,11 @@ defmodule ExampleApp.Payers do
     |> Decider.async(
       load: Decider.LoadPolicy.any_cached_value(),
       store:
-        MessageDb.Store.LatestKnownEvent.config(
-          conn: ExampleApp.MessageDbConn,
-          cache: Equinox.Cache.LRU.named(ExampleApp.Payers.Cache),
-          codec: Events,
-          fold: Fold
-        ),
+        {MessageDb.Store.LatestKnownEvent,
+         conn: ExampleApp.MessageDbConn,
+         cache: {Equinox.Cache.LRU, name: ExampleApp.Payers.Cache},
+         codec: Events,
+         fold: Fold},
       registry: :global,
       supervisor: ExampleApp.Payers.Supervisor
     )

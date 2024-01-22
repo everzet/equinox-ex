@@ -16,19 +16,22 @@ defmodule Equinox.MessageDb.Store.LatestKnownEvent do
               doc: "Database connection(s) to a leader and follower DBs"
             ],
             cache: [
-              type: :any,
-              default: Equinox.Cache.NoCache.config(),
-              doc: "State caching module that implements `Equinox.Cache` behaviour"
+              type: {:or, [:any, {:tuple, [:atom, :keyword_list]}]},
+              default: Equinox.Cache.NoCache.new(),
+              doc:
+                "Implementation of `Equinox.Cache` protocol or module and options producing one"
             ],
             codec: [
-              type: :atom,
+              type: {:or, [:any, {:tuple, [:atom, :keyword_list]}]},
               required: true,
-              doc: "Event (en|de)coding module that implements `Equinox.Codec` behaviour"
+              doc:
+                "Implementation of `Equinox.Codec` behaviour or module and options producing one"
             ],
             fold: [
-              type: :atom,
+              type: {:or, [:any, {:tuple, [:atom, :keyword_list]}]},
               required: true,
-              doc: "State producing module that implements `Equinox.Fold` behaviour"
+              doc:
+                "Implementation of `Equinox.Fold` behaviour or module and options producing one"
             ]
           )
 
@@ -36,23 +39,36 @@ defmodule Equinox.MessageDb.Store.LatestKnownEvent do
     @type o :: unquote(NimbleOptions.option_typespec(@opts))
 
     def docs, do: NimbleOptions.docs(@opts)
-    def validate!(opts), do: NimbleOptions.validate!(opts, @opts)
+
+    def validate!(opts) do
+      opts
+      |> NimbleOptions.validate!(@opts)
+      |> Keyword.update!(:cache, &apply_new/1)
+      |> Keyword.update!(:codec, &apply_new/1)
+      |> Keyword.update!(:fold, &apply_new/1)
+      |> normalize_conn()
+    end
+
+    defp apply_new({m, o}), do: apply(m, :new, [o])
+    defp apply_new(not_new), do: not_new
+
+    defp normalize_conn(opts) do
+      {conn, opts} = Keyword.pop!(opts, :conn)
+
+      {leader, follower} =
+        case conn do
+          conn when is_list(conn) -> {conn[:leader], conn[:follower]}
+          conn -> {conn, conn}
+        end
+
+      [{:leader, leader}, {:follower, follower} | opts]
+    end
   end
 
   @enforce_keys [:leader, :follower, :cache, :codec, :fold]
   defstruct [:leader, :follower, :cache, :codec, :fold]
 
-  def config(opts) do
-    {conn, opts} = opts |> Options.validate!() |> Keyword.pop(:conn)
-
-    {leader, follower} =
-      case conn do
-        conn when is_list(conn) -> {conn[:leader], conn[:follower]}
-        conn -> {conn, conn}
-      end
-
-    struct(__MODULE__, [{:leader, leader}, {:follower, follower} | opts])
-  end
+  def new(opts), do: struct(__MODULE__, Options.validate!(opts))
 
   defimpl Equinox.Store do
     alias Equinox.MessageDb.Store.LatestKnownEvent

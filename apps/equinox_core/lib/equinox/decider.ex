@@ -7,9 +7,10 @@ defmodule Equinox.Decider do
 
     @opts NimbleOptions.new!(
             store: [
-              type: :any,
+              type: {:or, [:any, {:tuple, [:atom, :keyword_list]}]},
               required: true,
-              doc: "An implementation of `Equinox.Store` protocol"
+              doc:
+                "Implementation of `Equinox.Store` protocol or module and options producing one"
             ],
             load: [
               type: {:struct, LoadPolicy},
@@ -28,9 +29,17 @@ defmodule Equinox.Decider do
     @type t :: [o()]
     @type o :: unquote(NimbleOptions.option_typespec(@opts))
 
-    def validate!(opts), do: NimbleOptions.validate!(opts, @opts)
     def docs, do: NimbleOptions.docs(@opts)
     def keys, do: Keyword.keys(@opts.schema)
+
+    def validate!(opts) do
+      opts
+      |> NimbleOptions.validate!(@opts)
+      |> Keyword.update!(:store, &apply_new/1)
+    end
+
+    defp apply_new({m, o}), do: apply(m, :new, [o])
+    defp apply_new(not_new), do: not_new
   end
 
   @enforce_keys [:stream, :store, :load, :resync]
@@ -45,7 +54,10 @@ defmodule Equinox.Decider do
 
   @spec for_stream(String.t(), Options.t()) :: t()
   def for_stream(stream_name, opts) do
-    struct(__MODULE__, [{:stream, stream_name} | Options.validate!(opts)])
+    opts
+    |> Options.validate!()
+    |> Keyword.put(:stream, stream_name)
+    |> then(&struct(__MODULE__, &1))
   end
 
   @spec async(t(), Async.Options.t()) :: Async.t()
