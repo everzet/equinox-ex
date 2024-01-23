@@ -200,6 +200,10 @@ defmodule Equinox.Decider.AsyncTest do
       Process.sleep(50)
       assert Process.alive?(async.server)
     end
+
+    test "lifetime policy can be specified via shortened version (tuple)" do
+      init(lifetime: {:max_inactivity, :timer.seconds(10)})
+    end
   end
 
   defp capture_exit(fun) do

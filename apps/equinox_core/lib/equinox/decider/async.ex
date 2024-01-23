@@ -43,15 +43,11 @@ defmodule Equinox.Decider.Async do
     def validate!(opts) do
       opts
       |> NimbleOptions.validate!(@opts)
-      |> Keyword.update!(:lifetime, &apply_fun(LifetimePolicy, &1))
+      |> Keyword.update!(:lifetime, &LifetimePolicy.normalize/1)
     end
 
     def docs, do: NimbleOptions.docs(@opts)
     def keys, do: Keyword.keys(@opts.schema)
-
-    defp apply_fun(m, {f, a}), do: apply(m, f, [a])
-    defp apply_fun(_, value) when is_struct(value), do: value
-    defp apply_fun(m, f), do: apply(m, f, [])
   end
 
   defmodule AsyncError do

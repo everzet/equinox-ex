@@ -133,7 +133,7 @@ defmodule ExampleApp.Invoices do
   use Supervisor
 
   alias ExampleApp.CustomValidators
-  alias Equinox.{UUID, Decider, Decider.LoadPolicy}
+  alias Equinox.{UUID, Decider}
   alias Ecto.Changeset
 
   def start_link(init_arg), do: Supervisor.start_link(__MODULE__, init_arg, name: __MODULE__)
@@ -154,7 +154,7 @@ defmodule ExampleApp.Invoices do
          {:ok, data} <- Changeset.apply_action(changeset, :raise_invoice) do
       invoice_id
       |> resolve()
-      |> Decider.transact(&Decide.raise_invoice(&1, data), LoadPolicy.assume_empty())
+      |> Decider.transact(&Decide.raise_invoice(&1, data), :assume_empty)
     end
   end
 

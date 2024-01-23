@@ -2,11 +2,12 @@ defmodule Equinox.Decider.LifetimePolicy do
   @enforce_keys [:after_init, :after_query, :after_transact]
   defstruct [:after_init, :after_query, :after_transact]
 
-  @type t :: %__MODULE__{
-          after_init: timeout(),
-          after_query: timeout(),
-          after_transact: timeout()
-        }
+  @type t ::
+          {:max_inactivity, non_neg_integer()}
+          | %__MODULE__{after_init: timeout(), after_query: timeout(), after_transact: timeout()}
+
+  def normalize(%__MODULE__{} = policy), do: policy
+  def normalize({:max_inactivity, timeout}), do: max_inactivity(timeout)
 
   def default, do: max_inactivity(:timer.minutes(20))
 

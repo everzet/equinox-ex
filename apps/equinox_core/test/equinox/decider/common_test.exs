@@ -98,6 +98,14 @@ defmodule Equinox.Decider.CommonTest do
         assert :ok = Decider.transact(decider, fn 0 -> [2] end, LoadPolicy.require_load())
       end
 
+      test "policy override can be shortened version (atom)" do
+        decider = init(unquote(decider_mod), load: LoadPolicy.assume_empty())
+        stub(StoreMock, :sync, fn _, %{version: -1}, _ -> {:ok, State.new(5, 1)} end)
+
+        expect(StoreMock, :load, fn _, %{assumes_empty?: false} -> {:ok, State.new(0, -1)} end)
+        assert :ok = Decider.transact(decider, fn 0 -> [2] end, :require_load)
+      end
+
       test "when provided, passes wrapper context all the way to the Store.sync/3" do
         decider = init(unquote(decider_mod))
         stub(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
@@ -161,6 +169,18 @@ defmodule Equinox.Decider.CommonTest do
 
       test "respects configured resync policy" do
         decider = init(unquote(decider_mod), resync: ResyncPolicy.max_attempts(0))
+        stub(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
+
+        expect(StoreMock, :sync, 1, fn _, %{version: -1}, _ ->
+          {:conflict, fn -> raise RuntimeError end}
+        end)
+
+        assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~
+                 "ExhaustedResyncAttempts"
+      end
+
+      test "resync policy can be specified via shortened version (tuple)" do
+        decider = init(unquote(decider_mod), resync: {:max_attempts, 0})
         stub(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
 
         expect(StoreMock, :sync, 1, fn _, %{version: -1}, _ ->

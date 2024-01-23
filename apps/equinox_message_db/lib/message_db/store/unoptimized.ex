@@ -47,14 +47,14 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
     def validate!(opts) do
       opts
       |> NimbleOptions.validate!(@opts)
-      |> Keyword.update!(:cache, &apply_mfa/1)
-      |> Keyword.update!(:codec, &apply_mfa/1)
-      |> Keyword.update!(:fold, &apply_mfa/1)
+      |> Keyword.update!(:cache, &new/1)
+      |> Keyword.update!(:codec, &new/1)
+      |> Keyword.update!(:fold, &new/1)
       |> set_conns()
     end
 
-    defp apply_mfa({m, f, a}), do: apply(m, f, a)
-    defp apply_mfa(not_mfa), do: not_mfa
+    defp new({m, f, a}), do: apply(m, f, a)
+    defp new(not_mfa), do: not_mfa
 
     defp set_conns(opts) do
       {conn, opts} = Keyword.pop!(opts, :conn)

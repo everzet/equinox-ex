@@ -6,7 +6,13 @@ defmodule Equinox.Decider.ResyncPolicy do
 
   @enforce_keys [:max_attempts]
   defstruct [:max_attempts]
-  @type t :: %__MODULE__{max_attempts: non_neg_integer()}
+
+  @type t ::
+          {:max_attempts, non_neg_integer()}
+          | %__MODULE__{max_attempts: non_neg_integer()}
+
+  def normalize(%__MODULE__{} = policy), do: policy
+  def normalize({:max_attempts, attempts}), do: max_attempts(attempts)
 
   def default, do: max_attempts(3)
   def max_attempts(max_attempts), do: %__MODULE__{max_attempts: max_attempts}
