@@ -43,7 +43,7 @@ defmodule Equinox.Decider.Async do
     def validate!(opts) do
       opts
       |> NimbleOptions.validate!(@opts)
-      |> Keyword.update!(:lifetime, &LifetimePolicy.normalize/1)
+      |> Keyword.update!(:lifetime, &LifetimePolicy.wrap/1)
     end
 
     def docs, do: NimbleOptions.docs(@opts)

@@ -43,16 +43,16 @@ defmodule Equinox.MessageDb.Store.LatestKnownEvent do
     def validate!(opts) do
       opts
       |> NimbleOptions.validate!(@opts)
-      |> Keyword.update!(:cache, &apply_new/1)
-      |> Keyword.update!(:codec, &apply_new/1)
-      |> Keyword.update!(:fold, &apply_new/1)
-      |> set_conns()
+      |> Keyword.update!(:cache, &init_dependency/1)
+      |> Keyword.update!(:codec, &init_dependency/1)
+      |> Keyword.update!(:fold, &init_dependency/1)
+      |> init_connections()
     end
 
-    defp apply_new({m, o}), do: apply(m, :new, [o])
-    defp apply_new(not_new), do: not_new
+    defp init_dependency({m, o}), do: apply(m, :new, [o])
+    defp init_dependency(not_new), do: not_new
 
-    defp set_conns(opts) do
+    defp init_connections(opts) do
       {conn, opts} = Keyword.pop!(opts, :conn)
 
       {leader, follower} =

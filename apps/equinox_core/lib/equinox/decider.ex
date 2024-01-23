@@ -46,13 +46,13 @@ defmodule Equinox.Decider do
     def validate!(opts) do
       opts
       |> NimbleOptions.validate!(@opts)
-      |> Keyword.update!(:store, &setup_store/1)
-      |> Keyword.update!(:load, &LoadPolicy.normalize/1)
-      |> Keyword.update!(:resync, &ResyncPolicy.normalize/1)
+      |> Keyword.update!(:store, &init_store/1)
+      |> Keyword.update!(:load, &LoadPolicy.wrap/1)
+      |> Keyword.update!(:resync, &ResyncPolicy.wrap/1)
     end
 
-    defp setup_store({m, o}), do: apply(m, :new, [o])
-    defp setup_store(not_new), do: not_new
+    defp init_store({m, o}), do: apply(m, :new, [o])
+    defp init_store(not_new), do: not_new
   end
 
   @enforce_keys [:stream, :store, :load, :resync]
@@ -113,7 +113,7 @@ defmodule Equinox.Decider do
 
   def query(%__MODULE__{} = decider, query, load_policy) do
     Telemetry.span_decider_query(decider, query, load_policy, fn ->
-      with {:ok, state} <- load_state(decider, LoadPolicy.normalize(load_policy || decider.load)) do
+      with {:ok, state} <- load_state(decider, LoadPolicy.wrap(load_policy || decider.load)) do
         execute_query(decider, state, query)
       else
         {:error, unrecoverable_error} -> raise unrecoverable_error
@@ -135,7 +135,7 @@ defmodule Equinox.Decider do
 
   def transact(%__MODULE__{} = decider, decision, load_policy) do
     Telemetry.span_decider_transact(decider, decision, load_policy, fn ->
-      with {:ok, state} <- load_state(decider, LoadPolicy.normalize(load_policy || decider.load)),
+      with {:ok, state} <- load_state(decider, LoadPolicy.wrap(load_policy || decider.load)),
            {:ok, result} <- transact_with_resync(decider, state, decision) do
         result
       else
