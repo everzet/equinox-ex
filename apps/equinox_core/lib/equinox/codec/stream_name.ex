@@ -5,6 +5,8 @@ defmodule Equinox.Codec.StreamName do
       @type t :: %__MODULE__{message: String.t()}
     end
 
+    @type t :: String.t()
+
     @separator "-"
     def separator, do: @separator
 
@@ -53,12 +55,16 @@ defmodule Equinox.Codec.StreamName do
     end
   end
 
-  @spec encode(String.t(), String.t()) :: String.t()
+  alias Equinox.Codec.StreamId
+
+  @type t :: String.t()
+
+  @spec encode(Category.t(), StreamId.t()) :: t()
   def encode(category_name, stream_id) when is_bitstring(stream_id) do
     Fragments.compose(category_name, stream_id)
   end
 
-  @spec parse(String.t()) :: {:ok, String.t()} | {:error, Fragments.Error.t()}
+  @spec parse(String.t()) :: {:ok, t()} | {:error, Fragments.Error.t()}
   def parse(stream_name) do
     case Fragments.split(stream_name) do
       {:ok, [_category, _stream_id]} -> {:ok, stream_name}
@@ -66,7 +72,7 @@ defmodule Equinox.Codec.StreamName do
     end
   end
 
-  @spec parse!(String.t()) :: String.t()
+  @spec parse!(String.t()) :: t()
   def parse!(stream_name) do
     case parse(stream_name) do
       {:ok, stream_name} -> stream_name
@@ -74,14 +80,14 @@ defmodule Equinox.Codec.StreamName do
     end
   end
 
-  @spec decode(String.t()) :: {:ok, {String.t(), String.t()}} | {:error, Fragments.Error.t()}
+  @spec decode(t()) :: {:ok, {Category.t(), StreamId.t()}} | {:error, Fragments.Error.t()}
   def decode(stream_name) do
     with {:ok, [category, stream_id]} <- Fragments.split(stream_name) do
       {:ok, {category, stream_id}}
     end
   end
 
-  @spec decode!(String.t()) :: {String.t(), String.t()}
+  @spec decode!(t()) :: {Category.t(), StreamId.t()}
   def decode!(stream_name) do
     case decode(stream_name) do
       {:ok, result} -> result
@@ -89,8 +95,8 @@ defmodule Equinox.Codec.StreamName do
     end
   end
 
-  @spec match(String.t(), String.t()) ::
-          {:ok, stream_id :: String.t()}
+  @spec match(Category.t(), t()) ::
+          {:ok, StreamId.t()}
           | {:error, Fragments.Error.t()}
           | {:error, WrongCategory.t()}
   def match(match_category, stream_name) do
@@ -103,7 +109,7 @@ defmodule Equinox.Codec.StreamName do
     end
   end
 
-  @spec match!(String.t(), String.t()) :: stream_id :: String.t()
+  @spec match!(Category.t(), t()) :: StreamId.t()
   def match!(match_category, stream_name) do
     case match(match_category, stream_name) do
       {:ok, stream_id} -> stream_id

@@ -1,5 +1,6 @@
 defmodule Equinox.Decider do
   alias Equinox.{Store, Telemetry}
+  alias Equinox.Codec.StreamName
   alias Equinox.Decider.{Decision, Query, LoadPolicy, ResyncPolicy, Async}
 
   defmodule Options do
@@ -56,7 +57,7 @@ defmodule Equinox.Decider do
   defstruct [:stream, :store, :load, :resync]
 
   @type t :: %__MODULE__{
-          stream: Store.stream_name(),
+          stream: StreamName.t(),
           store: Store.t(),
           load: LoadPolicy.t(),
           resync: ResyncPolicy.t()
@@ -71,12 +72,12 @@ defmodule Equinox.Decider do
   end
 
   @spec async(t(), Async.Options.t()) :: Async.t()
-  @spec async(String.t(), [Options.o() | Async.Options.o()]) :: Async.t()
+  @spec async(StreamName.t(), [Options.o() | Async.Options.o()]) :: Async.t()
   def async(stream_name_or_decider, opts \\ [])
 
   def async(%__MODULE__{} = decider, opts), do: Async.wrap_decider(decider, opts)
 
-  def async(stream_name, opts) when is_bitstring(stream_name) do
+  def async(stream_name, opts) do
     {decider_opts, async_opts} = Keyword.split(opts, Options.keys())
 
     stream_name
@@ -94,7 +95,7 @@ defmodule Equinox.Decider do
     |> start()
   end
 
-  @spec start(String.t(), [Options.o() | Async.Options.o()]) :: Async.t() | pid()
+  @spec start(StreamName.t(), [Options.o() | Async.Options.o()]) :: Async.t() | pid()
   def start(stream_name, both_opts) when is_bitstring(stream_name) do
     stream_name
     |> async(both_opts)

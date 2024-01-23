@@ -41,24 +41,26 @@ defmodule Equinox.Codec.StreamId do
     end
   end
 
-  @spec encode(String.t()) :: String.t()
+  @type t :: String.t()
+
+  @spec encode(String.t()) :: t()
   def encode(id) when is_bitstring(id), do: Fragments.compose([id])
 
-  @spec encode({String.t(), String.t()}) :: String.t()
-  @spec encode({String.t(), String.t(), String.t()}) :: String.t()
-  @spec encode({String.t(), String.t(), String.t(), String.t()}) :: String.t()
+  @spec encode({String.t(), String.t()}) :: t()
+  @spec encode({String.t(), String.t(), String.t()}) :: t()
+  @spec encode({String.t(), String.t(), String.t(), String.t()}) :: t()
   def encode(tuple) when is_tuple(tuple), do: tuple |> Tuple.to_list() |> Fragments.compose()
 
-  @spec decode(String.t(), 1) ::
+  @spec decode(t(), 1) ::
           {:ok, String.t()}
           | {:error, Fragments.Error.t()}
-  @spec decode(String.t(), 2) ::
+  @spec decode(t(), 2) ::
           {:ok, {String.t(), String.t()}}
           | {:error, Fragments.Error.t()}
-  @spec decode(String.t(), 3) ::
+  @spec decode(t(), 3) ::
           {:ok, {String.t(), String.t(), String.t()}}
           | {:error, Fragments.Error.t()}
-  @spec decode(String.t(), 4) ::
+  @spec decode(t(), 4) ::
           {:ok, {String.t(), String.t(), String.t(), String.t()}}
           | {:error, Fragments.Error.t()}
   def decode(string, count) do
