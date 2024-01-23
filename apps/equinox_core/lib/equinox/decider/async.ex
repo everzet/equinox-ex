@@ -11,7 +11,7 @@ defmodule Equinox.Decider.Async do
             supervisor: [
               type: {:or, [:atom, {:in, [:disabled]}]},
               default: :disabled,
-              doc: "Name of the DynamicSupervisor which should parent the decider process"
+              doc: "DynamicSupervisor which should parent the decider process"
             ],
             registry: [
               type:
@@ -23,17 +23,21 @@ defmodule Equinox.Decider.Async do
                    {:in, [:disabled]}
                  ]},
               default: :disabled,
-              doc: "Name of the Registry (or :global) under which our decider should be listed"
+              doc: "Process registry under which our decider should be listed"
             ],
             lifetime: [
               type:
                 {:or,
                  [
+                   {:in, [:default]},
                    {:tuple, [{:in, [:max_inactivity]}, :non_neg_integer]},
-                   {:struct, LifetimePolicy}
+                   {:non_empty_keyword_list,
+                    after_init: [type: :non_neg_integer],
+                    after_query: [type: :non_neg_integer],
+                    after_transact: [type: :non_neg_integer]}
                  ]},
-              default: LifetimePolicy.default(),
-              doc: "Decider server lifetime policy"
+              default: :default,
+              doc: "Process lifetime policy specifying how long decider should stay alive"
             ]
           )
 
@@ -43,7 +47,7 @@ defmodule Equinox.Decider.Async do
     def validate!(opts) do
       opts
       |> NimbleOptions.validate!(@opts)
-      |> Keyword.update!(:lifetime, &LifetimePolicy.wrap/1)
+      |> Keyword.update!(:lifetime, &LifetimePolicy.new/1)
     end
 
     def docs, do: NimbleOptions.docs(@opts)
@@ -126,42 +130,42 @@ defmodule Equinox.Decider.Async do
     DynamicSupervisor.start_child(supervisor, {__MODULE__, async})
   end
 
-  @spec query(t(), Query.t(), nil | LoadPolicy.t(), timeout()) :: Query.result()
-  def query(async, query, load_policy \\ nil, operation_timeout \\ :timer.seconds(5)) do
-    ensure_async_started(async, fn async ->
-      GenServer.call(async.server, {:query, query, load_policy}, operation_timeout)
+  @spec query(t(), Query.t(), nil | LoadPolicy.option(), timeout()) :: Query.result()
+  def query(async, query, load_policy \\ nil, call_timeout \\ :timer.seconds(5)) do
+    ensure_server_running(async, fn server ->
+      GenServer.call(server, {:query, query, load_policy}, call_timeout)
     end)
   end
 
-  @spec transact(t(), Decision.without_result(), nil | LoadPolicy.t(), timeout()) ::
+  @spec transact(t(), Decision.without_result(), nil | LoadPolicy.option(), timeout()) ::
           :ok
           | {:error, Decision.Error.t()}
-  @spec transact(t(), Decision.with_result(), nil | LoadPolicy.t(), timeout()) ::
+  @spec transact(t(), Decision.with_result(), nil | LoadPolicy.option(), timeout()) ::
           {:ok, Decision.result()}
           | {:error, Decision.Error.t()}
-  def transact(async, decision, load_policy \\ nil, operation_timeout \\ :timer.seconds(5)) do
-    ensure_async_started(async, fn async ->
-      GenServer.call(async.server, {:transact, decision, load_policy}, operation_timeout)
+  def transact(async, decision, load_policy \\ nil, call_timeout \\ :timer.seconds(5)) do
+    ensure_server_running(async, fn server ->
+      GenServer.call(server, {:transact, decision, load_policy}, call_timeout)
     end)
   end
 
-  defp ensure_async_started(%__MODULE__{server: nil} = async, fun) do
-    async |> start() |> fun.()
+  defp ensure_server_running(%__MODULE__{server: nil} = async, fun) do
+    async |> start() |> then(&fun.(&1.server))
   end
 
-  defp ensure_async_started(%__MODULE__{server: pid} = async, fun) when is_pid(pid) do
+  defp ensure_server_running(%__MODULE__{server: pid} = async, fun) when is_pid(pid) do
     if Process.alive?(pid) do
-      fun.(async)
+      fun.(pid)
     else
-      ensure_async_started(%{async | server: nil}, fun)
+      ensure_server_running(put_in(async.server, nil), fun)
     end
   end
 
-  defp ensure_async_started(%__MODULE__{} = async, fun) do
+  defp ensure_server_running(%__MODULE__{server: server} = async, fun) do
     try do
-      fun.(async)
+      fun.(server)
     catch
-      :exit, {:noproc, _} -> async |> start() |> fun.()
+      :exit, {:noproc, _} -> async |> start() |> then(&fun.(&1.server))
     end
   end
 

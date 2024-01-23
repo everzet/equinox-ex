@@ -13,25 +13,22 @@ defmodule Equinox.MessageDb.Store.LatestKnownEvent do
                    ]
                  ]},
               required: true,
-              doc: "Database connection(s) to a leader and follower DBs"
+              doc: "Database connection(s) to leader and follower DBs"
             ],
             cache: [
-              type: {:or, [:any, {:tuple, [:atom, :keyword_list]}]},
-              default: Equinox.Cache.NoCache.new(),
-              doc:
-                "Implementation of `Equinox.Cache` protocol or module and options producing one"
+              type: {:or, [{:tuple, [:atom, :keyword_list]}, :mfa]},
+              default: {Equinox.Cache.NoCache, nil},
+              doc: "Builder function returning implementation of `Equinox.Cache` protocol"
             ],
             codec: [
-              type: {:or, [:any, {:tuple, [:atom, :keyword_list]}]},
+              type: {:or, [:atom, {:tuple, [:atom, :keyword_list]}, :mfa]},
               required: true,
-              doc:
-                "Implementation of `Equinox.Codec` behaviour or module and options producing one"
+              doc: "Implementation of `Equinox.Codec` behaviour or builder function returning one"
             ],
             fold: [
-              type: {:or, [:any, {:tuple, [:atom, :keyword_list]}]},
+              type: {:or, [:atom, {:tuple, [:atom, :keyword_list]}, :mfa]},
               required: true,
-              doc:
-                "Implementation of `Equinox.Fold` behaviour or module and options producing one"
+              doc: "Implementation of `Equinox.Fold` behaviour or builder function returning one"
             ]
           )
 
@@ -49,8 +46,9 @@ defmodule Equinox.MessageDb.Store.LatestKnownEvent do
       |> init_connections()
     end
 
+    defp init_dependency({m, f, a}), do: apply(m, f, a)
     defp init_dependency({m, o}), do: apply(m, :new, [o])
-    defp init_dependency(not_new), do: not_new
+    defp init_dependency(a) when is_atom(a), do: a
 
     defp init_connections(opts) do
       {conn, opts} = Keyword.pop!(opts, :conn)

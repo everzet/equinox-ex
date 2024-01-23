@@ -1,6 +1,8 @@
 defmodule Equinox.CacheMock.Config do
   defstruct mod: Equinox.CacheMock
 
+  def new(_ \\ []), do: %__MODULE__{}
+
   @callback get(any(), any()) :: any()
   @callback put(any(), any()) :: any()
 

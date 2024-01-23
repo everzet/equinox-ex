@@ -1,7 +1,7 @@
 defmodule Equinox.Cache.NoCache do
   defstruct []
 
-  def new(_ \\ []), do: %__MODULE__{}
+  def new(_ \\ nil), do: %__MODULE__{}
 
   defimpl Equinox.Cache do
     @impl Equinox.Cache

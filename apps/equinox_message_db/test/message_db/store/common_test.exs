@@ -23,7 +23,7 @@ defmodule MessageDb.Store.CommonTest do
   end
 
   defp new(store_mod, opts) do
-    [cache: %CacheMock.Config{}, codec: Codec, fold: Fold]
+    [cache: {CacheMock.Config, []}, codec: Codec, fold: Fold]
     |> Keyword.merge(opts)
     |> store_mod.new()
   end
@@ -48,7 +48,7 @@ defmodule MessageDb.Store.CommonTest do
 
         assert {:ok, %State{value: 3}} =
                  new(unquote(store_mod), conn: conn)
-                 |> Store.load(@stream, LoadPolicy.default())
+                 |> Store.load(@stream, LoadPolicy.new(:default))
       end
 
       test_in_isolation "uses follower connection by default", %{conn: conn} do
@@ -57,7 +57,7 @@ defmodule MessageDb.Store.CommonTest do
 
         assert {:ok, %State{value: 3}} =
                  new(unquote(store_mod), conn: [follower: conn, leader: :"?"])
-                 |> Store.load(@stream, LoadPolicy.default())
+                 |> Store.load(@stream, LoadPolicy.new(:default))
       end
 
       test_in_isolation "uses leader connection if policy requires leader", %{conn: conn} do
@@ -66,7 +66,7 @@ defmodule MessageDb.Store.CommonTest do
 
         assert {:ok, %State{value: 3}} =
                  new(unquote(store_mod), conn: [leader: conn, follower: :"?"])
-                 |> Store.load(@stream, LoadPolicy.require_leader())
+                 |> Store.load(@stream, LoadPolicy.new(:require_leader))
       end
 
       test_in_isolation "returns empty state without load if policy assumes empty", %{conn: conn} do
@@ -75,7 +75,7 @@ defmodule MessageDb.Store.CommonTest do
 
         assert {:ok, %State{value: nil}} =
                  new(unquote(store_mod), conn: conn)
-                 |> Store.load(@stream, LoadPolicy.assume_empty())
+                 |> Store.load(@stream, LoadPolicy.new(:assume_empty))
       end
 
       test_in_isolation "returns cached value without load if matches policy", %{conn: conn} do
@@ -86,7 +86,7 @@ defmodule MessageDb.Store.CommonTest do
 
         assert {:ok, %State{value: 2}} =
                  new(unquote(store_mod), conn: conn)
-                 |> Store.load(@stream, LoadPolicy.allow_stale(5_000))
+                 |> Store.load(@stream, LoadPolicy.new({:allow_stale, 5_000}))
       end
 
       test_in_isolation "always caches loaded value", %{conn: conn} do
@@ -97,7 +97,7 @@ defmodule MessageDb.Store.CommonTest do
 
         assert {:ok, _} =
                  new(unquote(store_mod), conn: conn)
-                 |> Store.load(@stream, LoadPolicy.default())
+                 |> Store.load(@stream, LoadPolicy.new(:default))
       end
     end
 

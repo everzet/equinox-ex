@@ -7,15 +7,11 @@ defmodule Equinox.Decider.ResyncPolicy do
   @enforce_keys [:max_attempts]
   defstruct [:max_attempts]
 
-  @type t ::
-          {:max_attempts, non_neg_integer()}
-          | %__MODULE__{max_attempts: non_neg_integer()}
+  @type t :: %__MODULE__{max_attempts: non_neg_integer()}
+  @type option :: :default | {:max_attempts, non_neg_integer()}
 
-  def wrap(%__MODULE__{} = policy), do: policy
-  def wrap({:max_attempts, attempts}), do: max_attempts(attempts)
-
-  def default, do: max_attempts(3)
-  def max_attempts(max_attempts), do: %__MODULE__{max_attempts: max_attempts}
+  def new(:default), do: new({:max_attempts, 3})
+  def new({:max_attempts, attempts}), do: %__MODULE__{max_attempts: attempts}
 
   def validate_attempt(%__MODULE__{max_attempts: max_attempts}, attempt) do
     if attempt < max_attempts do

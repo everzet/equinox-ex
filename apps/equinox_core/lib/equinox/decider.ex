@@ -7,33 +7,30 @@ defmodule Equinox.Decider do
 
     @opts NimbleOptions.new!(
             store: [
-              type: {:or, [:any, {:tuple, [:atom, :keyword_list]}]},
+              type: {:or, [{:tuple, [:atom, :keyword_list]}, :mfa]},
               required: true,
-              doc:
-                "Implementation of `Equinox.Store` protocol or module and options producing one"
+              doc: "Builder function returning implementation of `Equinox.Store` protocol"
             ],
             load: [
               type:
                 {:or,
                  [
-                   {:in, [:require_load, :require_leader, :any_cached_value, :assume_empty]},
-                   {:tuple, [{:in, [:allow_stale]}, :pos_integer]},
-                   {:struct, LoadPolicy}
+                   {:in,
+                    [:default, :require_load, :require_leader, :any_cached_value, :assume_empty]},
+                   {:tuple, [{:in, [:allow_stale]}, :pos_integer]}
                  ]},
-              default: LoadPolicy.default(),
-              doc:
-                "Load policy used to define policy for loading the aggregate state before querying / transacting"
+              default: :default,
+              doc: "Default aggregate state loading policy for querying and transacting"
             ],
             resync: [
               type:
                 {:or,
                  [
-                   {:tuple, [{:in, [:max_attempts]}, :non_neg_integer]},
-                   {:struct, ResyncPolicy}
+                   {:in, [:default]},
+                   {:tuple, [{:in, [:max_attempts]}, :non_neg_integer]}
                  ]},
-              default: ResyncPolicy.default(),
-              doc:
-                "Retry / Attempts policy used to define policy for retrying based on the conflicting state when there's an Append conflict"
+              default: :default,
+              doc: "Aggregate resync policy in case of state <-> stream version conflicts"
             ]
           )
 
@@ -47,12 +44,12 @@ defmodule Equinox.Decider do
       opts
       |> NimbleOptions.validate!(@opts)
       |> Keyword.update!(:store, &init_store/1)
-      |> Keyword.update!(:load, &LoadPolicy.wrap/1)
-      |> Keyword.update!(:resync, &ResyncPolicy.wrap/1)
+      |> Keyword.update!(:load, &LoadPolicy.new/1)
+      |> Keyword.update!(:resync, &ResyncPolicy.new/1)
     end
 
+    defp init_store({m, f, a}), do: apply(m, f, a)
     defp init_store({m, o}), do: apply(m, :new, [o])
-    defp init_store(not_new), do: not_new
   end
 
   @enforce_keys [:stream, :store, :load, :resync]
@@ -104,7 +101,7 @@ defmodule Equinox.Decider do
     |> start()
   end
 
-  @spec query(t() | Async.t(), Query.t(), nil | LoadPolicy.t()) :: Query.result()
+  @spec query(t() | Async.t(), Query.t(), nil | LoadPolicy.option()) :: Query.result()
   def query(decider, query, load_policy \\ nil)
 
   def query(%Async{} = async, query, load_policy) do
@@ -121,10 +118,10 @@ defmodule Equinox.Decider do
     end)
   end
 
-  @spec transact(t() | Async.t(), Decision.without_result(), nil | LoadPolicy.t()) ::
+  @spec transact(t() | Async.t(), Decision.without_result(), nil | LoadPolicy.option()) ::
           :ok
           | {:error, Decision.Error.t()}
-  @spec transact(t() | Async.t(), Decision.with_result(), nil | LoadPolicy.t()) ::
+  @spec transact(t() | Async.t(), Decision.with_result(), nil | LoadPolicy.option()) ::
           {:ok, Decision.result()}
           | {:error, Decision.Error.t()}
   def transact(decider, decision, load_policy \\ nil)

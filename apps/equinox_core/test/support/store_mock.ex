@@ -1,6 +1,8 @@
 defmodule Equinox.StoreMock.Config do
   defstruct [:allow_from, mod: Equinox.StoreMock]
 
+  def new(allow_from: pid) when is_pid(pid), do: %__MODULE__{allow_from: pid}
+
   @callback load(any(), any()) :: any()
   @callback sync(any(), any(), any()) :: any()
 

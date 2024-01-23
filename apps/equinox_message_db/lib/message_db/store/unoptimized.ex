@@ -18,19 +18,19 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
               doc: "Database connection(s) to a leader and follower DBs"
             ],
             cache: [
-              type: {:or, [:any, :mfa]},
-              default: Equinox.Cache.NoCache.new(),
-              doc: "Implementation of `Equinox.Cache` protocol or function returning one"
+              type: {:or, [{:tuple, [:atom, :keyword_list]}, :mfa]},
+              default: {Equinox.Cache.NoCache, nil},
+              doc: "Builder function returning implementation of `Equinox.Cache` protocol"
             ],
             codec: [
-              type: {:or, [:atom, :mfa]},
+              type: {:or, [:atom, {:tuple, [:atom, :keyword_list]}, :mfa]},
               required: true,
-              doc: "Module implementing `Equinox.Codec` behaviour or function returning one"
+              doc: "Implementation of `Equinox.Codec` behaviour or builder function returning one"
             ],
             fold: [
-              type: {:or, [:atom, :mfa]},
+              type: {:or, [:atom, {:tuple, [:atom, :keyword_list]}, :mfa]},
               required: true,
-              doc: "Module implementing `Equinox.Fold` behaviour or function returning one"
+              doc: "Implementation of `Equinox.Fold` behaviour or builder function returning one"
             ],
             batch_size: [
               type: :pos_integer,
@@ -54,7 +54,8 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
     end
 
     defp init_dependency({m, f, a}), do: apply(m, f, a)
-    defp init_dependency(not_mfa), do: not_mfa
+    defp init_dependency({m, o}), do: apply(m, :new, [o])
+    defp init_dependency(a) when is_atom(a), do: a
 
     defp init_connections(opts) do
       {conn, opts} = Keyword.pop!(opts, :conn)
