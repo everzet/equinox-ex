@@ -78,6 +78,18 @@ defmodule Equinox.Decider.CommonTest do
         assert :ok = Decider.transact(decider, fn 0 -> [2] end)
       end
 
+      test "load policy can be shortened version (atom) on init" do
+        stub(StoreMock, :sync, fn _, %{version: -1}, _ -> {:ok, State.new(5, 1)} end)
+
+        decider = init(unquote(decider_mod), load: :assume_empty)
+        expect(StoreMock, :load, fn _, %{assumes_empty?: true} -> {:ok, State.new(0, -1)} end)
+        assert :ok = Decider.transact(decider, fn 0 -> [2] end)
+
+        decider = init(unquote(decider_mod), laod: :require_load)
+        expect(StoreMock, :load, fn _, %{assumes_empty?: false} -> {:ok, State.new(0, -1)} end)
+        assert :ok = Decider.transact(decider, fn 0 -> [2] end)
+      end
+
       test "allows default load policy to be overriden with optional third argument" do
         decider = init(unquote(decider_mod), load: LoadPolicy.assume_empty())
         stub(StoreMock, :sync, fn _, %{version: -1}, _ -> {:ok, State.new(5, 1)} end)

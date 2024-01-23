@@ -13,13 +13,24 @@ defmodule Equinox.Decider do
                 "Implementation of `Equinox.Store` protocol or module and options producing one"
             ],
             load: [
-              type: {:struct, LoadPolicy},
+              type:
+                {:or,
+                 [
+                   {:in, [:require_load, :require_leader, :any_cached_value, :assume_empty]},
+                   {:tuple, [{:in, [:allow_stale]}, :pos_integer]},
+                   {:struct, LoadPolicy}
+                 ]},
               default: LoadPolicy.default(),
               doc:
                 "Load policy used to define policy for loading the aggregate state before querying / transacting"
             ],
             resync: [
-              type: {:struct, ResyncPolicy},
+              type:
+                {:or,
+                 [
+                   {:tuple, [{:in, [:max_attempts]}, :non_neg_integer]},
+                   {:struct, ResyncPolicy}
+                 ]},
               default: ResyncPolicy.default(),
               doc:
                 "Retry / Attempts policy used to define policy for retrying based on the conflicting state when there's an Append conflict"
@@ -36,10 +47,16 @@ defmodule Equinox.Decider do
       opts
       |> NimbleOptions.validate!(@opts)
       |> Keyword.update!(:store, &apply_new/1)
+      |> Keyword.update!(:load, &apply_fun(LoadPolicy, &1))
+      |> Keyword.update!(:resync, &apply_fun(ResyncPolicy, &1))
     end
 
     defp apply_new({m, o}), do: apply(m, :new, [o])
     defp apply_new(not_new), do: not_new
+
+    defp apply_fun(m, {f, a}), do: apply(m, f, [a])
+    defp apply_fun(_, value) when is_struct(value), do: value
+    defp apply_fun(m, f), do: apply(m, f, [])
   end
 
   @enforce_keys [:stream, :store, :load, :resync]

@@ -133,7 +133,7 @@ defmodule ExampleApp.Invoices do
   use Supervisor
 
   alias ExampleApp.CustomValidators
-  alias Equinox.{UUID, Decider, Decider.LoadPolicy, MessageDb}
+  alias Equinox.{UUID, Decider, Decider.LoadPolicy}
   alias Ecto.Changeset
 
   def start_link(init_arg), do: Supervisor.start_link(__MODULE__, init_arg, name: __MODULE__)
@@ -141,8 +141,8 @@ defmodule ExampleApp.Invoices do
   @impl Supervisor
   def init(_arg) do
     children = [
-      {Registry, name: ExampleApp.Invoices.Registry, keys: :unique},
-      {DynamicSupervisor, name: ExampleApp.Invoices.Supervisor, strategy: :one_for_one}
+      {Registry, Application.fetch_env!(:example_app, __MODULE__)[:registry]},
+      {DynamicSupervisor, Application.fetch_env!(:example_app, __MODULE__)[:supervisor]}
     ]
 
     Supervisor.init(children, strategy: :rest_for_one)
@@ -201,13 +201,6 @@ defmodule ExampleApp.Invoices do
   defp resolve(invoice_id) do
     invoice_id
     |> Stream.name()
-    |> Decider.async(
-      store:
-        {MessageDb.Store.LatestKnownEvent,
-         conn: ExampleApp.MessageDbConn, codec: Events, fold: Fold},
-      lifetime: Decider.LifetimePolicy.max_inactivity(:timer.seconds(1)),
-      registry: ExampleApp.Invoices.Registry,
-      supervisor: ExampleApp.Invoices.Supervisor
-    )
+    |> Decider.async(Application.fetch_env!(:example_app, __MODULE__)[:decider])
   end
 end

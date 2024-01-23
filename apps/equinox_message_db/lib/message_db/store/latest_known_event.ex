@@ -46,13 +46,13 @@ defmodule Equinox.MessageDb.Store.LatestKnownEvent do
       |> Keyword.update!(:cache, &apply_new/1)
       |> Keyword.update!(:codec, &apply_new/1)
       |> Keyword.update!(:fold, &apply_new/1)
-      |> normalize_conn()
+      |> set_conns()
     end
 
     defp apply_new({m, o}), do: apply(m, :new, [o])
     defp apply_new(not_new), do: not_new
 
-    defp normalize_conn(opts) do
+    defp set_conns(opts) do
       {conn, opts} = Keyword.pop!(opts, :conn)
 
       {leader, follower} =

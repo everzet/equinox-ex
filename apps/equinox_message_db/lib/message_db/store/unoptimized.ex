@@ -50,13 +50,13 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
       |> Keyword.update!(:cache, &apply_mfa/1)
       |> Keyword.update!(:codec, &apply_mfa/1)
       |> Keyword.update!(:fold, &apply_mfa/1)
-      |> normalize_conn()
+      |> set_conns()
     end
 
     defp apply_mfa({m, f, a}), do: apply(m, f, a)
     defp apply_mfa(not_mfa), do: not_mfa
 
-    defp normalize_conn(opts) do
+    defp set_conns(opts) do
       {conn, opts} = Keyword.pop!(opts, :conn)
 
       {leader, follower} =

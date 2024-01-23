@@ -56,7 +56,7 @@ defmodule ExampleApp.Payers do
   use Supervisor
 
   alias ExampleApp.CustomValidators
-  alias Equinox.{UUID, Decider, MessageDb}
+  alias Equinox.{UUID, Decider}
   alias Ecto.Changeset
 
   def start_link(init_arg), do: Supervisor.start_link(__MODULE__, init_arg, name: __MODULE__)
@@ -64,8 +64,8 @@ defmodule ExampleApp.Payers do
   @impl Supervisor
   def init(_arg) do
     children = [
-      {DynamicSupervisor, name: ExampleApp.Payers.Supervisor, strategy: :one_for_one},
-      {Equinox.Cache.LRU, name: ExampleApp.Payers.Cache, max_memory: {50, :mb}}
+      {DynamicSupervisor, Application.fetch_env!(:example_app, __MODULE__)[:supervisor]},
+      {Equinox.Cache.LRU, Application.fetch_env!(:example_app, __MODULE__)[:cache]}
     ]
 
     Supervisor.init(children, strategy: :rest_for_one)
@@ -107,16 +107,6 @@ defmodule ExampleApp.Payers do
   defp resolve(payer_id) do
     payer_id
     |> Stream.name()
-    |> Decider.async(
-      load: Decider.LoadPolicy.any_cached_value(),
-      store:
-        {MessageDb.Store.LatestKnownEvent,
-         conn: ExampleApp.MessageDbConn,
-         cache: {Equinox.Cache.LRU, name: ExampleApp.Payers.Cache},
-         codec: Events,
-         fold: Fold},
-      registry: :global,
-      supervisor: ExampleApp.Payers.Supervisor
-    )
+    |> Decider.async(Application.fetch_env!(:example_app, __MODULE__)[:decider])
   end
 end
