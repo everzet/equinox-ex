@@ -4,11 +4,12 @@ defmodule Equinox.Decider.CommonTest do
   import Mox
   import ExUnit.CaptureLog
 
+  alias Equinox.Codec.StreamName
   alias Equinox.{Decider, Decider.Decision}
   alias Equinox.Store.State
   alias Equinox.StoreMock
 
-  @stream "Invoice-1"
+  @stream StreamName.decode!("Invoice-1")
 
   setup :verify_on_exit!
 
@@ -259,7 +260,7 @@ defmodule Equinox.Decider.CommonTest do
 
   defp init(Decider, attrs) do
     attrs
-    |> Keyword.get(:stream_name, "Invoice-1")
+    |> Keyword.get(:stream_name, StreamName.decode!("Invoice-1"))
     |> Decider.for_stream(
       store: {StoreMock.Config, allow_from: self()},
       load: Keyword.get(attrs, :load, :require_load),

@@ -5,6 +5,7 @@ defmodule Equinox.Decider.AsyncTest do
   import ExUnit.CaptureLog
 
   alias Equinox.Decider
+  alias Equinox.Codec.StreamName
   alias Equinox.Store.State
   alias Equinox.StoreMock
 
@@ -93,7 +94,7 @@ defmodule Equinox.Decider.AsyncTest do
     test "allows interacting with process without carrying pid around" do
       start_supervised!({Registry, keys: :unique, name: DeciderTestRegistry})
 
-      stream = "Invoice-1"
+      stream = StreamName.decode!("Invoice-1")
       async = init(stream_name: stream, registry: DeciderTestRegistry)
 
       stub(StoreMock, :load, fn ^stream, _ -> {:ok, State.new(0, -1)} end)
@@ -108,7 +109,7 @@ defmodule Equinox.Decider.AsyncTest do
     test "isolates processes by stream name" do
       start_supervised!({Registry, keys: :unique, name: DeciderTestRegistry})
 
-      stream_1 = "Invoice-1"
+      stream_1 = StreamName.decode!("Invoice-1")
       decider_1 = init(stream_name: stream_1, registry: DeciderTestRegistry)
       expect(StoreMock, :load, fn ^stream_1, _ -> {:ok, State.new(0, -1)} end)
 
@@ -116,7 +117,7 @@ defmodule Equinox.Decider.AsyncTest do
         {:ok, State.new(2, 0)}
       end)
 
-      stream_2 = "Invoice-2"
+      stream_2 = StreamName.decode!("Invoice-2")
       decider_2 = init(stream_name: stream_2, registry: DeciderTestRegistry)
       expect(StoreMock, :load, fn ^stream_2, _ -> {:ok, State.new(0, -1)} end)
 
@@ -129,26 +130,26 @@ defmodule Equinox.Decider.AsyncTest do
     end
 
     test ":global is supported" do
-      stream = "Invoice-1"
+      stream = StreamName.decode!("Invoice-1")
       async = init(stream_name: stream, registry: :global)
 
       stub(StoreMock, :load, fn _, _ -> {:ok, State.new(5, -1)} end)
 
       assert 5 = Decider.query(async, & &1)
 
-      assert pid = GenServer.whereis({:global, stream})
+      assert pid = GenServer.whereis({:global, stream.full})
       assert Process.alive?(pid)
     end
 
     test ":global can be prefixed" do
-      stream = "Invoice-1"
+      stream = StreamName.decode!("Invoice-1")
       async = init(stream_name: stream, registry: {:global, "prefix-"})
 
       stub(StoreMock, :load, fn _, _ -> {:ok, State.new(5, -1)} end)
 
       assert 5 = Decider.query(async, & &1)
 
-      assert pid = GenServer.whereis({:global, "prefix-" <> stream})
+      assert pid = GenServer.whereis({:global, "prefix-" <> stream.full})
       assert Process.alive?(pid)
     end
   end
@@ -220,7 +221,7 @@ defmodule Equinox.Decider.AsyncTest do
 
   defp init(attrs) do
     attrs
-    |> Keyword.get(:stream_name, "Invoice-1")
+    |> Keyword.get(:stream_name, StreamName.decode!("Invoice-1"))
     |> Decider.async(
       store: {StoreMock.Config, allow_from: self()},
       supervisor: Keyword.get(attrs, :supervisor, :disabled),

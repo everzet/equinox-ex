@@ -1,5 +1,4 @@
 defmodule Equinox.MessageDb.Reader do
-  alias Equinox.Codec.StreamName
   alias Equinox.Events.TimelineEvent
 
   @type position :: non_neg_integer()
@@ -9,7 +8,7 @@ defmodule Equinox.MessageDb.Reader do
 
   @spec get_category_messages(
           Postgrex.conn(),
-          StreamName.Category.t(),
+          String.t(),
           global_position(),
           batch_size(),
           consumer_group() | {nil, nil}
@@ -30,7 +29,7 @@ defmodule Equinox.MessageDb.Reader do
     |> list_wrap_results()
   end
 
-  @spec get_stream_messages(Postgrex.conn(), StreamName.t(), position(), batch_size()) ::
+  @spec get_stream_messages(Postgrex.conn(), String.t(), position(), batch_size()) ::
           {:ok, list(TimelineEvent.t())} | {:error, Exception.t()}
   def get_stream_messages(conn, stream, position, batch_size) do
     conn
@@ -48,7 +47,7 @@ defmodule Equinox.MessageDb.Reader do
     |> list_wrap_results()
   end
 
-  @spec get_last_stream_message(Postgrex.conn(), StreamName.t()) ::
+  @spec get_last_stream_message(Postgrex.conn(), String.t()) ::
           {:ok, TimelineEvent.t() | nil} | {:error, Exception.t()}
   def get_last_stream_message(conn, stream) do
     conn
@@ -67,7 +66,7 @@ defmodule Equinox.MessageDb.Reader do
     |> get_first_result()
   end
 
-  @spec stream_messages(Postgrex.conn(), StreamName.t(), position(), batch_size()) ::
+  @spec stream_messages(Postgrex.conn(), String.t(), position(), batch_size()) ::
           Enumerable.t({:ok, TimelineEvent.t()} | {:error, Exception.t()})
   def stream_messages(conn, stream, start_position, batch_size) do
     {start_position, batch_size}

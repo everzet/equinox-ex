@@ -11,10 +11,20 @@ defmodule Equinox.MessageDb.ReaderTest do
 
     test_in_isolation "retrieving messages across multiple streams", %{conn: conn} do
       assert {:ok, 0} =
-               Writer.write_messages(conn, @category <> "-4", [EventData.new(type: "T")], -1)
+               Writer.write_messages(
+                 conn,
+                 @category <> "-4",
+                 [EventData.new(type: "T")],
+                 -1
+               )
 
       assert {:ok, 0} =
-               Writer.write_messages(conn, @category <> "-2", [EventData.new(type: "T")], -1)
+               Writer.write_messages(
+                 conn,
+                 @category <> "-2",
+                 [EventData.new(type: "T")],
+                 -1
+               )
 
       assert {:ok, messages} = Reader.get_category_messages(conn, @category, 0, 2)
       assert length(messages) == 2

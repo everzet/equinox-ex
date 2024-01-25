@@ -57,37 +57,23 @@ defmodule Equinox.Codec.StreamName do
 
   alias Equinox.Codec.StreamId
 
-  @type t :: String.t()
+  @enforce_keys [:category, :id, :full]
+  defstruct [:category, :id, :full]
+  @type t :: %__MODULE__{category: Category.t(), id: StreamId.t(), full: String.t()}
 
-  @spec encode(Category.t(), StreamId.t()) :: t()
-  def encode(category_name, stream_id) when is_bitstring(stream_id) do
-    Fragments.compose(category_name, stream_id)
+  @spec new(Category.t(), StreamId.t()) :: t()
+  def new(category, id) when is_bitstring(id) do
+    %__MODULE__{category: category, id: id, full: Fragments.compose(category, id)}
   end
 
-  @spec parse(String.t()) :: {:ok, t()} | {:error, Fragments.Error.t()}
-  def parse(stream_name) do
-    case Fragments.split(stream_name) do
-      {:ok, [_category, _stream_id]} -> {:ok, stream_name}
-      {:error, error} -> {:error, error}
+  @spec decode(String.t()) :: {:ok, t()} | {:error, Fragments.Error.t()}
+  def decode(stream_name) when is_bitstring(stream_name) do
+    with {:ok, [category, id]} <- Fragments.split(stream_name) do
+      {:ok, %__MODULE__{category: category, id: id, full: stream_name}}
     end
   end
 
-  @spec parse!(String.t()) :: t()
-  def parse!(stream_name) do
-    case parse(stream_name) do
-      {:ok, stream_name} -> stream_name
-      {:error, error} -> raise error
-    end
-  end
-
-  @spec decode(t()) :: {:ok, {Category.t(), StreamId.t()}} | {:error, Fragments.Error.t()}
-  def decode(stream_name) do
-    with {:ok, [category, stream_id]} <- Fragments.split(stream_name) do
-      {:ok, {category, stream_id}}
-    end
-  end
-
-  @spec decode!(t()) :: {Category.t(), StreamId.t()}
+  @spec decode!(String.t()) :: t()
   def decode!(stream_name) do
     case decode(stream_name) do
       {:ok, result} -> result
@@ -95,25 +81,7 @@ defmodule Equinox.Codec.StreamName do
     end
   end
 
-  @spec match(Category.t(), t()) ::
-          {:ok, StreamId.t()}
-          | {:error, Fragments.Error.t()}
-          | {:error, WrongCategory.t()}
-  def match(match_category, stream_name) do
-    with {:ok, {category_name, stream_id}} <- decode(stream_name) do
-      if category_name == match_category do
-        {:ok, stream_id}
-      else
-        {:error, WrongCategory.exception(category_name)}
-      end
-    end
-  end
-
-  @spec match!(Category.t(), t()) :: StreamId.t()
-  def match!(match_category, stream_name) do
-    case match(match_category, stream_name) do
-      {:ok, stream_id} -> stream_id
-      {:error, exception} -> raise exception
-    end
+  defimpl String.Chars do
+    def to_string(stream_name), do: stream_name.full
   end
 end

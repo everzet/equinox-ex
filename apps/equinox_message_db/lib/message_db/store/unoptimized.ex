@@ -19,7 +19,7 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
             ],
             cache: [
               type: {:or, [{:tuple, [:atom, :keyword_list]}, :mfa]},
-              default: {Equinox.Cache.NoCache, nil},
+              default: {Equinox.Cache.NoCache, []},
               doc: "Builder function returning implementation of `Equinox.Cache` protocol"
             ],
             codec: [

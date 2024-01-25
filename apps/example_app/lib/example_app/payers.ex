@@ -6,7 +6,7 @@ defmodule ExampleApp.Payers do
 
     def category, do: "Payer"
     def id(payer_id), do: StreamId.encode(payer_id)
-    def name(payer_id), do: StreamName.encode(category(), id(payer_id))
+    def name(payer_id), do: StreamName.new(category(), id(payer_id))
   end
 
   defmodule Events do

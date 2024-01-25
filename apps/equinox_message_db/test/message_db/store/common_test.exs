@@ -4,6 +4,7 @@ defmodule MessageDb.Store.CommonTest do
   import Mox
 
   alias Equinox.Store
+  alias Equinox.Codec.StreamName
   alias Equinox.Store.{State, EventsToSync}
   alias Equinox.Events.EventData
   alias Equinox.Decider.LoadPolicy
@@ -32,7 +33,7 @@ defmodule MessageDb.Store.CommonTest do
 
   # We test all store versions with the same test suite
   Enum.each([Unoptimized, LatestKnownEvent], fn store_mod ->
-    @stream "s-1"
+    @stream StreamName.decode!("s-1")
     @orig State.init(Fold, -1)
 
     setup do

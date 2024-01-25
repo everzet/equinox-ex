@@ -1,5 +1,4 @@
 defmodule Equinox.MessageDb.Writer do
-  alias Equinox.Codec.StreamName
   alias Equinox.Events.EventData
 
   @type expected_version :: -1 | non_neg_integer()
@@ -17,12 +16,12 @@ defmodule Equinox.MessageDb.Writer do
 
     @type t :: %__MODULE__{
             message: String.t(),
-            stream_name: nil | StreamName.t(),
+            stream_name: nil | String.t(),
             stream_version: nil | -1 | non_neg_integer()
           }
   end
 
-  @spec write_messages(Postgrex.conn(), StreamName.t(), list(EventData.t()), expected_version()) ::
+  @spec write_messages(Postgrex.conn(), String.t(), list(EventData.t()), expected_version()) ::
           {:ok, new_version :: written_position()}
           | {:error,
              StreamVersionConflict.t()

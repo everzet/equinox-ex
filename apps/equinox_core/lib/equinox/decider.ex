@@ -63,8 +63,8 @@ defmodule Equinox.Decider do
           resync: ResyncPolicy.t()
         }
 
-  @spec for_stream(String.t(), Options.t()) :: t()
-  def for_stream(stream_name, opts) do
+  @spec for_stream(StreamName.t(), Options.t()) :: t()
+  def for_stream(%StreamName{} = stream_name, opts) do
     opts
     |> Options.validate!()
     |> Keyword.put(:stream, stream_name)
@@ -73,11 +73,11 @@ defmodule Equinox.Decider do
 
   @spec async(t(), Async.Options.t()) :: Async.t()
   @spec async(StreamName.t(), [Options.o() | Async.Options.o()]) :: Async.t()
-  def async(stream_name_or_decider, opts \\ [])
+  def async(stream_or_decider, opts \\ [])
 
   def async(%__MODULE__{} = decider, opts), do: Async.wrap_decider(decider, opts)
 
-  def async(stream_name, opts) do
+  def async(%StreamName{} = stream_name, opts) do
     {decider_opts, async_opts} = Keyword.split(opts, Options.keys())
 
     stream_name
@@ -96,7 +96,7 @@ defmodule Equinox.Decider do
   end
 
   @spec start(StreamName.t(), [Options.o() | Async.Options.o()]) :: Async.t() | pid()
-  def start(stream_name, both_opts) when is_bitstring(stream_name) do
+  def start(%StreamName{} = stream_name, both_opts) do
     stream_name
     |> async(both_opts)
     |> start()

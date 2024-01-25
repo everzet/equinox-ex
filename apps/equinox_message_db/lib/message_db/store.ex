@@ -5,7 +5,7 @@ defmodule Equinox.MessageDb.Store do
   def sync(conn, stream_name, state, to_sync, codec, fold) do
     messages = EventsToSync.to_messages(to_sync, codec)
 
-    case Writer.write_messages(conn, stream_name, messages, state.version) do
+    case Writer.write_messages(conn, stream_name.full, messages, state.version) do
       {:ok, new_version} ->
         new_state =
           to_sync.events
@@ -21,7 +21,7 @@ defmodule Equinox.MessageDb.Store do
 
   def load_unoptimized(conn, stream_name, state, codec, fold, batch_size) do
     conn
-    |> Reader.stream_messages(stream_name, state.version + 1, batch_size)
+    |> Reader.stream_messages(stream_name.full, state.version + 1, batch_size)
     |> Enum.reduce_while({:ok, state}, fn
       {:ok, timeline_event}, {:ok, state} ->
         case codec.decode(timeline_event) do
@@ -43,7 +43,7 @@ defmodule Equinox.MessageDb.Store do
   end
 
   def load_latest_known_event(conn, stream_name, state, codec, fold) do
-    case Reader.get_last_stream_message(conn, stream_name) do
+    case Reader.get_last_stream_message(conn, stream_name.full) do
       {:ok, nil} ->
         {:ok, state}
 

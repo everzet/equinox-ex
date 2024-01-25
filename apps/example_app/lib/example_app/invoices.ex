@@ -4,7 +4,7 @@ defmodule ExampleApp.Invoices do
 
     def category, do: "Invoice"
     def id(invoice_id), do: StreamId.encode(invoice_id)
-    def name(invoice_id), do: StreamName.encode(category(), id(invoice_id))
+    def name(invoice_id), do: StreamName.new(category(), id(invoice_id))
   end
 
   defmodule Events do
