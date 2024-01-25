@@ -155,7 +155,7 @@ defmodule Equinox.Decider do
     end)
   end
 
-  defp transact_with_resync(%__MODULE__{} = decider, state, decision, attempt \\ 0) do
+  defp transact_with_resync(%__MODULE__{} = decider, state, decision, attempt \\ 1) do
     case attempt_to_transact(decider, state, decision, attempt) do
       {:ok, result} ->
         {:ok, result}
@@ -164,7 +164,7 @@ defmodule Equinox.Decider do
         {:error, error}
 
       {:conflict, resync_fun} ->
-        with :ok <- ResyncPolicy.validate_attempt(decider.resync, attempt),
+        with :ok <- ResyncPolicy.validate_resync_attempt(decider.resync, attempt),
              {:ok, resynced_state} <- resync_fun.() do
           transact_with_resync(decider, resynced_state, decision, attempt + 1)
         end
