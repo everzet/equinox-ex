@@ -4,7 +4,7 @@ defmodule Equinox.Store.State do
   defstruct [:value, :version]
 
   @type t :: %__MODULE__{value: Fold.result(), version: stream_version()}
-  @type stream_version :: term()
+  @type stream_version :: -1 | non_neg_integer()
 
   @spec ensure_initialized(nil | t(), Fold.t(), stream_version()) :: t()
   def ensure_initialized(nil, fold, initial_version), do: init(fold, initial_version)
