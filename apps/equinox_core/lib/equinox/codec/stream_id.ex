@@ -43,7 +43,11 @@ defmodule Equinox.Codec.StreamId do
 
   @enforce_keys [:fragments, :combined]
   defstruct [:fragments, :combined]
-  @type t :: %__MODULE__{fragments: nonempty_list(String.t()), combined: String.t()}
+
+  @type t :: %__MODULE__{
+          fragments: nonempty_list(String.t()),
+          combined: String.t()
+        }
 
   @spec new(String.t() | nonempty_list(String.t())) :: t()
   def new(fragments) do

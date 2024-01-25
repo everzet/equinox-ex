@@ -6,7 +6,7 @@ defmodule Equinox.Codec.StreamNameTest do
   test "new/2" do
     assert %StreamName{
              category: "stream",
-             id: %StreamId{fragments: ["1"], combined: "1"},
+             stream_id: %StreamId{fragments: ["1"], combined: "1"},
              combined: "stream-1"
            } = StreamName.new("stream", StreamId.new("1"))
 
@@ -17,7 +17,7 @@ defmodule Equinox.Codec.StreamNameTest do
     assert "stream-1" =
              StreamName.encode(%StreamName{
                category: "stream",
-               id: %StreamId{fragments: ["1"], combined: "1"},
+               stream_id: %StreamId{fragments: ["1"], combined: "1"},
                combined: "stream-1"
              })
   end
@@ -26,7 +26,7 @@ defmodule Equinox.Codec.StreamNameTest do
     assert {:ok,
             %StreamName{
               category: "stream",
-              id: %StreamId{fragments: ["1"], combined: "1"},
+              stream_id: %StreamId{fragments: ["1"], combined: "1"},
               combined: "stream-1"
             }} = StreamName.decode("stream-1", 1)
 
@@ -37,7 +37,7 @@ defmodule Equinox.Codec.StreamNameTest do
   test "decode!/1" do
     assert %StreamName{
              category: "stream",
-             id: %StreamId{fragments: ["1"], combined: "1"},
+             stream_id: %StreamId{fragments: ["1"], combined: "1"},
              combined: "stream-1"
            } = StreamName.decode!("stream-1", 1)
 
