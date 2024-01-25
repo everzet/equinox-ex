@@ -41,45 +41,36 @@ defmodule Equinox.Codec.StreamId do
     end
   end
 
-  @type t :: String.t()
+  @enforce_keys [:fragments, :combined]
+  defstruct [:fragments, :combined]
+  @type t :: %__MODULE__{fragments: nonempty_list(String.t()), combined: String.t()}
 
-  @spec encode(String.t()) :: t()
-  def encode(id) when is_bitstring(id), do: Fragments.compose([id])
+  @spec new(String.t() | nonempty_list(String.t())) :: t()
+  def new(fragments) do
+    fragments = List.wrap(fragments)
+    combined = Fragments.compose(fragments)
+    %__MODULE__{fragments: fragments, combined: combined}
+  end
 
-  @spec encode({String.t(), String.t()}) :: t()
-  @spec encode({String.t(), String.t(), String.t()}) :: t()
-  @spec encode({String.t(), String.t(), String.t(), String.t()}) :: t()
-  def encode(tuple) when is_tuple(tuple), do: tuple |> Tuple.to_list() |> Fragments.compose()
+  @spec encode(t()) :: String.t()
+  def encode(%__MODULE__{combined: combined}), do: combined
 
-  @spec decode(t(), 1) ::
-          {:ok, String.t()}
-          | {:error, Fragments.Error.t()}
-  @spec decode(t(), 2) ::
-          {:ok, {String.t(), String.t()}}
-          | {:error, Fragments.Error.t()}
-  @spec decode(t(), 3) ::
-          {:ok, {String.t(), String.t(), String.t()}}
-          | {:error, Fragments.Error.t()}
-  @spec decode(t(), 4) ::
-          {:ok, {String.t(), String.t(), String.t(), String.t()}}
-          | {:error, Fragments.Error.t()}
-  def decode(string, count) do
-    with {:ok, fragments} <- Fragments.split(string, count) do
-      case fragments do
-        [id] -> {:ok, id}
-        list -> {:ok, List.to_tuple(list)}
-      end
+  @spec decode(String.t(), pos_integer()) :: {:ok, t()} | {:error, Fragments.Error.t()}
+  def decode(combined, count) do
+    with {:ok, fragments} <- Fragments.split(combined, count) do
+      {:ok, %__MODULE__{fragments: fragments, combined: combined}}
     end
   end
 
-  @spec decode!(String.t(), 1) :: String.t()
-  @spec decode!(String.t(), 2) :: {String.t(), String.t()}
-  @spec decode!(String.t(), 3) :: {String.t(), String.t(), String.t()}
-  @spec decode!(String.t(), 4) :: {String.t(), String.t(), String.t(), String.t()}
-  def decode!(string, count) do
-    case decode(string, count) do
-      {:ok, res} -> res
+  @spec decode!(String.t(), pos_integer()) :: t()
+  def decode!(combined, count) do
+    case decode(combined, count) do
+      {:ok, stream_id} -> stream_id
       {:error, error} -> raise error
     end
+  end
+
+  defimpl String.Chars do
+    def to_string(stream_id), do: stream_id.combined
   end
 end

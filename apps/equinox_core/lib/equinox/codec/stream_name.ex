@@ -57,31 +57,35 @@ defmodule Equinox.Codec.StreamName do
 
   alias Equinox.Codec.StreamId
 
-  @enforce_keys [:category, :id, :full]
-  defstruct [:category, :id, :full]
-  @type t :: %__MODULE__{category: Category.t(), id: StreamId.t(), full: String.t()}
+  @enforce_keys [:category, :id, :combined]
+  defstruct [:category, :id, :combined]
+  @type t :: %__MODULE__{category: Category.t(), id: StreamId.t(), combined: String.t()}
 
   @spec new(Category.t(), StreamId.t()) :: t()
-  def new(category, id) when is_bitstring(id) do
-    %__MODULE__{category: category, id: id, full: Fragments.compose(category, id)}
+  def new(category, %StreamId{} = id) do
+    %__MODULE__{category: category, id: id, combined: Fragments.compose(category, id)}
   end
 
-  @spec decode(String.t()) :: {:ok, t()} | {:error, Fragments.Error.t()}
-  def decode(stream_name) when is_bitstring(stream_name) do
-    with {:ok, [category, id]} <- Fragments.split(stream_name) do
-      {:ok, %__MODULE__{category: category, id: id, full: stream_name}}
+  @spec encode(t()) :: String.t()
+  def encode(%__MODULE__{combined: combined}), do: combined
+
+  @spec decode(String.t(), pos_integer()) :: {:ok, t()} | {:error, Fragments.Error.t()}
+  def decode(stream_name, id_count) when is_bitstring(stream_name) do
+    with {:ok, [category, stream_id]} <- Fragments.split(stream_name),
+         {:ok, stream_id} <- StreamId.decode(stream_id, id_count) do
+      {:ok, %__MODULE__{category: category, id: stream_id, combined: stream_name}}
     end
   end
 
-  @spec decode!(String.t()) :: t()
-  def decode!(stream_name) do
-    case decode(stream_name) do
+  @spec decode!(String.t(), pos_integer()) :: t()
+  def decode!(stream_name, id_count) do
+    case decode(stream_name, id_count) do
       {:ok, result} -> result
       {:error, error} -> raise error
     end
   end
 
   defimpl String.Chars do
-    def to_string(stream_name), do: stream_name.full
+    def to_string(stream_name), do: stream_name.combined
   end
 end

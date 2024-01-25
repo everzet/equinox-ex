@@ -24,7 +24,7 @@ defmodule Equinox.MessageDb.StoreTest do
     def fold(vals, _), do: Enum.at(vals, -1)
   end
 
-  @stream StreamName.decode!("num-1")
+  @stream StreamName.decode!("num-1", 1)
 
   describe "sync/6" do
     @fold SumFold

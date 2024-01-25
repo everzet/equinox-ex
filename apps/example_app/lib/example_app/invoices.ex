@@ -3,7 +3,7 @@ defmodule ExampleApp.Invoices do
     alias Equinox.Codec.{StreamId, StreamName}
 
     def category, do: "Invoice"
-    def id(invoice_id), do: StreamId.encode(invoice_id)
+    def id(invoice_id), do: StreamId.new(invoice_id)
     def name(invoice_id), do: StreamName.new(category(), id(invoice_id))
   end
 

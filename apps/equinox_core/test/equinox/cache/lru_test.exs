@@ -4,9 +4,9 @@ defmodule Equinox.Cache.LRUTest do
   alias Equinox.Codec.StreamName
   alias Equinox.{Cache, Cache.LRU, Store.State}
 
-  @stream1 StreamName.decode!("Invoice-1")
-  @stream2 StreamName.decode!("Invoice-2")
-  @stream3 StreamName.decode!("Invoice-3")
+  @stream1 StreamName.decode!("Invoice-1", 1)
+  @stream2 StreamName.decode!("Invoice-2", 1)
+  @stream3 StreamName.decode!("Invoice-3", 1)
 
   test "returns nothing if there is no cache" do
     start_supervised!({LRU, name: TestCache, max_size: 10, max_memory: 100_000})

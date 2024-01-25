@@ -9,7 +9,7 @@ defmodule Equinox.Decider.CommonTest do
   alias Equinox.Store.State
   alias Equinox.StoreMock
 
-  @stream StreamName.decode!("Invoice-1")
+  @stream StreamName.decode!("Invoice-1", 1)
 
   setup :verify_on_exit!
 
@@ -260,7 +260,7 @@ defmodule Equinox.Decider.CommonTest do
 
   defp init(Decider, attrs) do
     attrs
-    |> Keyword.get(:stream_name, StreamName.decode!("Invoice-1"))
+    |> Keyword.get(:stream_name, StreamName.decode!("Invoice-1", 1))
     |> Decider.for_stream(
       store: {StoreMock.Config, allow_from: self()},
       load: Keyword.get(attrs, :load, :require_load),
