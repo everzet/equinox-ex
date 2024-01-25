@@ -57,29 +57,29 @@ defmodule Equinox.Codec.StreamName do
 
   alias Equinox.Codec.StreamId
 
-  @enforce_keys [:category, :stream_id, :combined]
-  defstruct [:category, :stream_id, :combined]
+  @enforce_keys [:category, :stream_id, :whole]
+  defstruct [:category, :stream_id, :whole]
 
   @type t :: %__MODULE__{
           category: Category.t(),
           stream_id: StreamId.t(),
-          combined: String.t()
+          whole: String.t()
         }
 
   @spec new(Category.t(), StreamId.t()) :: t()
   def new(category, %StreamId{} = stream_id) do
-    combined = Fragments.compose(category, stream_id)
-    %__MODULE__{category: category, stream_id: stream_id, combined: combined}
+    whole = Fragments.compose(category, stream_id)
+    %__MODULE__{category: category, stream_id: stream_id, whole: whole}
   end
 
   @spec encode(t()) :: String.t()
-  def encode(%__MODULE__{combined: combined}), do: combined
+  def encode(%__MODULE__{whole: whole}), do: whole
 
   @spec decode(String.t(), pos_integer()) :: {:ok, t()} | {:error, Fragments.Error.t()}
   def decode(string, id_fragment_count) when is_bitstring(string) do
     with {:ok, [category, stream_id]} <- Fragments.split(string),
          {:ok, stream_id} <- StreamId.decode(stream_id, id_fragment_count) do
-      {:ok, %__MODULE__{category: category, stream_id: stream_id, combined: string}}
+      {:ok, %__MODULE__{category: category, stream_id: stream_id, whole: string}}
     end
   end
 
@@ -92,6 +92,6 @@ defmodule Equinox.Codec.StreamName do
   end
 
   defimpl String.Chars do
-    def to_string(stream_name), do: stream_name.combined
+    def to_string(stream_name), do: stream_name.whole
   end
 end

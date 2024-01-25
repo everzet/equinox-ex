@@ -137,7 +137,7 @@ defmodule Equinox.Decider.AsyncTest do
 
       assert 5 = Decider.query(async, & &1)
 
-      assert pid = GenServer.whereis({:global, stream.combined})
+      assert pid = GenServer.whereis({:global, stream.whole})
       assert Process.alive?(pid)
     end
 
@@ -149,7 +149,7 @@ defmodule Equinox.Decider.AsyncTest do
 
       assert 5 = Decider.query(async, & &1)
 
-      assert pid = GenServer.whereis({:global, "prefix-" <> stream.combined})
+      assert pid = GenServer.whereis({:global, "prefix-" <> stream.whole})
       assert Process.alive?(pid)
     end
   end

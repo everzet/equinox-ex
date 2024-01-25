@@ -5,10 +5,10 @@ defmodule Equinox.Codec.StreamIdTest do
 
   describe "new/1" do
     test "encodes an ID string using exact number of fragments" do
-      assert %StreamId{combined: "a"} = StreamId.new("a")
-      assert %StreamId{combined: "a_b"} = StreamId.new(["a", "b"])
-      assert %StreamId{combined: "a_b_c"} = StreamId.new(["a", "b", "c"])
-      assert %StreamId{combined: "a_b_c_d"} = StreamId.new(["a", "b", "c", "d"])
+      assert %StreamId{whole: "a"} = StreamId.new("a")
+      assert %StreamId{whole: "a_b"} = StreamId.new(["a", "b"])
+      assert %StreamId{whole: "a_b_c"} = StreamId.new(["a", "b", "c"])
+      assert %StreamId{whole: "a_b_c_d"} = StreamId.new(["a", "b", "c", "d"])
     end
 
     test "raises exception if any fragment is empty" do

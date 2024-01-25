@@ -85,9 +85,9 @@ defmodule Equinox.Decider.Async do
     server =
       case registry do
         :disabled -> nil
-        :global -> {:global, decider.stream.combined}
-        {:global, prefix} -> {:global, prefix <> decider.stream.combined}
-        module -> {:via, Registry, {module, decider.stream.combined}}
+        :global -> {:global, decider.stream.whole}
+        {:global, prefix} -> {:global, prefix <> decider.stream.whole}
+        module -> {:via, Registry, {module, decider.stream.whole}}
       end
 
     %{async | server: server}

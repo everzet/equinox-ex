@@ -41,40 +41,40 @@ defmodule Equinox.Codec.StreamId do
     end
   end
 
-  @enforce_keys [:fragments, :combined]
-  defstruct [:fragments, :combined]
+  @enforce_keys [:fragments, :whole]
+  defstruct [:fragments, :whole]
 
   @type t :: %__MODULE__{
           fragments: nonempty_list(String.t()),
-          combined: String.t()
+          whole: String.t()
         }
 
   @spec new(String.t() | nonempty_list(String.t())) :: t()
   def new(fragments) do
     fragments = List.wrap(fragments)
-    combined = Fragments.compose(fragments)
-    %__MODULE__{fragments: fragments, combined: combined}
+    whole = Fragments.compose(fragments)
+    %__MODULE__{fragments: fragments, whole: whole}
   end
 
   @spec encode(t()) :: String.t()
-  def encode(%__MODULE__{combined: combined}), do: combined
+  def encode(%__MODULE__{whole: whole}), do: whole
 
   @spec decode(String.t(), pos_integer()) :: {:ok, t()} | {:error, Fragments.Error.t()}
-  def decode(combined, count) do
-    with {:ok, fragments} <- Fragments.split(combined, count) do
-      {:ok, %__MODULE__{fragments: fragments, combined: combined}}
+  def decode(string, count) do
+    with {:ok, fragments} <- Fragments.split(string, count) do
+      {:ok, %__MODULE__{fragments: fragments, whole: string}}
     end
   end
 
   @spec decode!(String.t(), pos_integer()) :: t()
-  def decode!(combined, count) do
-    case decode(combined, count) do
+  def decode!(string, count) do
+    case decode(string, count) do
       {:ok, stream_id} -> stream_id
       {:error, error} -> raise error
     end
   end
 
   defimpl String.Chars do
-    def to_string(stream_id), do: stream_id.combined
+    def to_string(stream_id), do: stream_id.whole
   end
 end
