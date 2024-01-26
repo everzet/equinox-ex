@@ -46,15 +46,6 @@ defmodule Equinox.Codec.StreamName do
     end
   end
 
-  defmodule WrongCategory do
-    defexception [:message]
-    @type t :: %__MODULE__{message: String.t()}
-
-    def exception(category) do
-      %__MODULE__{message: "StreamName: Received unexpected category '#{category}'"}
-    end
-  end
-
   alias Equinox.Codec.StreamId
 
   @enforce_keys [:category, :stream_id, :whole]
