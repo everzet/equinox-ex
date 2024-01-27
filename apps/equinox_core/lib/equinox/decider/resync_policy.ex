@@ -10,6 +10,7 @@ defmodule Equinox.Decider.ResyncPolicy do
   @type t :: %__MODULE__{max_attempts: non_neg_integer()}
   @type option :: :default | {:max_attempts, non_neg_integer()}
 
+  def new(%__MODULE__{} = policy), do: policy
   def new(:default), do: new({:max_attempts, 3})
   def new({:max_attempts, attempts}), do: %__MODULE__{max_attempts: attempts}
 

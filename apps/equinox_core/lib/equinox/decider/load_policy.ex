@@ -16,9 +16,7 @@ defmodule Equinox.Decider.LoadPolicy do
           | {:allow_stale, pos_integer()}
           | :assume_empty
 
-  def wrap(%__MODULE__{} = policy), do: policy
-  def wrap(other), do: new(other)
-
+  def new(%__MODULE__{} = policy), do: policy
   def new(:default), do: new(:require_load)
   def new(:require_load), do: %__MODULE__{max_cache_age: 0}
   def new(:require_leader), do: %__MODULE__{requires_leader?: true, max_cache_age: 0}

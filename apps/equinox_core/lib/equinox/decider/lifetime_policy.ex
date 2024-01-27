@@ -4,10 +4,11 @@ defmodule Equinox.Decider.LifetimePolicy do
   @type t :: %__MODULE__{after_init: timeout(), after_query: timeout(), after_transact: timeout()}
   @type option :: :default | {:max_inactivity, timeout()}
 
+  def new(%__MODULE__{} = policy), do: policy
   def new(:default), do: new({:max_inactivity, :timer.minutes(20)})
   def new(fields) when is_list(fields), do: struct!(__MODULE__, fields)
 
   def new({:max_inactivity, timeout}) do
-    %__MODULE__{after_init: timeout, after_query: timeout, after_transact: timeout}
+    new(after_init: timeout, after_query: timeout, after_transact: timeout)
   end
 end
