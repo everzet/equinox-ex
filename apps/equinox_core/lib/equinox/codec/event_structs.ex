@@ -2,18 +2,19 @@ defmodule Equinox.Codec.EventStructs do
   defmacro __using__(_opts) do
     quote do
       @behaviour Equinox.Codec
-      alias Equinox.Codec.EventStructs.{Upcast, Downcast}
+      alias Equinox.Events.{EventData, TimelineEvent}
+      alias Equinox.Codec.{EventStructs, EventStructs.Upcast, EventStructs.Downcast}
 
       @impl Equinox.Codec
       def encode(%{__struct__: struct} = event, context) do
         event
-        |> Equinox.Codec.EventStructs.struct_to_event_data(__MODULE__)
-        |> Map.put(:metadata, context[:metadata])
+        |> EventStructs.struct_to_event_data(__MODULE__)
+        |> EventData.set_metadata(context[:metadata])
       end
 
       @impl Equinox.Codec
-      def decode(event) do
-        Equinox.Codec.EventStructs.timeline_event_to_struct(event, __MODULE__)
+      def decode(%TimelineEvent{} = event) do
+        EventStructs.timeline_event_to_struct(event, __MODULE__)
       end
 
       defoverridable encode: 2
@@ -46,13 +47,11 @@ defmodule Equinox.Codec.EventStructs do
     if String.starts_with?(full_type, parent_type) do
       type = String.replace_leading(full_type, parent_type <> ".", "")
 
-      data =
-        event
-        |> Downcast.downcast()
-        |> Map.from_struct()
-        |> Map.new(fn {k, v} -> {Atom.to_string(k), v} end)
-
-      Equinox.Events.EventData.new(type: type, data: data)
+      event
+      |> Downcast.downcast()
+      |> Map.from_struct()
+      |> Map.new(fn {k, v} -> {Atom.to_string(k), v} end)
+      |> then(&Equinox.Events.EventData.new(type: type, data: &1))
     else
       raise ArgumentError, "Expected a struct under #{parent_type}, got #{full_type}"
     end

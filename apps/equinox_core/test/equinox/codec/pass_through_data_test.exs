@@ -24,13 +24,12 @@ defmodule Equinox.Codec.PassThroughDataTest do
 
   describe "encode" do
     test "passes through data, unchanged" do
-      assert %EventData{type: "unknown", data: %{"val1" => 1, "val2" => 2}} =
-               PassThroughData.encode(%{"val1" => 1, "val2" => 2}, nil)
+      assert %EventData{type: "Custom", data: %{"val1" => 1, "val2" => 2}} =
+               PassThroughData.encode(%{"type" => "Custom", "val1" => 1, "val2" => 2}, nil)
     end
 
-    test "used type field, if present" do
-      assert %EventData{type: "my event"} =
-               PassThroughData.encode(%{"type" => "my event"}, nil)
+    test "raises ArgumentError if given man has no `type` field" do
+      assert_raise ArgumentError, fn -> PassThroughData.encode(%{}, nil) end
     end
   end
 end

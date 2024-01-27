@@ -18,6 +18,9 @@ defmodule Equinox.Events do
       values = Keyword.put_new(values, :id, Equinox.UUID.generate())
       struct!(__MODULE__, values)
     end
+
+    def set_data(%__MODULE__{} = e, data), do: %{e | data: data}
+    def set_metadata(%__MODULE__{} = e, meta), do: %{e | metadata: meta}
   end
 
   defmodule TimelineEvent do
