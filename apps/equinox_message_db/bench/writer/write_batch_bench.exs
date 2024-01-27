@@ -13,7 +13,7 @@ message_stream =
         "nickname" => "everzet"
       },
       metadata: %{
-        "tenant_id" => "Wrongfast"
+        "tenant_id" => "Equinox"
       }
     )
   end)
@@ -28,14 +28,13 @@ Benchee.run(
     end
   },
   inputs: [
-    {"1 message", 1},
-    {"3 messages", 3},
-    {"10 messages", 10},
-    {"1,000 messages", 1_000},
-    {"10,000 messages", 10_000}
+    {"single writer, 1 message", 1},
+    {"single writer, 5 messages", 5},
+    {"single writer, 10 messages", 10},
+    {"single writer, 100 messages", 100}
   ],
   before_each: fn count ->
-    {"benchmarkStream-" <> UUID.generate(), Enum.take(message_stream, count), count}
+    {"benchmarkStream-" <> UUID.generate(), message_stream |> Enum.take(count), count}
   end,
   time: 10
 )

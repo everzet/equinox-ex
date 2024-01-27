@@ -2,8 +2,6 @@ alias Equinox.UUID
 alias Equinox.Events.EventData
 alias Equinox.MessageDb.{Connection, Writer, Reader}
 
-stream = "benchmarkStream-" <> UUID.generate()
-
 message_stream =
   Stream.repeatedly(fn ->
     EventData.new(
@@ -20,6 +18,8 @@ message_stream =
     )
   end)
 
+stream = "benchmarkStream-" <> UUID.generate()
+
 {:ok, _} = Connection.start_link(name: CONN)
 {:ok, _} = Writer.write_messages(CONN, stream, Enum.take(message_stream, 1_000), -1)
 
@@ -30,8 +30,8 @@ Benchee.run(
     end
   },
   inputs: [
-    {"1 message", 1},
-    {"10 messages", 10},
+    {"5 messages", 5},
+    {"100 messages", 100},
     {"1,000 messages", 1_000}
   ],
   time: 10
