@@ -73,6 +73,15 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
   @enforce_keys [:leader, :follower, :cache, :codec, :fold, :batch_size]
   defstruct [:leader, :follower, :cache, :codec, :fold, :batch_size]
 
+  @type t :: %__MODULE__{
+          leader: Postgrex.conn(),
+          follower: Postgrex.conn(),
+          cache: Equinox.Cache.t(),
+          codec: Equinox.Codec.t(),
+          fold: Equinox.Fold.t(),
+          batch_size: Equinox.MessageDb.Store.batch_size()
+        }
+
   def new(opts), do: struct(__MODULE__, Options.validate!(opts))
 
   defimpl Equinox.Store do

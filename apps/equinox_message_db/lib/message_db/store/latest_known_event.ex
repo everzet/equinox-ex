@@ -66,6 +66,14 @@ defmodule Equinox.MessageDb.Store.LatestKnownEvent do
   @enforce_keys [:leader, :follower, :cache, :codec, :fold]
   defstruct [:leader, :follower, :cache, :codec, :fold]
 
+  @type t :: %__MODULE__{
+          leader: Postgrex.conn(),
+          follower: Postgrex.conn(),
+          cache: Equinox.Cache.t(),
+          codec: Equinox.Codec.t(),
+          fold: Equinox.Fold.t()
+        }
+
   def new(opts), do: struct(__MODULE__, Options.validate!(opts))
 
   defimpl Equinox.Store do

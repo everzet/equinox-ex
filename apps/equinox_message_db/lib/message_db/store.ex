@@ -1,46 +1,57 @@
 defmodule Equinox.MessageDb.Store do
+  alias Equinox.{Store.State, Store.EventsToSync}
+  alias Equinox.{Codec, Codec.StreamName, Fold}
   alias Equinox.Events.TimelineEvent
   alias Equinox.MessageDb.{Reader, Writer}
-  alias Equinox.Store.{State, EventsToSync}
 
+  @type batch_size :: pos_integer()
+
+  @spec sync(Postgrex.conn(), StreamName.t(), State.t(), EventsToSync.t(), Codec.t(), Fold.t()) ::
+          {:ok, State.t()}
+          | {:error, Exception.t()}
   def sync(conn, stream_name, state, events, codec, fold) do
     events
-    |> EventsToSync.to_messages(codec)
-    |> encode_messages()
+    |> encode_events(codec)
     |> then(&Writer.write_messages(conn, stream_name.whole, &1, state.version))
     |> fold_write(events.events, state, fold)
   end
 
+  @spec load_unoptimized(
+          Postgrex.conn(),
+          StreamName.t(),
+          State.t(),
+          Codec.t(),
+          Fold.t(),
+          batch_size()
+        ) ::
+          {:ok, State.t()}
+          | {:error, Exception.t()}
   def load_unoptimized(conn, stream_name, state, codec, fold, batch_size) do
     conn
     |> Reader.stream_messages(stream_name.whole, state.version + 1, batch_size)
-    |> decode_event_stream(codec)
-    |> fold_event_stream({:ok, state}, fold)
+    |> decode_events(codec)
+    |> fold_events(state, fold)
   end
 
+  @spec load_latest_known_event(Postgrex.conn(), StreamName.t(), State.t(), Codec.t(), Fold.t()) ::
+          {:ok, State.t()}
+          | {:error, Exception.t()}
   def load_latest_known_event(conn, stream_name, state, codec, fold) do
     conn
     |> Reader.get_last_stream_message(stream_name.whole)
     |> decode_event(codec)
-    |> fold_event({:ok, state}, fold)
+    |> fold_event(state, fold)
   end
 
-  defp encode_messages(messages),
-    # We let Postgrex do its thing encoding messages _because it is much more optimal
-    # than anything else we would be able to come up with here. It uses IOLists.
-    do: messages
-
-  defp fold_write({:error, error}, _domain_events, _state, _fold), do: {:error, error}
-
-  defp fold_write({:ok, pos}, domain_events, state, fold) do
-    {:ok,
-     domain_events
-     |> fold.fold(state.value)
-     |> State.new(pos)}
-  end
+  defp encode_events(events, codec),
+    # We let Postgrex (through Writer) do its thing encoding messages because it is much
+    # more optimal at that than anything else we would be able to come up with here.
+    # It uses IOLists behind the scene to optimize performance and memory consumption
+    # when writing to the socket.
+    do: EventsToSync.to_messages(events, codec)
 
   defp decode_event({:error, error}, _codec), do: {:error, error}
-  defp decode_event({:ok, nil}, _codec), do: {:ok, {-1, nil}}
+  defp decode_event({:ok, nil}, _codec), do: {:ok, nil}
 
   defp decode_event({:ok, timeline_event}, codec) do
     {:ok,
@@ -54,27 +65,34 @@ defmodule Equinox.MessageDb.Store do
   defp decode_data!(str) when is_bitstring(str), do: Jason.decode!(str)
   defp decode_data!(anything_else), do: anything_else
 
-  defp decode_event_stream(event_stream, codec) do
-    event_stream
+  defp decode_events(events, codec) do
+    events
     |> Task.async_stream(&decode_event(&1, codec), ordered: true)
-    |> Stream.map(fn
-      {:ok, result} -> result
-      {:exit, reason} -> raise RuntimeError, "Failed to decode event: #{inspect(reason)}"
-    end)
+    |> Stream.map(fn {:ok, return} -> return end)
   end
 
-  defp fold_event({:error, error}, {:ok, _state}, _fold), do: {:error, error}
-  defp fold_event({:ok, {_pos, nil}}, {:ok, state}, _fold), do: {:ok, state}
+  defp fold_write({:error, error}, _domain_events, _state, _fold), do: {:error, error}
 
-  defp fold_event({:ok, {pos, evt}}, {:ok, state}, fold) do
+  defp fold_write({:ok, pos}, domain_events, state, fold) do
+    {:ok,
+     domain_events
+     |> fold.fold(state.value)
+     |> State.new(pos)}
+  end
+
+  defp fold_event(event, {:ok, state}, fold), do: fold_event(event, state, fold)
+  defp fold_event({:error, error}, _state, _fold), do: {:error, error}
+  defp fold_event({:ok, nil}, state, _fold), do: {:ok, state}
+
+  defp fold_event({:ok, {pos, evt}}, state, fold) do
     {:ok,
      [evt]
      |> fold.fold(state.value)
      |> State.new(pos)}
   end
 
-  defp fold_event_stream(event_stream, state, fold) do
-    Enum.reduce_while(event_stream, state, fn
+  defp fold_events(events, state, fold) do
+    Enum.reduce_while(events, {:ok, state}, fn
       {:ok, event}, state -> {:cont, fold_event({:ok, event}, state, fold)}
       {:error, error}, {:ok, _partial_state} -> {:halt, {:error, error}}
     end)
