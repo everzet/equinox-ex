@@ -9,7 +9,7 @@ defmodule Equinox.Codec.EventStructs do
       def encode(%{__struct__: struct} = event, context) do
         event
         |> EventStructs.struct_to_event_data(__MODULE__)
-        |> EventData.set_metadata(context[:metadata])
+        |> EventData.update_metadata(fn nil -> context[:metadata] end)
       end
 
       @impl Equinox.Codec

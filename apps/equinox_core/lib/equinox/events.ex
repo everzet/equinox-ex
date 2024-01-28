@@ -19,8 +19,8 @@ defmodule Equinox.Events do
       struct!(__MODULE__, values)
     end
 
-    def set_data(%__MODULE__{} = e, data), do: %{e | data: data}
-    def set_metadata(%__MODULE__{} = e, meta), do: %{e | metadata: meta}
+    def update_data(%__MODULE__{} = e, fun), do: %{e | data: fun.(e.data)}
+    def update_metadata(%__MODULE__{} = e, fun), do: %{e | metadata: fun.(e.metadata)}
   end
 
   defmodule TimelineEvent do
@@ -41,5 +41,8 @@ defmodule Equinox.Events do
     def new(values) when is_list(values) do
       struct!(__MODULE__, values)
     end
+
+    def update_data(%__MODULE__{} = e, fun), do: %{e | data: fun.(e.data)}
+    def update_metadata(%__MODULE__{} = e, fun), do: %{e | metadata: fun.(e.metadata)}
   end
 end
