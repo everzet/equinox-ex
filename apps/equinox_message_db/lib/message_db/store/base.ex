@@ -52,9 +52,10 @@ defmodule Equinox.MessageDb.Store.Base do
     do: EventsToSync.to_messages(events, codec)
 
   defp decode_event({:error, error}, _codec), do: {:error, error}
-  defp decode_event({:ok, nil}, _codec), do: {:ok, nil}
+  defp decode_event({:ok, event}, codec), do: decode_event(event, codec)
+  defp decode_event(nil, _codec), do: {:ok, nil}
 
-  defp decode_event({:ok, timeline_event}, codec) do
+  defp decode_event(timeline_event, codec) do
     {:ok,
      {timeline_event.position,
       timeline_event
@@ -73,29 +74,25 @@ defmodule Equinox.MessageDb.Store.Base do
   end
 
   defp fold_write({:error, error}, _domain_events, _state, _fold), do: {:error, error}
+  defp fold_write({:ok, pos}, events, state, fold), do: fold_event({pos, events}, state, fold)
 
-  defp fold_write({:ok, pos}, domain_events, state, fold) do
-    {:ok,
-     domain_events
-     |> fold.fold(state.value)
-     |> State.new(pos)}
-  end
-
-  defp fold_event(event, {:ok, state}, fold), do: fold_event(event, state, fold)
   defp fold_event({:error, error}, _state, _fold), do: {:error, error}
-  defp fold_event({:ok, nil}, state, _fold), do: {:ok, state}
+  defp fold_event({:ok, event}, state, fold), do: fold_event(event, state, fold)
+  defp fold_event(event, {:ok, state}, fold), do: fold_event(event, state, fold)
+  defp fold_event(nil, state, _fold), do: {:ok, state}
 
-  defp fold_event({:ok, {pos, evt}}, state, fold) do
+  defp fold_event({position, event}, state, fold) do
     {:ok,
-     [evt]
+     event
+     |> List.wrap()
      |> fold.fold(state.value)
-     |> State.new(pos)}
+     |> State.new(position)}
   end
 
   defp fold_events(events, state, fold) do
     Enum.reduce_while(events, {:ok, state}, fn
-      {:ok, event}, state -> {:cont, fold_event({:ok, event}, state, fold)}
       {:error, error}, {:ok, _partial_state} -> {:halt, {:error, error}}
+      {:ok, event}, {:ok, state} -> {:cont, fold_event(event, state, fold)}
     end)
   end
 end
