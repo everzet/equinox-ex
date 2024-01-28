@@ -44,10 +44,11 @@ defmodule Equinox.MessageDb.Store do
   end
 
   defp encode_events(events, codec),
-    # We let Postgrex (through Writer) do its thing encoding messages because it is much
-    # more optimal at that than anything else we would be able to come up with here.
-    # It uses IOLists behind the scene to optimize performance and memory consumption
-    # when writing to the socket.
+    # We simply convert our domain events into timeline events, but leave data and metadata
+    # not serialized.
+    # We let Postgrex (through Writer) do its own thing serializing messages on write. It
+    # is very optimal at that as it uses IOLists behind the scene. That results in best
+    # performance and memory consumption as IOListst are handled very efficiently by VM.
     do: EventsToSync.to_messages(events, codec)
 
   defp decode_event({:error, error}, _codec), do: {:error, error}
