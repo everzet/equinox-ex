@@ -1,7 +1,7 @@
 defmodule Equinox.MessageDb.Store.Base do
   alias Equinox.{Store.State, Store.EventsToSync}
   alias Equinox.{Codec, Codec.StreamName, Fold}
-  alias Equinox.Events.{DomainEvent, TimelineEvent}
+  alias Equinox.Events.{EventData, TimelineEvent}
   alias Equinox.MessageDb.{Reader, Writer}
 
   @type batch_size :: pos_integer()
@@ -47,12 +47,17 @@ defmodule Equinox.MessageDb.Store.Base do
   end
 
   defp encode_events(events, codec) do
-    encode = &codec.encode(&1, events.context)
-    # We let Postgrex (through Writer) do its own thing and serialize messages on write. It
-    # is very optimal at that as it uses IOLists behind the scene. That results in best
-    # performance and memory consumption as IOListst are handled very efficiently by VM.
-    serialize = & &1
-    Enum.map(events.events, &DomainEvent.encode(&1, encode, serialize))
+    Enum.map(events.events, fn event ->
+      event
+      |> codec.encode(events.context)
+      # We do not serialize event data and metadata, passing both through as-is.
+      # Instead we rely on Postgrex (through Writer) to do its own thing and serialize
+      # messages on write for us.
+      # It is very optimal at that as it uses IOLists behind the scene. This results in
+      # best performance and memory consumption. Better than anything we would be able
+      # to produce on our own.
+      |> EventData.serialize(& &1)
+    end)
   end
 
   defp decode_event({:error, error}, _codec), do: {:error, error}
@@ -60,9 +65,11 @@ defmodule Equinox.MessageDb.Store.Base do
   defp decode_event(nil, _codec), do: {:ok, nil}
 
   defp decode_event(event, codec) do
-    deserialize = &@serializer.decode!/1
-    decode = &codec.decode/1
-    {:ok, {event.position, TimelineEvent.decode(event, deserialize, decode)}}
+    {:ok,
+     {event.position,
+      event
+      |> TimelineEvent.deserialize(&@serializer.decode!/1)
+      |> codec.decode()}}
   end
 
   defp decode_events(events, codec) do

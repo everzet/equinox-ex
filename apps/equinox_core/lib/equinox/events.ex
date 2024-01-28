@@ -1,22 +1,6 @@
 defmodule Equinox.Events do
   defmodule DomainEvent do
-    alias Equinox.Events.EventData
-
     @type t :: term()
-    @type encode :: (t() -> EventData.t())
-    @type serialize :: (term() | nil -> term() | binary() | nil)
-
-    @spec encode(t(), encode(), serialize()) :: EventData.t()
-    def encode(event, encode, serialize) do
-      event
-      |> encode.()
-      |> EventData.update_data(&serialize_data(&1, serialize))
-      |> EventData.update_metadata(&serialize_data(&1, serialize))
-    end
-
-    defp serialize_data(nil, _serialize), do: nil
-    defp serialize_data(str, _serialize) when is_bitstring(str), do: str
-    defp serialize_data(term, serialize), do: serialize.(term)
   end
 
   defmodule EventData do
@@ -29,6 +13,7 @@ defmodule Equinox.Events do
             data: term() | binary() | nil,
             metadata: term() | binary() | nil
           }
+    @type serialize :: (term() | nil -> term() | binary() | nil)
 
     @spec new(keyword()) :: t()
     def new(values) when is_list(values) do
@@ -42,6 +27,17 @@ defmodule Equinox.Events do
 
     @spec update_metadata(t(), (term() | binary() | nil -> term() | binary() | nil)) :: t()
     def update_metadata(%__MODULE__{} = event, fun), do: %{event | metadata: fun.(event.metadata)}
+
+    @spec serialize(t(), serialize()) :: t()
+    def serialize(%__MODULE__{} = event, serialize) do
+      event
+      |> update_data(&serialize_data(&1, serialize))
+      |> update_metadata(&serialize_data(&1, serialize))
+    end
+
+    defp serialize_data(nil, _serialize), do: nil
+    defp serialize_data(str, _serialize) when is_bitstring(str), do: str
+    defp serialize_data(term, serialize), do: serialize.(term)
   end
 
   defmodule TimelineEvent do
@@ -59,7 +55,6 @@ defmodule Equinox.Events do
             time: NaiveDateTime.t()
           }
     @type deserialize :: (term() | binary() | nil -> term() | nil)
-    @type decode :: (t() -> nil | DomainEvent.t())
 
     @spec new(keyword()) :: t()
     def new(values) when is_list(values), do: struct!(__MODULE__, values)
@@ -70,12 +65,11 @@ defmodule Equinox.Events do
     @spec update_metadata(t(), (term() | binary() | nil -> term() | binary() | nil)) :: t()
     def update_metadata(%__MODULE__{} = event, fun), do: %{event | metadata: fun.(event.metadata)}
 
-    @spec decode(t(), deserialize(), decode()) :: nil | DomainEvent.t()
-    def decode(%__MODULE__{} = event, deserialize, decode) do
+    @spec deserialize(t(), deserialize()) :: t()
+    def deserialize(%__MODULE__{} = event, deserialize) do
       event
       |> update_data(&deserialize_data(&1, deserialize))
       |> update_metadata(&deserialize_data(&1, deserialize))
-      |> decode.()
     end
 
     defp deserialize_data(str, deserialize) when is_bitstring(str), do: deserialize.(str)
