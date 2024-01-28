@@ -10,8 +10,8 @@ defmodule Equinox.Events do
     @type t :: %__MODULE__{
             id: String.t(),
             type: String.t(),
-            data: map() | nil,
-            metadata: map() | nil
+            data: map() | binary() | nil,
+            metadata: map() | binary() | nil
           }
 
     def new(values) when is_list(values) do
@@ -33,8 +33,8 @@ defmodule Equinox.Events do
             stream_name: String.t(),
             position: non_neg_integer(),
             global_position: non_neg_integer(),
-            data: map() | nil,
-            metadata: map() | nil,
+            data: map() | binary() | nil,
+            metadata: map() | binary() | nil,
             time: NaiveDateTime.t()
           }
 
