@@ -1,10 +1,8 @@
 defmodule Equinox.Decider.LoadPolicy do
-  alias Equinox.Cache
-
   defstruct max_cache_age: 0, requires_leader?: false, assumes_empty?: false
 
   @type t :: %__MODULE__{
-          max_cache_age: Cache.max_age(),
+          max_cache_age: timeout(),
           requires_leader?: boolean(),
           assumes_empty?: boolean()
         }
