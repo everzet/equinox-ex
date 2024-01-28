@@ -6,6 +6,9 @@ defmodule Equinox.MessageDb.Store.Base do
 
   @type batch_size :: pos_integer()
 
+  @deserializer Jason
+  @decode_timeout :timer.seconds(5)
+
   @spec sync(Postgrex.conn(), StreamName.t(), State.t(), EventsToSync.t(), Codec.t(), Fold.t()) ::
           {:ok, State.t()}
           | {:error, Exception.t()}
@@ -64,13 +67,13 @@ defmodule Equinox.MessageDb.Store.Base do
       |> codec.decode()}}
   end
 
-  defp decode_data!(str) when is_bitstring(str), do: Jason.decode!(str)
+  defp decode_data!(str) when is_bitstring(str), do: @deserializer.decode!(str)
   defp decode_data!(anything_else), do: anything_else
 
   defp decode_events(events, codec) do
     events
-    |> Task.async_stream(&decode_event(&1, codec), ordered: true)
-    |> Stream.map(fn {:ok, return} -> return end)
+    |> Task.async_stream(&decode_event(&1, codec), ordered: true, timeout: @decode_timeout)
+    |> Stream.map(fn {:ok, task_return} -> task_return end)
   end
 
   defp fold_write({:error, error}, _domain_events, _state, _fold), do: {:error, error}
