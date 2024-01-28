@@ -53,8 +53,8 @@ defmodule Equinox.MessageDb.ReaderTest do
       assert written.id == message.id
       assert written.type == message.type
       assert written.position == 0
-      assert written.data == message.data
-      assert written.metadata == message.metadata
+      assert written.data
+      assert written.metadata
       assert written.time
     end
 

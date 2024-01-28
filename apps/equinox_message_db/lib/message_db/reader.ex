@@ -16,7 +16,7 @@ defmodule Equinox.MessageDb.Reader do
   def get_category_messages(conn, category, position, batch_size, {member, size} \\ {nil, nil}) do
     conn
     |> Postgrex.query(
-      "SELECT id, type, stream_name, position, global_position, data::jsonb, metadata::jsonb, time
+      "SELECT id, type, stream_name, position, global_position, data::text, metadata::text, time
        FROM get_category_messages($1, $2, $3, null, $4, $5)",
       [category, position, batch_size, member, size],
       decode_mapper: fn row ->
@@ -34,7 +34,7 @@ defmodule Equinox.MessageDb.Reader do
   def get_stream_messages(conn, stream, position, batch_size) do
     conn
     |> Postgrex.query(
-      "SELECT id, type, stream_name, position, global_position, data::jsonb, metadata::jsonb, time
+      "SELECT id, type, stream_name, position, global_position, data::text, metadata::text, time
        FROM get_stream_messages($1, $2, $3)",
       [stream, position, batch_size],
       decode_mapper: fn row ->
@@ -52,7 +52,7 @@ defmodule Equinox.MessageDb.Reader do
   def get_last_stream_message(conn, stream) do
     conn
     |> Postgrex.query(
-      "SELECT id, type, stream_name, position, global_position, data::jsonb, metadata::jsonb, time
+      "SELECT id, type, stream_name, position, global_position, data::text, metadata::text, time
        FROM get_last_stream_message($1)",
       [stream],
       decode_mapper: fn row ->
