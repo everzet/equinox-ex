@@ -2,13 +2,13 @@ defmodule Equinox.MessageDb.Store do
   alias Equinox.MessageDb.{Reader, Writer}
   alias Equinox.Store.{State, EventsToSync}
 
-  def sync(conn, stream_name, state, to_sync, codec, fold) do
-    messages = EventsToSync.to_messages(to_sync, codec)
+  def sync(conn, stream_name, state, events, codec, fold) do
+    messages = EventsToSync.to_messages(events, codec)
 
     case Writer.write_messages(conn, stream_name.whole, messages, state.version) do
       {:ok, new_version} ->
         new_state =
-          to_sync.events
+          events.events
           |> fold.fold(state.value)
           |> State.new(new_version)
 

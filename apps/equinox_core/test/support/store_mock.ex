@@ -8,7 +8,7 @@ defmodule Equinox.StoreMock.Config do
 
   defimpl Equinox.Store do
     def load(store, stream, policy), do: store.mod.load(stream, policy)
-    def sync(store, stream, state, to_sync), do: store.mod.sync(stream, state, to_sync)
+    def sync(store, stream, state, events), do: store.mod.sync(stream, state, events)
   end
 end
 
