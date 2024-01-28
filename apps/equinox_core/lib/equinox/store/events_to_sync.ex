@@ -15,8 +15,8 @@ defmodule Equinox.Store.EventsToSync do
   def empty?(%__MODULE__{events: []}), do: true
   def empty?(%__MODULE__{}), do: false
 
-  @spec to_messages(t(), Codec.t()) :: list(EventData.t())
-  def to_messages(%__MODULE__{} = to_sync, codec) do
-    Enum.map(to_sync.events, &codec.encode(&1, to_sync.context))
+  @spec encode(t(), Codec.t(), DomainEvent.serialize()) :: list(EventData.t())
+  def encode(%__MODULE__{} = to_sync, codec, serialize) do
+    Enum.map(to_sync.events, &DomainEvent.encode(&1, codec, to_sync.context, serialize))
   end
 end

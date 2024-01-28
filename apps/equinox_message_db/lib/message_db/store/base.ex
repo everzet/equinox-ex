@@ -6,7 +6,7 @@ defmodule Equinox.MessageDb.Store.Base do
 
   @type batch_size :: pos_integer()
 
-  @deserializer Jason
+  @serializer Jason
   @decode_timeout :timer.seconds(5)
 
   @spec sync(Postgrex.conn(), StreamName.t(), State.t(), EventsToSync.t(), Codec.t(), Fold.t()) ::
@@ -49,26 +49,18 @@ defmodule Equinox.MessageDb.Store.Base do
   defp encode_events(events, codec),
     # We simply convert our domain events into timeline events, but leave data and metadata
     # not serialized.
-    # We let Postgrex (through Writer) do its own thing serializing messages on write. It
+    # We let Postgrex (through Writer) do its own thing and serialize messages on write. It
     # is very optimal at that as it uses IOLists behind the scene. That results in best
     # performance and memory consumption as IOListst are handled very efficiently by VM.
-    do: EventsToSync.to_messages(events, codec)
+    do: EventsToSync.encode(events, codec, & &1)
 
   defp decode_event({:error, error}, _codec), do: {:error, error}
   defp decode_event({:ok, event}, codec), do: decode_event(event, codec)
   defp decode_event(nil, _codec), do: {:ok, nil}
 
-  defp decode_event(timeline_event, codec) do
-    {:ok,
-     {timeline_event.position,
-      timeline_event
-      |> TimelineEvent.update_data(&decode_data!/1)
-      |> TimelineEvent.update_metadata(&decode_data!/1)
-      |> codec.decode()}}
+  defp decode_event(event, codec) do
+    {:ok, {event.position, TimelineEvent.decode(event, &@serializer.decode!/1, codec)}}
   end
-
-  defp decode_data!(str) when is_bitstring(str), do: @deserializer.decode!(str)
-  defp decode_data!(anything_else), do: anything_else
 
   defp decode_events(events, codec) do
     events
