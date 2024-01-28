@@ -76,57 +76,53 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
   def new(opts), do: struct(__MODULE__, Options.validate!(opts))
 
   defimpl Equinox.Store do
+    alias Equinox.Cache
+    alias Equinox.Store.State
+    alias Equinox.MessageDb.Store, as: BaseStore
     alias Equinox.MessageDb.Store.Unoptimized
+    alias Equinox.MessageDb.Writer.StreamVersionConflict
 
     @impl Equinox.Store
     def load(%Unoptimized{} = store, stream, policy) do
-      init = Equinox.Store.State.init(store.fold, -1)
+      %{
+        leader: l_conn,
+        follower: f_conn,
+        cache: cache,
+        codec: codec,
+        fold: fold,
+        batch_size: b_size
+      } = store
 
-      if policy.assumes_empty? do
-        {:ok, init}
-      else
-        case Equinox.Cache.get(store.cache, stream, policy.max_cache_age) do
-          nil ->
-            if(policy.requires_leader?, do: store.leader, else: store.follower)
-            |> do_load(stream, init, store.cache, store.codec, store.fold, store.batch_size)
+      empty = State.init(store.fold, -1)
 
-          val ->
-            {:ok, val}
-        end
+      cond do
+        policy.assumes_empty? -> {:ok, empty}
+        cached = Cache.get(store.cache, stream, policy.max_cache_age) -> {:ok, cached}
+        policy.requires_leader? -> do_load(l_conn, stream, empty, cache, codec, fold, b_size)
+        :otherwise -> do_load(f_conn, stream, empty, cache, codec, fold, b_size)
       end
     end
 
     @impl Equinox.Store
-    def sync(%Unoptimized{} = store, stream, state, to_sync) do
-      do_sync(
-        store.leader,
-        stream,
-        state,
-        to_sync,
-        store.cache,
-        store.codec,
-        store.fold,
-        store.batch_size
-      )
+    def sync(%Unoptimized{} = store, stream, state, events) do
+      %{leader: conn, cache: cache, codec: codec, fold: fold, batch_size: b_size} = store
+      do_sync(conn, stream, state, events, cache, codec, fold, b_size)
     end
 
     defp do_load(conn, stream, state, cache, codec, fold, batch_size) do
-      case Equinox.MessageDb.Store.load_unoptimized(conn, stream, state, codec, fold, batch_size) do
-        {:ok, state} -> {:ok, tap(state, &Equinox.Cache.put(cache, stream, &1))}
+      case BaseStore.load_unoptimized(conn, stream, state, codec, fold, batch_size) do
+        {:ok, state} -> {:ok, tap(state, &Cache.put(cache, stream, &1))}
         anything_else -> anything_else
       end
     end
 
-    defp do_sync(conn, stream, state, to_sync, cache, codec, fold, batch_size) do
-      case Equinox.MessageDb.Store.sync(conn, stream, state, to_sync, codec, fold) do
-        {:error, %Equinox.MessageDb.Writer.StreamVersionConflict{}} ->
-          {:conflict, fn -> do_load(conn, stream, state, cache, codec, fold, batch_size) end}
+    defp do_sync(conn, stream, state, events, cache, codec, fold, batch_size) do
+      resync_fun = fn -> do_load(conn, stream, state, cache, codec, fold, batch_size) end
 
-        {:ok, new_state} ->
-          {:ok, tap(new_state, &Equinox.Cache.put(cache, stream, &1))}
-
-        anything_else ->
-          anything_else
+      case BaseStore.sync(conn, stream, state, events, codec, fold) do
+        {:error, %StreamVersionConflict{}} -> {:conflict, resync_fun}
+        {:ok, new_state} -> {:ok, tap(new_state, &Cache.put(cache, stream, &1))}
+        anything_else -> anything_else
       end
     end
   end
