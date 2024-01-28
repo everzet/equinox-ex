@@ -1,10 +1,10 @@
-defmodule Equinox.MessageDb.StoreTest do
+defmodule Equinox.MessageDb.Store.BaseTest do
   use Equinox.MessageDb.ConnCase
 
   alias Equinox.Codec.StreamName
   alias Equinox.Store.{State, EventsToSync}
   alias Equinox.Events.EventData
-  alias Equinox.MessageDb.{Store, Writer}
+  alias Equinox.MessageDb.{Store.Base, Writer}
 
   defmodule NumberCodec do
     @behaviour Equinox.Codec
@@ -33,23 +33,30 @@ defmodule Equinox.MessageDb.StoreTest do
 
     test_in_isolation "syncs from initial state", %{conn: conn} do
       assert {:ok, %State{value: 9, version: 2}} =
-               Store.sync(conn, @stream, @state, EventsToSync.new([2, 3, 4]), @codec, @fold)
+               Base.sync(conn, @stream, @state, EventsToSync.new([2, 3, 4]), @codec, @fold)
     end
 
     test_in_isolation "syncs from intermediate state", %{conn: conn} do
       assert {:ok, %State{value: 5, version: 1}} =
-               Store.sync(conn, @stream, @state, EventsToSync.new([2, 3]), @codec, @fold)
+               Base.sync(conn, @stream, @state, EventsToSync.new([2, 3]), @codec, @fold)
 
       assert {:ok, %State{value: 9, version: 2}} =
-               Store.sync(conn, @stream, State.new(5, 1), EventsToSync.new([4]), @codec, @fold)
+               Base.sync(
+                 conn,
+                 @stream,
+                 State.new(5, 1),
+                 EventsToSync.new([4]),
+                 @codec,
+                 @fold
+               )
     end
 
     test_in_isolation "handles version conflicts by returning error", %{conn: conn} do
       assert {:ok, %State{value: 5, version: 1}} =
-               Store.sync(conn, @stream, @state, EventsToSync.new([2, 3]), @codec, @fold)
+               Base.sync(conn, @stream, @state, EventsToSync.new([2, 3]), @codec, @fold)
 
       assert {:error, %Writer.StreamVersionConflict{}} =
-               Store.sync(conn, @stream, @state, EventsToSync.new([4]), @codec, @fold)
+               Base.sync(conn, @stream, @state, EventsToSync.new([4]), @codec, @fold)
     end
   end
 
@@ -60,42 +67,42 @@ defmodule Equinox.MessageDb.StoreTest do
 
     test_in_isolation "loads from non-initialized state", %{conn: conn} do
       assert {:ok, %State{}} =
-               Store.sync(conn, @stream, @state, EventsToSync.new([2, 3, 4]), @codec, @fold)
+               Base.sync(conn, @stream, @state, EventsToSync.new([2, 3, 4]), @codec, @fold)
 
       assert {:ok, %State{value: 9, version: 2}} =
-               Store.load_unoptimized(conn, @stream, @state, @codec, @fold, 100)
+               Base.load_unoptimized(conn, @stream, @state, @codec, @fold, 100)
     end
 
     test_in_isolation "loads from initial state", %{conn: conn} do
       assert {:ok, %State{}} =
-               Store.sync(conn, @stream, @state, EventsToSync.new([2, 3, 4]), @codec, @fold)
+               Base.sync(conn, @stream, @state, EventsToSync.new([2, 3, 4]), @codec, @fold)
 
       assert {:ok, %State{value: 9, version: 2}} =
-               Store.load_unoptimized(conn, @stream, @state, @codec, @fold, 100)
+               Base.load_unoptimized(conn, @stream, @state, @codec, @fold, 100)
     end
 
     test_in_isolation "loads from intermediate state", %{conn: conn} do
       assert {:ok, %State{}} =
-               Store.sync(conn, @stream, @state, EventsToSync.new([2, 3, 4]), @codec, @fold)
+               Base.sync(conn, @stream, @state, EventsToSync.new([2, 3, 4]), @codec, @fold)
 
       assert {:ok, %State{value: 9, version: 2}} =
-               Store.load_unoptimized(conn, @stream, State.new(5, 1), @codec, @fold, 100)
+               Base.load_unoptimized(conn, @stream, State.new(5, 1), @codec, @fold, 100)
     end
 
     test_in_isolation "handles empty streams", %{conn: conn} do
       assert {:ok, %State{value: 0, version: -1}} =
-               Store.load_unoptimized(conn, @stream, @state, @codec, @fold, 100)
+               Base.load_unoptimized(conn, @stream, @state, @codec, @fold, 100)
     end
 
     test_in_isolation "handles different batch sizes", %{conn: conn} do
       assert {:ok, %State{}} =
-               Store.sync(conn, @stream, @state, EventsToSync.new([2, 3, 4]), @codec, @fold)
+               Base.sync(conn, @stream, @state, EventsToSync.new([2, 3, 4]), @codec, @fold)
 
       assert {:ok, %State{value: 9, version: 2}} =
-               Store.load_unoptimized(conn, @stream, @state, @codec, @fold, 1)
+               Base.load_unoptimized(conn, @stream, @state, @codec, @fold, 1)
 
       assert {:ok, %State{value: 9, version: 2}} =
-               Store.load_unoptimized(conn, @stream, @state, @codec, @fold, 100)
+               Base.load_unoptimized(conn, @stream, @state, @codec, @fold, 100)
     end
   end
 
@@ -106,31 +113,31 @@ defmodule Equinox.MessageDb.StoreTest do
 
     test_in_isolation "loads from non-initialized state", %{conn: conn} do
       assert {:ok, %State{}} =
-               Store.sync(conn, @stream, @state, EventsToSync.new([2, 3, 4]), @codec, @fold)
+               Base.sync(conn, @stream, @state, EventsToSync.new([2, 3, 4]), @codec, @fold)
 
       assert {:ok, %State{value: 4, version: 2}} =
-               Store.load_latest_known_event(conn, @stream, @state, @codec, @fold)
+               Base.load_latest_known_event(conn, @stream, @state, @codec, @fold)
     end
 
     test_in_isolation "loads from initial state", %{conn: conn} do
       assert {:ok, %State{}} =
-               Store.sync(conn, @stream, @state, EventsToSync.new([2, 3, 4]), @codec, @fold)
+               Base.sync(conn, @stream, @state, EventsToSync.new([2, 3, 4]), @codec, @fold)
 
       assert {:ok, %State{value: 4, version: 2}} =
-               Store.load_latest_known_event(conn, @stream, @state, @codec, @fold)
+               Base.load_latest_known_event(conn, @stream, @state, @codec, @fold)
     end
 
     test_in_isolation "loads from intermediate state", %{conn: conn} do
       assert {:ok, %State{}} =
-               Store.sync(conn, @stream, @state, EventsToSync.new([2, 3, 4]), @codec, @fold)
+               Base.sync(conn, @stream, @state, EventsToSync.new([2, 3, 4]), @codec, @fold)
 
       assert {:ok, %State{value: 4, version: 2}} =
-               Store.load_latest_known_event(conn, @stream, State.new(3, 1), @codec, @fold)
+               Base.load_latest_known_event(conn, @stream, State.new(3, 1), @codec, @fold)
     end
 
     test_in_isolation "handles empty streams", %{conn: conn} do
       assert {:ok, %State{value: nil, version: -1}} =
-               Store.load_latest_known_event(conn, @stream, @state, @codec, @fold)
+               Base.load_latest_known_event(conn, @stream, @state, @codec, @fold)
     end
   end
 end

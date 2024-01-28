@@ -77,10 +77,8 @@ defmodule Equinox.MessageDb.Store.LatestKnownEvent do
   def new(opts), do: struct(__MODULE__, Options.validate!(opts))
 
   defimpl Equinox.Store do
-    alias Equinox.Cache
-    alias Equinox.Store.State
-    alias Equinox.MessageDb.Store, as: BaseStore
-    alias Equinox.MessageDb.Store.LatestKnownEvent
+    alias Equinox.{Cache, Store.State}
+    alias Equinox.MessageDb.Store.{Base, LatestKnownEvent}
     alias Equinox.MessageDb.Writer.StreamVersionConflict
 
     @impl Equinox.Store
@@ -103,7 +101,7 @@ defmodule Equinox.MessageDb.Store.LatestKnownEvent do
     end
 
     defp do_load(conn, stream, state, cache, codec, fold) do
-      case BaseStore.load_latest_known_event(conn, stream, state, codec, fold) do
+      case Base.load_latest_known_event(conn, stream, state, codec, fold) do
         {:ok, state} -> {:ok, tap(state, &Cache.put(cache, stream, &1))}
         anything_else -> anything_else
       end
@@ -112,7 +110,7 @@ defmodule Equinox.MessageDb.Store.LatestKnownEvent do
     defp do_sync(conn, stream, state, events, cache, codec, fold) do
       resync_fun = fn -> do_load(conn, stream, state, cache, codec, fold) end
 
-      case BaseStore.sync(conn, stream, state, events, codec, fold) do
+      case Base.sync(conn, stream, state, events, codec, fold) do
         {:error, %StreamVersionConflict{}} -> {:conflict, resync_fun}
         {:ok, new_state} -> {:ok, tap(new_state, &Cache.put(cache, stream, &1))}
         anything_else -> anything_else

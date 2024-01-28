@@ -1,4 +1,4 @@
-defmodule Equinox.MessageDb.Store do
+defmodule Equinox.MessageDb.Store.Base do
   alias Equinox.{Store.State, Store.EventsToSync}
   alias Equinox.{Codec, Codec.StreamName, Fold}
   alias Equinox.Events.TimelineEvent
