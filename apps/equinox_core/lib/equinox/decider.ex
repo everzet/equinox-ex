@@ -163,8 +163,8 @@ defmodule Equinox.Decider do
       {:error, error} ->
         {:error, error}
 
-      {:conflict, resync_fun} ->
-        with {:ok, resynced_state} <- resync_state(decider, resync_fun, attempt) do
+      {:conflict, resync} ->
+        with {:ok, resynced_state} <- resync_state(decider, resync, attempt) do
           transact_with_resync(decider, resynced_state, decision, attempt + 1)
         end
     end
