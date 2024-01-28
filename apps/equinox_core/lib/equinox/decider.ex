@@ -164,8 +164,7 @@ defmodule Equinox.Decider do
         {:error, error}
 
       {:conflict, resync_fun} ->
-        with :ok <- ResyncPolicy.validate_resync_attempt(decider.resync, attempt),
-             {:ok, resynced_state} <- resync_fun.() do
+        with {:ok, resynced_state} <- resync_state(decider, resync_fun, attempt) do
           transact_with_resync(decider, resynced_state, decision, attempt + 1)
         end
     end
@@ -176,6 +175,15 @@ defmodule Equinox.Decider do
       with {:ok, result, events} <- execute_decision(decider, state, decision),
            {:ok, _synced_state} <- sync_state(decider, state, events) do
         {:ok, result}
+      end
+    end)
+  end
+
+  defp resync_state(%__MODULE__{} = decider, resync, attempt) do
+    Telemetry.span_decider_transact_resync(decider, resync, attempt, fn ->
+      with :ok <- ResyncPolicy.validate_resync_attempt(decider.resync, attempt),
+           {:ok, resynced_state} <- resync.() do
+        {:ok, resynced_state}
       end
     end)
   end

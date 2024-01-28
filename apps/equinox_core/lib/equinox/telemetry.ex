@@ -44,6 +44,17 @@ defmodule Equinox.Telemetry do
     end)
   end
 
+  def span_decider_transact_resync(decider, resync, attempt, fun) do
+    meta = %{decider: decider, resync: resync, attempt: attempt}
+
+    :telemetry.span([:equinox, :decider, :transact, :resync], meta, fn ->
+      case fun.() do
+        {:ok, resynced} -> {{:ok, resynced}, Map.merge(meta, %{resynced_state: resynced})}
+        {:error, error} -> {{:error, error}, Map.merge(meta, %{error: error})}
+      end
+    end)
+  end
+
   def span_decider_transact_decision(decider, state, decision, fun) do
     meta = %{decider: decider, state: state, decision: decision}
 
