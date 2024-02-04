@@ -1,5 +1,5 @@
 defmodule Equinox.Codec do
-  alias Equinox.Events.{TimelineEvent, DomainEvent, EventData}
+  alias Equinox.Events.{DomainEvent, EventData, TimelineEvent}
 
   @type t :: module()
   @type context :: map()

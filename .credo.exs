@@ -69,12 +69,11 @@
           #
           ## Consistency Checks
           #
-
           # I disagree that `ExhaustedResyncAttemptsError` reads or sounds any
           # better than `ExhaustedResyncAttempts`.
-          # So we disable this check:
-          # {Credo.Check.Consistency.ExceptionNames, []},
-
+          # So we set this check to `:low` priority (it only shows up with `--strict`:
+          {Credo.Check.Consistency.ExceptionNames, [priority: :low]},
+          # ---
           {Credo.Check.Consistency.LineEndings, []},
           {Credo.Check.Consistency.ParameterPatternMatching, []},
           {Credo.Check.Consistency.SpaceAroundOperators, []},
