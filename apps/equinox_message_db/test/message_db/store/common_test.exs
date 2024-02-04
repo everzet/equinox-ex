@@ -19,7 +19,7 @@ defmodule MessageDb.Store.CommonTest do
 
   defmodule Fold do
     @behaviour Equinox.Fold
-    def initial(), do: nil
+    def initial, do: nil
     def fold(vals, _), do: Enum.at(vals, -1)
   end
 

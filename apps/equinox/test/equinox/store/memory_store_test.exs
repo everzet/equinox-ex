@@ -14,7 +14,7 @@ defmodule Equinox.Store.MemoryStoreTest do
 
   defmodule SumFold do
     @behaviour Equinox.Fold
-    def initial(), do: 0
+    def initial, do: 0
     def fold(nums, sum), do: Enum.sum([sum | nums])
   end
 

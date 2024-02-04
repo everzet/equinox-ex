@@ -166,11 +166,9 @@ defmodule Equinox.Decider.Async do
   end
 
   defp ensure_server_running(%__MODULE__{server: server} = async, fun) do
-    try do
-      fun.(server)
-    catch
-      :exit, {:noproc, _} -> async |> start() |> then(&fun.(&1.server))
-    end
+    fun.(server)
+  catch
+    :exit, {:noproc, _} -> async |> start() |> then(&fun.(&1.server))
   end
 
   @impl GenServer

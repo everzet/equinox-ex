@@ -57,13 +57,13 @@ defmodule Equinox.UUID do
   Generates a random, version 4 UUID.
   """
   @spec generate() :: t
-  def generate(), do: encode(bingenerate())
+  def generate, do: encode(bingenerate())
 
   @doc """
   Generates a random, version 4 UUID in the binary format.
   """
   @spec bingenerate() :: raw
-  def bingenerate() do
+  def bingenerate do
     <<u0::48, _::4, u1::12, _::2, u2::62>> = :crypto.strong_rand_bytes(16)
     <<u0::48, 4::4, u1::12, 2::2, u2::62>>
   end

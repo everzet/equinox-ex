@@ -14,13 +14,13 @@ defmodule Equinox.MessageDb.Store.BaseTest do
 
   defmodule SumFold do
     @behaviour Equinox.Fold
-    def initial(), do: 0
+    def initial, do: 0
     def fold(nums, sum), do: Enum.sum([sum | nums])
   end
 
   defmodule InsFold do
     @behaviour Equinox.Fold
-    def initial(), do: nil
+    def initial, do: nil
     def fold(vals, _), do: Enum.at(vals, -1)
   end
 
