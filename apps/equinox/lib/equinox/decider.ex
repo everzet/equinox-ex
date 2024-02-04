@@ -114,10 +114,9 @@ defmodule Equinox.Decider do
 
   def query(%__MODULE__{} = decider, query, load_policy) do
     Telemetry.span_decider_query(decider, query, load_policy, fn ->
-      with {:ok, state} <- load_state(decider, LoadPolicy.new(load_policy || decider.load)) do
-        execute_query(decider, state, query)
-      else
-        {:error, unrecoverable_error} -> raise unrecoverable_error
+      case load_state(decider, LoadPolicy.new(load_policy || decider.load)) do
+        {:ok, state} -> execute_query(decider, state, query)
+        {:error, error} -> raise error
       end
     end)
   end
@@ -184,9 +183,8 @@ defmodule Equinox.Decider do
 
   defp resync_state(%__MODULE__{} = decider, resync, attempt) do
     Telemetry.span_decider_transact_resync(decider, resync, attempt, fn ->
-      with :ok <- ResyncPolicy.validate_resync_attempt(decider.resync, attempt),
-           {:ok, resynced_state} <- resync.() do
-        {:ok, resynced_state}
+      with :ok <- ResyncPolicy.validate_resync_attempt(decider.resync, attempt) do
+        resync.()
       end
     end)
   end
@@ -198,12 +196,12 @@ defmodule Equinox.Decider do
   end
 
   defp sync_state(%__MODULE__{} = decider, state, events) do
-    unless Store.EventsToSync.empty?(events) do
+    if Store.EventsToSync.empty?(events) do
+      {:ok, state}
+    else
       Telemetry.span_decider_sync(decider, state, events, fn ->
         Store.sync(decider.store, decider.stream, state, events)
       end)
-    else
-      {:ok, state}
     end
   end
 end

@@ -58,9 +58,10 @@ defmodule Equinox.MessageDb.Writer do
     {:ok, written_position}
   end
 
-  defp handle_write_result({:error, %Postgrex.Error{postgres: postgres} = error}) do
+  defp handle_write_result({:error, %Postgrex.Error{postgres: postgres} = error})
+       when is_map(postgres) do
     cond do
-      is_map(postgres) and postgres.message =~ "Wrong expected version" ->
+      postgres.message =~ "Wrong expected version" ->
         {stream_name, stream_version} =
           case capture_stream_name_and_version(postgres.message) do
             %{"stream" => stream, "version" => version} -> {stream, String.to_integer(version)}
@@ -74,7 +75,7 @@ defmodule Equinox.MessageDb.Writer do
            stream_version: stream_version
          )}
 
-      is_map(postgres) and postgres.message =~ "constraint \"messages_id\"" ->
+      postgres.message =~ "constraint \"messages_id\"" ->
         message_id =
           case capture_duplicate_id(postgres.detail || "") do
             %{"id" => id} -> id
@@ -90,6 +91,10 @@ defmodule Equinox.MessageDb.Writer do
       true ->
         {:error, error}
     end
+  end
+
+  defp handle_write_result({:error, %Postgrex.Error{} = error}) do
+    {:error, error}
   end
 
   defp write_single_message(conn, stream, message, version) do

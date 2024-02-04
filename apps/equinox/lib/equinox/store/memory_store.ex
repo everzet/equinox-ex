@@ -68,11 +68,11 @@ defmodule Equinox.Store.MemoryStore do
 
   @impl GenServer
   def handle_call({:checkout, owner_pid}, _from, state) do
-    if not Map.has_key?(state.stores, owner_pid) do
+    if Map.has_key?(state.stores, owner_pid) do
+      {:reply, {:error, {:already_checked_out, owner_pid}}, state}
+    else
       Process.monitor(owner_pid)
       {:reply, :ok, put_in(state.stores[owner_pid], %{})}
-    else
-      {:reply, {:error, {:already_checked_out, owner_pid}}, state}
     end
   end
 

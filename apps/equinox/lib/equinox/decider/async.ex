@@ -57,6 +57,15 @@ defmodule Equinox.Decider.Async do
   defmodule AsyncError do
     defexception [:message]
     @type t :: %__MODULE__{message: String.t()}
+
+    def exception(error_or_message) do
+      case error_or_message do
+        %__MODULE__{} = already_error -> already_error
+        str when is_bitstring(str) -> %__MODULE__{message: str}
+        err when is_exception(err) -> %__MODULE__{message: Exception.message(err)}
+        term -> %__MODULE__{message: inspect(term)}
+      end
+    end
   end
 
   @enforce_keys [:decider, :supervisor, :lifetime]
@@ -96,15 +105,10 @@ defmodule Equinox.Decider.Async do
   @spec start(t()) :: t()
   def start(%__MODULE__{} = async) do
     Telemetry.span_async_start(async, fn ->
-      with {:ok, pid} <- start_server(async) do
-        update_in(async.server, fn
-          nil -> pid
-          val -> val
-        end)
-      else
+      case start_server(async) do
+        {:ok, pid} -> update_in(async.server, &(&1 || pid))
         {:error, {:already_started, _pid}} -> async
-        {:error, error} when is_exception(error) -> raise AsyncError, Exception.message(error)
-        {:error, error} -> raise AsyncError, "Failed to start process: #{inspect(error)}"
+        {:error, error} -> raise AsyncError, error
       end
     end)
   end
