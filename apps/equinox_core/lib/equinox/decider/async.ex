@@ -44,14 +44,14 @@ defmodule Equinox.Decider.Async do
     @type t :: [o]
     @type o :: unquote(NimbleOptions.option_typespec(@opts))
 
+    def docs, do: NimbleOptions.docs(@opts)
+    def keys, do: Keyword.keys(@opts.schema)
+
     def validate!(opts) do
       opts
       |> NimbleOptions.validate!(@opts)
       |> Keyword.update!(:lifetime, &LifetimePolicy.new/1)
     end
-
-    def docs, do: NimbleOptions.docs(@opts)
-    def keys, do: Keyword.keys(@opts.schema)
   end
 
   defmodule AsyncError do

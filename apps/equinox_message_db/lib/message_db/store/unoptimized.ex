@@ -47,17 +47,17 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
     def validate!(opts) do
       opts
       |> NimbleOptions.validate!(@opts)
-      |> Keyword.update!(:cache, &init_dependency/1)
-      |> Keyword.update!(:codec, &init_dependency/1)
-      |> Keyword.update!(:fold, &init_dependency/1)
-      |> init_connections()
+      |> Keyword.update!(:cache, &init_dep/1)
+      |> Keyword.update!(:codec, &init_dep/1)
+      |> Keyword.update!(:fold, &init_dep/1)
+      |> init_conns()
     end
 
-    defp init_dependency({m, f, a}), do: apply(m, f, a)
-    defp init_dependency({m, o}), do: apply(m, :new, [o])
-    defp init_dependency(a) when is_atom(a), do: a
+    defp init_dep({m, f, a}), do: apply(m, f, a)
+    defp init_dep({m, o}), do: apply(m, :new, [o])
+    defp init_dep(a) when is_atom(a), do: a
 
-    defp init_connections(opts) do
+    defp init_conns(opts) do
       {conn, opts} = Keyword.pop!(opts, :conn)
 
       {leader, follower} =
