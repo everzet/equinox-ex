@@ -140,12 +140,16 @@ defmodule ExampleApp.Invoices do
 
   @impl Supervisor
   def init(_arg) do
+    config = Application.fetch_env!(:example_app, __MODULE__)
+
     children = [
-      {Registry, Application.fetch_env!(:example_app, __MODULE__)[:registry]},
-      {DynamicSupervisor, Application.fetch_env!(:example_app, __MODULE__)[:supervisor]}
+      config[:registry] && {Registry, config[:registry]},
+      config[:supervisor] && {DynamicSupervisor, config[:supervisor]}
     ]
 
-    Supervisor.init(children, strategy: :rest_for_one)
+    children
+    |> Enum.filter(& &1)
+    |> Supervisor.init(strategy: :rest_for_one)
   end
 
   def raise(invoice_id, params) do
