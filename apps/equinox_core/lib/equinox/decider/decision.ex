@@ -5,14 +5,14 @@ defmodule Equinox.Decider.Decision do
     @enforce_keys [:message]
     defexception [:message, :exception, :term]
 
-    @type unwrapped :: Error.t() | Exception.t() | term() | String.t()
     @type t :: %__MODULE__{
             message: String.t(),
             exception: nil | Exception.t(),
             term: nil | term()
           }
+    @type raw :: Exception.t() | term() | String.t()
 
-    @spec exception(unwrapped()) :: t()
+    @spec exception(t() | raw()) :: t()
     def exception(error) do
       case error do
         %__MODULE__{} = already_error ->
@@ -39,13 +39,13 @@ defmodule Equinox.Decider.Decision do
           (Fold.result() ->
              EventsToSync.events()
              | {:ok, EventsToSync.events()}
-             | {:error, Error.unwrapped()})
+             | {:error, Error.t() | Error.raw()})
 
   @type fun_with_result ::
           (Fold.result() ->
              {result(), EventsToSync.events()}
              | {:ok, result(), EventsToSync.events()}
-             | {:error, Error.unwrapped()})
+             | {:error, Error.t() | Error.raw()})
 
   @spec execute(without_result(), Fold.result()) ::
           {:ok, :ok, EventsToSync.t()}
