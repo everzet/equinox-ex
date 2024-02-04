@@ -54,9 +54,9 @@ defmodule Equinox.Decider.Decision do
           {:ok, {:ok, result()}, EventsToSync.t()}
           | {:error, Error.t()}
   def execute({decision, context}, state), do: do_execute(decision, state, context)
-  def execute(decision, state), do: do_execute(decision, state)
+  def execute(decision, state), do: do_execute(decision, state, %{})
 
-  def do_execute(decision, state, context \\ %{}) do
+  defp do_execute(decision, state, context) do
     case decision.(state) do
       {:error, error} -> {:error, Error.exception(error)}
       {:ok, events} -> {:ok, :ok, EventsToSync.new(events, context)}
