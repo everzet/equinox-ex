@@ -52,8 +52,8 @@ defmodule Equinox.Decider do
       |> Keyword.update!(:resync, &ResyncPolicy.new/1)
     end
 
+    defp init_store({m, o}), do: m.new(o)
     defp init_store({m, f, a}), do: apply(m, f, a)
-    defp init_store({m, o}), do: apply(m, :new, [o])
   end
 
   @enforce_keys [:stream, :store, :load, :resync]

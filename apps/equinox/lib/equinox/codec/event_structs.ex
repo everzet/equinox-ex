@@ -1,4 +1,6 @@
 defmodule Equinox.Codec.EventStructs do
+  alias Equinox.Events.EventData
+
   defmacro __using__(_opts) do
     quote do
       @behaviour Equinox.Codec
@@ -51,7 +53,7 @@ defmodule Equinox.Codec.EventStructs do
       |> Downcast.downcast()
       |> Map.from_struct()
       |> Map.new(fn {k, v} -> {Atom.to_string(k), v} end)
-      |> then(&Equinox.Events.EventData.new(type: type, data: &1))
+      |> then(&EventData.new(type: type, data: &1))
     else
       raise ArgumentError, "Expected a struct under #{parent_type}, got #{full_type}"
     end
