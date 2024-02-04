@@ -87,7 +87,7 @@ defmodule MessageDb.Store.CommonTest do
 
         assert {:ok, %State{value: 2}} =
                  new(unquote(store_mod), conn: conn)
-                 |> Store.load(@stream, LoadPolicy.new({:allow_stale, 5_000}))
+                 |> Store.load(@stream, LoadPolicy.new(max_cache_age: :timer.seconds(5)))
       end
 
       test_in_isolation "always caches loaded value", %{conn: conn} do

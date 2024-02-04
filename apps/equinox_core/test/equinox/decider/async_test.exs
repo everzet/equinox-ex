@@ -202,7 +202,7 @@ defmodule Equinox.Decider.AsyncTest do
     end
 
     test "lifetime policy can be specified via shortened version (tuple)" do
-      init(lifetime: {:max_inactivity, :timer.seconds(10)})
+      init(lifetime: [max_inactivity: :timer.seconds(10)])
     end
   end
 

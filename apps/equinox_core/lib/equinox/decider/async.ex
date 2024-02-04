@@ -30,7 +30,7 @@ defmodule Equinox.Decider.Async do
                 {:or,
                  [
                    {:in, [:default]},
-                   {:tuple, [{:in, [:max_inactivity]}, :non_neg_integer]},
+                   {:non_empty_keyword_list, max_inactivity: [type: :non_neg_integer]},
                    {:non_empty_keyword_list,
                     after_init: [type: :non_neg_integer],
                     after_query: [type: :non_neg_integer],

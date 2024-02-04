@@ -17,8 +17,11 @@ defmodule Equinox.Decider do
                 {:or,
                  [
                    {:in,
-                    [:default, :require_load, :require_leader, :any_cached_value, :assume_empty]},
-                   {:tuple, [{:in, [:allow_stale]}, :pos_integer]}
+                    [:default, :assume_empty, :require_load, :require_leader, :any_cached_value]},
+                   {:non_empty_keyword_list,
+                    max_cache_age: [type: :non_neg_integer],
+                    requires_leader?: [type: :boolean],
+                    assumes_empty?: [type: :boolean]}
                  ]},
               default: :default,
               doc: "Default aggregate state loading policy for querying and transacting"
@@ -28,7 +31,7 @@ defmodule Equinox.Decider do
                 {:or,
                  [
                    {:in, [:default]},
-                   {:tuple, [{:in, [:max_attempts]}, :non_neg_integer]}
+                   {:non_empty_keyword_list, max_attempts: [type: :non_neg_integer]}
                  ]},
               default: :default,
               doc: "Aggregate resync policy in case of state <-> stream version conflicts"

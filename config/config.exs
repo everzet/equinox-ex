@@ -55,7 +55,7 @@ config :example_app, ExampleApp.Invoices,
        fold: ExampleApp.Invoices.Fold},
     supervisor: ExampleApp.Invoices.Supervisor,
     registry: ExampleApp.Invoices.Registry,
-    lifetime: {:max_inactivity, :timer.seconds(1)}
+    lifetime: [max_inactivity: :timer.seconds(1)]
   ]
 
 import_config "#{config_env()}.exs"
