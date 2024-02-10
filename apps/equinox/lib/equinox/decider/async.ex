@@ -55,20 +55,6 @@ defmodule Equinox.Decider.Async do
     end
   end
 
-  defmodule AsyncError do
-    defexception [:message]
-    @type t :: %__MODULE__{message: String.t()}
-
-    def exception(error_or_message) do
-      case error_or_message do
-        %__MODULE__{} = already_error -> already_error
-        str when is_bitstring(str) -> %__MODULE__{message: str}
-        err when is_exception(err) -> %__MODULE__{message: Exception.message(err)}
-        term -> %__MODULE__{message: inspect(term)}
-      end
-    end
-  end
-
   @enforce_keys [:decider, :supervisor, :lifetime]
   defstruct [:server, :decider, :supervisor, :lifetime]
 
@@ -109,7 +95,7 @@ defmodule Equinox.Decider.Async do
       case start_server(async) do
         {:ok, pid} -> update_in(async.server, &(&1 || pid))
         {:error, {:already_started, _pid}} -> async
-        {:error, error} -> raise AsyncError, error
+        {:error, error} -> raise RuntimeError, "Error starting Decider process: #{inspect(error)}"
       end
     end)
   end
@@ -125,7 +111,7 @@ defmodule Equinox.Decider.Async do
   @spec start_link(t()) :: GenServer.on_start()
   def start_link(%__MODULE__{} = async) do
     case async.server do
-      pid when is_pid(pid) -> raise AsyncError, "Process #{inspect(pid)} already started"
+      pid when is_pid(pid) -> raise RuntimeError, "Process #{inspect(pid)} already started"
       name -> GenServer.start_link(__MODULE__, async, name: name)
     end
   end
