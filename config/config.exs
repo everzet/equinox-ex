@@ -51,6 +51,7 @@ config :example_app, ExampleApp.Invoices,
     store:
       {Equinox.MessageDb.Store.LatestKnownEvent,
        conn: ExampleApp.MessageDbConn,
+       cache: {Equinox.Cache.ProcessDict, []},
        codec: ExampleApp.Invoices.Events,
        fold: ExampleApp.Invoices.Fold},
     supervisor: ExampleApp.Invoices.Supervisor,
