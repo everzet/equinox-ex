@@ -50,13 +50,8 @@ defmodule Equinox.MessageDb.Store.Base do
     Enum.map(events.events, fn event ->
       event
       |> codec.encode(events.context)
-      # We do not serialize event data and metadata, passing both through as-is.
-      # Instead we rely on Postgrex (through Writer) to do its own thing and serialize
-      # messages on write for us.
-      # It is very optimal at that as it uses IOLists behind the scene. This results in
-      # best performance and memory consumption. Better than anything we would be able
-      # to produce on our own.
-      |> EventData.serialize(& &1)
+      |> EventData.update_data(&serialize_data/1)
+      |> EventData.update_metadata(&serialize_data/1)
     end)
   end
 
@@ -68,7 +63,8 @@ defmodule Equinox.MessageDb.Store.Base do
     {:ok,
      {event.position,
       event
-      |> TimelineEvent.deserialize(&@serializer.decode!/1)
+      |> TimelineEvent.update_data(&deserialize_data/1)
+      |> TimelineEvent.update_metadata(&deserialize_data/1)
       |> codec.decode()}}
   end
 
@@ -100,4 +96,15 @@ defmodule Equinox.MessageDb.Store.Base do
       {:ok, event}, {:ok, state} -> {:cont, fold_event(event, state, fold)}
     end)
   end
+
+  defp deserialize_data(str) when is_bitstring(str), do: @serializer.decode!(str)
+  defp deserialize_data(anything_else), do: anything_else
+
+  # We do not serialize event data or metadata ourselves.
+  # Instead we rely on Postgrex (through Writer) to do its own thing and serialize
+  # messages on write for us.
+  #
+  # Postgrex uses IOLists behind the scene, which results in best performance and
+  # memory consumption. Better than anything we would be able to produce on our own.
+  defp serialize_data(unserialized_value), do: unserialized_value
 end
