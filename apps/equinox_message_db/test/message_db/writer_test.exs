@@ -32,14 +32,15 @@ defmodule Equinox.MessageDb.WriterTest do
       message = EventData.new(type: "SomeMessageType")
       message_id = message.id
 
-      assert {:error, %Writer.DuplicateMessageId{message_id: ^message_id}} =
+      assert {:error, %Writer.DuplicateMessageIdError{message_id: ^message_id}} =
                Writer.write_messages(conn, @stream, [message, message], -1)
     end
 
     test_in_isolation "failing to write message with wrong expected_version", %{conn: conn} do
       message = EventData.new(type: "SomeMessageType")
 
-      assert {:error, %Writer.StreamVersionConflict{stream_name: @stream, stream_version: -1}} =
+      assert {:error,
+              %Writer.StreamVersionConflictError{stream_name: @stream, stream_version: -1}} =
                Writer.write_messages(conn, @stream, [message], 999)
     end
   end

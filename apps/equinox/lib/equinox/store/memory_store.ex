@@ -4,7 +4,7 @@ defmodule Equinox.Store.MemoryStore do
   alias Equinox.Decider.LoadPolicy
   alias Equinox.Store.State
 
-  defmodule NotCheckedOut do
+  defmodule NoCheckoutError do
     defexception [:message]
   end
 
@@ -80,7 +80,7 @@ defmodule Equinox.Store.MemoryStore do
   def handle_call({:load, store, stream_name, policy}, _from, state) do
     cond do
       not Map.has_key?(state.stores, store.owner_pid) ->
-        {:reply, {:error, NotCheckedOut.exception("Store has not been checked out")}, state}
+        {:reply, {:error, NoCheckoutError.exception("Store has not been checked out")}, state}
 
       policy.assumes_empty? ->
         {:reply, {:ok, State.new(store.fold.initial(), -1)}, state}
@@ -100,7 +100,7 @@ defmodule Equinox.Store.MemoryStore do
   def handle_call({:sync, store, stream_name, origin_state, events_to_sync}, _from, state) do
     cond do
       not Map.has_key?(state.stores, store.owner_pid) ->
-        {:reply, {:error, NotCheckedOut.exception("Store has not been checked out")}, state}
+        {:reply, {:error, NoCheckoutError.exception("Store has not been checked out")}, state}
 
       (get_in(state, [:stores, store.owner_pid, stream_name, :version]) || -1) !=
           origin_state.version ->
@@ -140,7 +140,7 @@ defmodule Equinox.Store.MemoryStore do
         |> Enum.filter(fn {name, _stream} -> String.starts_with?(name.whole, prefix) end)
         |> Enum.into(%{}, fn {name, stream} -> {name, stream.events} end)}, state}
     else
-      {:reply, {:error, NotCheckedOut.exception("Store has not been checked out")}, state}
+      {:reply, {:error, NoCheckoutError.exception("Store has not been checked out")}, state}
     end
   end
 

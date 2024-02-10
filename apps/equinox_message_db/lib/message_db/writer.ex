@@ -4,14 +4,14 @@ defmodule Equinox.MessageDb.Writer do
   @type expected_version :: -1 | non_neg_integer()
   @type written_position :: non_neg_integer()
 
-  defmodule DuplicateMessageId do
+  defmodule DuplicateMessageIdError do
     defexception message: "Message with given ID already exists",
                  message_id: nil
 
     @type t :: %__MODULE__{message: String.t(), message_id: nil | String.t()}
   end
 
-  defmodule StreamVersionConflict do
+  defmodule StreamVersionConflictError do
     defexception [:message, :stream_name, :stream_version]
 
     @type t :: %__MODULE__{
@@ -24,8 +24,8 @@ defmodule Equinox.MessageDb.Writer do
   @spec write_messages(Postgrex.conn(), String.t(), list(EventData.t()), expected_version()) ::
           {:ok, new_version :: written_position()}
           | {:error,
-             StreamVersionConflict.t()
-             | DuplicateMessageId.t()
+             StreamVersionConflictError.t()
+             | DuplicateMessageIdError.t()
              | Postgrex.Error.t()}
   def write_messages(conn, stream, messages, version) do
     conn
@@ -69,7 +69,7 @@ defmodule Equinox.MessageDb.Writer do
           end
 
         {:error,
-         StreamVersionConflict.exception(
+         StreamVersionConflictError.exception(
            message: postgres.message,
            stream_name: stream_name,
            stream_version: stream_version
@@ -83,7 +83,7 @@ defmodule Equinox.MessageDb.Writer do
           end
 
         {:error,
-         DuplicateMessageId.exception(
+         DuplicateMessageIdError.exception(
            message: postgres.message,
            message_id: message_id
          )}

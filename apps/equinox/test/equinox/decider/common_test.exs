@@ -153,7 +153,7 @@ defmodule Equinox.Decider.CommonTest do
         end)
 
         assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~
-                 "ExhaustedResyncAttempts"
+                 "MaxResyncsExhaustedError"
       end
 
       test "resync policy can be specified via shortened version (tuple)" do
@@ -165,7 +165,7 @@ defmodule Equinox.Decider.CommonTest do
         end)
 
         assert capture_crash(fn -> Decider.transact(decider, & &1) end) =~
-                 "ExhaustedResyncAttempts"
+                 "MaxResyncsExhaustedError"
       end
 
       test "decision callbacks returning result and events propagate result after sync" do

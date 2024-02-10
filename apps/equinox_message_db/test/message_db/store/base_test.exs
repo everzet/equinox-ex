@@ -55,7 +55,7 @@ defmodule Equinox.MessageDb.Store.BaseTest do
       assert {:ok, %State{value: 5, version: 1}} =
                Base.sync(conn, @stream, @state, EventsToSync.new([2, 3]), @codec, @fold)
 
-      assert {:error, %Writer.StreamVersionConflict{}} =
+      assert {:error, %Writer.StreamVersionConflictError{}} =
                Base.sync(conn, @stream, @state, EventsToSync.new([4]), @codec, @fold)
     end
   end

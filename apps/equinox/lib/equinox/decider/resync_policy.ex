@@ -1,5 +1,5 @@
 defmodule Equinox.Decider.ResyncPolicy do
-  defmodule ExhaustedResyncAttempts do
+  defmodule MaxResyncsExhaustedError do
     defexception [:message]
     @type t :: %__MODULE__{message: String.t()}
   end
@@ -19,7 +19,7 @@ defmodule Equinox.Decider.ResyncPolicy do
       :ok
     else
       {:error,
-       ExhaustedResyncAttempts.exception(
+       MaxResyncsExhaustedError.exception(
          "Decider <-> Stream state version conflict. Aborting after #{attempt - 1} attempt(s) to resync"
        )}
     end

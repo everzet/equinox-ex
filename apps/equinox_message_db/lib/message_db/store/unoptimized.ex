@@ -87,7 +87,7 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
   defimpl Equinox.Store do
     alias Equinox.{Cache, Store.State}
     alias Equinox.MessageDb.Store.{Base, Unoptimized}
-    alias Equinox.MessageDb.Writer.StreamVersionConflict
+    alias Equinox.MessageDb.Writer.StreamVersionConflictError
 
     @impl Equinox.Store
     def load(%Unoptimized{} = store, stream, policy) do
@@ -127,7 +127,7 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
       resync_fun = fn -> do_load(conn, stream, state, cache, codec, fold, batch_size) end
 
       case Base.sync(conn, stream, state, events, codec, fold) do
-        {:error, %StreamVersionConflict{}} -> {:conflict, resync_fun}
+        {:error, %StreamVersionConflictError{}} -> {:conflict, resync_fun}
         {:ok, new_state} -> {:ok, tap(new_state, &Cache.put(cache, stream, &1))}
         anything_else -> anything_else
       end

@@ -30,13 +30,13 @@ defmodule Equinox.Store.MemoryStoreTest do
     test "is required for interacting with the store" do
       store = MemoryStore.new(codec: NumberCodec, fold: SumFold)
 
-      assert {:error, %MemoryStore.NotCheckedOut{}} =
+      assert {:error, %MemoryStore.NoCheckoutError{}} =
                Store.load(store, @stream, LoadPolicy.new(:default))
 
-      assert {:error, %MemoryStore.NotCheckedOut{}} =
+      assert {:error, %MemoryStore.NoCheckoutError{}} =
                Store.sync(store, @stream, @state, EventsToSync.new([]))
 
-      assert {:error, %MemoryStore.NotCheckedOut{}} = MemoryStore.inspect("")
+      assert {:error, %MemoryStore.NoCheckoutError{}} = MemoryStore.inspect("")
     end
 
     test "can only be done once per process" do
