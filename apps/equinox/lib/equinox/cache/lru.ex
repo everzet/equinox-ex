@@ -38,29 +38,21 @@ defmodule Equinox.Cache.LRU do
   def new(name: name), do: %__MODULE__{name: name}
 
   def start_link(opts) do
-    Options.validate!(opts)
     GenServer.start_link(__MODULE__, opts, name: Keyword.fetch!(opts, :name))
   end
 
   defimpl Equinox.Cache do
     @impl Equinox.Cache
     def get(cache, stream_name, max_age) do
+      current_time = System.monotonic_time(:millisecond)
+
       case :ets.lookup(cache.name, stream_name.whole) do
-        [{_, _ttl_key, stream_state, insert_time}] ->
-          case {max_age, System.monotonic_time(:millisecond) - insert_time} do
-            {:infinity, _cache_age} ->
-              GenServer.cast(cache.name, {:touch, stream_name.whole})
-              stream_state
+        [{_cache_key, _ttl_key, stream_state, insert_time}]
+        when max_age == :infinity or max_age > current_time - insert_time ->
+          GenServer.cast(cache.name, {:touch, stream_name.whole})
+          stream_state
 
-            {max_age, cache_age} when max_age > cache_age ->
-              GenServer.cast(cache.name, {:touch, stream_name.whole})
-              stream_state
-
-            _ ->
-              nil
-          end
-
-        [] ->
+        _ ->
           nil
       end
     end
@@ -75,6 +67,8 @@ defmodule Equinox.Cache.LRU do
 
   @impl GenServer
   def init(opts) do
+    opts = Options.validate!(opts)
+
     state = %{
       cache_table: opts[:name],
       ttl_table: :"#{opts[:name]}.TTL",
@@ -148,15 +142,19 @@ defmodule Equinox.Cache.LRU do
     end
   end
 
-  defp exhausted_max_size?(%{max_size: :infinity}), do: false
-
   defp exhausted_max_size?(%{cache_table: cache, max_size: max_size}) do
-    :ets.info(cache, :size) > max_size
+    cond do
+      max_size == :infinity -> false
+      cache_size = :ets.info(cache, :size) -> cache_size > max_size
+    end
   end
-
-  defp exhausted_max_memory?(%{max_memory: :infinity}), do: false
 
   defp exhausted_max_memory?(%{cache_table: cache, max_memory: max_memory}) do
-    :ets.info(cache, :memory) * :erlang.system_info(:wordsize) > max_memory
+    cond do
+      max_memory == :infinity -> false
+      cache_memory = memory_to_bytes(:ets.info(cache, :memory)) -> cache_memory > max_memory
+    end
   end
+
+  defp memory_to_bytes(memory), do: memory * :erlang.system_info(:wordsize)
 end
