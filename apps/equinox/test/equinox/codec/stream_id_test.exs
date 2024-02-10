@@ -24,6 +24,18 @@ defmodule Equinox.Codec.StreamIdTest do
     end
   end
 
+  describe "encode/1" do
+    test "simply returns `whole` part of the id" do
+      id = StreamId.new(["a", "b"])
+      assert "a_b" == StreamId.encode(id)
+    end
+
+    test "is used internally to convert id to string" do
+      id = StreamId.new(["a", "b"])
+      assert "a_b" == "#{id}"
+    end
+  end
+
   describe "decode/2" do
     test "extracts exact number of fragments from an ID string" do
       assert {:ok, %StreamId{fragments: ["a"]}} = StreamId.decode("a", 1)

@@ -23,6 +23,6 @@ defmodule Equinox.Decider.LoadPolicy do
   def new(:assume_empty), do: %__MODULE__{assumes_empty?: true}
   def new(:require_load), do: %__MODULE__{max_cache_age: 0}
   def new(:require_leader), do: %__MODULE__{requires_leader?: true}
-  def new(:any_cached_value), do: %__MODULE__{max_cache_age: :inifinity}
+  def new(:any_cached_value), do: %__MODULE__{max_cache_age: :infinity}
   def new(opts) when is_list(opts), do: struct!(__MODULE__, opts)
 end

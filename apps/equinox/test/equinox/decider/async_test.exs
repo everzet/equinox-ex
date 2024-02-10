@@ -5,6 +5,7 @@ defmodule Equinox.Decider.AsyncTest do
   import ExUnit.CaptureLog
 
   alias Equinox.Decider
+  alias Equinox.Decider.LifetimePolicy
   alias Equinox.Codec.StreamName
   alias Equinox.Store.State
   alias Equinox.StoreMock
@@ -78,7 +79,7 @@ defmodule Equinox.Decider.AsyncTest do
         init(
           supervisor: DeciderTestSupervisor,
           registry: DeciderTestRegistry,
-          lifetime: [after_init: 0]
+          lifetime: %LifetimePolicy{}
         )
 
       {:ok, pid} = Decider.Async.start_server(async)

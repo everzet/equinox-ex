@@ -29,7 +29,7 @@ defmodule Equinox.MessageDb.Store.BaseTest do
   describe "sync/6" do
     @fold SumFold
     @codec NumberCodec
-    @state State.init(@fold, -1)
+    @state State.new(@fold.initial(), -1)
 
     test_in_isolation "syncs from initial state", %{conn: conn} do
       assert {:ok, %State{value: 9, version: 2}} =
@@ -63,7 +63,7 @@ defmodule Equinox.MessageDb.Store.BaseTest do
   describe "load_unoptimized/6" do
     @fold SumFold
     @codec NumberCodec
-    @state State.init(@fold, -1)
+    @state State.new(@fold.initial(), -1)
 
     test_in_isolation "loads from non-initialized state", %{conn: conn} do
       assert {:ok, %State{}} =
@@ -109,7 +109,7 @@ defmodule Equinox.MessageDb.Store.BaseTest do
   describe "load_latest_known_event/5" do
     @fold InsFold
     @codec NumberCodec
-    @state State.init(@fold, -1)
+    @state State.new(@fold.initial(), -1)
 
     test_in_isolation "loads from non-initialized state", %{conn: conn} do
       assert {:ok, %State{}} =

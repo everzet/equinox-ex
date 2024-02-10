@@ -100,7 +100,7 @@ defmodule Equinox.MessageDb.Store.Unoptimized do
         batch_size: b_size
       } = store
 
-      empty = State.init(store.fold, -1)
+      empty = State.new(fold.initial(), -1)
 
       cond do
         policy.assumes_empty? -> {:ok, empty}

@@ -33,13 +33,10 @@ defmodule Equinox.Cache.LRU do
     def docs, do: NimbleOptions.docs(@opts)
   end
 
+  @enforce_keys [:name]
   defstruct [:name]
 
   def new(name: name), do: %__MODULE__{name: name}
-
-  def start_link(opts) do
-    GenServer.start_link(__MODULE__, opts, name: Keyword.fetch!(opts, :name))
-  end
 
   defimpl Equinox.Cache do
     @impl Equinox.Cache
@@ -64,6 +61,20 @@ defmodule Equinox.Cache.LRU do
   end
 
   use GenServer
+
+  def start_link(opts) do
+    GenServer.start_link(__MODULE__, opts, name: Keyword.fetch!(opts, :name))
+  end
+
+  def child_spec(opts) do
+    %{
+      id: Keyword.fetch!(opts, :name),
+      start: {__MODULE__, :start_link, [opts]},
+      restart: :permanent,
+      shutdown: 5_000,
+      type: :worker
+    }
+  end
 
   @impl GenServer
   def init(opts) do

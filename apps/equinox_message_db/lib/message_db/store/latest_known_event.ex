@@ -84,7 +84,7 @@ defmodule Equinox.MessageDb.Store.LatestKnownEvent do
     @impl Equinox.Store
     def load(%LatestKnownEvent{} = store, stream, policy) do
       %{leader: l_conn, follower: f_conn, cache: cache, codec: codec, fold: fold} = store
-      empty = State.init(store.fold, -1)
+      empty = State.new(fold.initial(), -1)
 
       cond do
         policy.assumes_empty? -> {:ok, empty}

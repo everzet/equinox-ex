@@ -11,15 +11,18 @@ defmodule Equinox.Codec.StreamNameTest do
            } = StreamName.new("stream", StreamId.new("1"))
 
     assert_raise StreamName.Category.Error, fn -> StreamName.new("st-ream", StreamId.new("1")) end
+    assert_raise StreamName.Category.Error, fn -> StreamName.new("", StreamId.new("1")) end
   end
 
   test "encode/1" do
-    assert "stream-1" =
-             StreamName.encode(%StreamName{
-               category: "stream",
-               stream_id: %StreamId{fragments: ["1"], whole: "1"},
-               whole: "stream-1"
-             })
+    stream_name = %StreamName{
+      category: "stream",
+      stream_id: %StreamId{fragments: ["1"], whole: "1"},
+      whole: "stream-1"
+    }
+
+    assert "stream-1" = StreamName.encode(stream_name)
+    assert "stream-1" = "#{stream_name}"
   end
 
   test "decode/2" do

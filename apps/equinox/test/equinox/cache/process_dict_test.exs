@@ -7,6 +7,10 @@ defmodule Equinox.Cache.ProcessDictTest do
   @stream1 StreamName.decode!("Invoice-1", 1)
   @stream2 StreamName.decode!("Invoice-2", 1)
 
+  test "configured via helper function new/1" do
+    assert ProcessDict.new() == %ProcessDict{}
+  end
+
   test "returns nil if there is no value stored in the current process dictionary" do
     cache = ProcessDict.new()
     assert Cache.get(cache, @stream1, :infinity) == nil

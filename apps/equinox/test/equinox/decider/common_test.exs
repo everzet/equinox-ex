@@ -5,7 +5,7 @@ defmodule Equinox.Decider.CommonTest do
   import ExUnit.CaptureLog
 
   alias Equinox.Codec.StreamName
-  alias Equinox.{Decider, Decider.Decision}
+  alias Equinox.{Decider, Decider.Decision, Decider.LoadPolicy, Decider.ResyncPolicy}
   alias Equinox.Store.State
   alias Equinox.StoreMock
 
@@ -23,7 +23,7 @@ defmodule Equinox.Decider.CommonTest do
       end
 
       test "respects default load policy set during init" do
-        decider = init(unquote(decider_mod), load: :assume_empty)
+        decider = init(unquote(decider_mod), load: %LoadPolicy{assumes_empty?: true})
         expect(StoreMock, :load, fn _, %{assumes_empty?: true} -> {:ok, State.new(:val, -1)} end)
         assert :val = Decider.query(decider, & &1)
 
@@ -37,11 +37,17 @@ defmodule Equinox.Decider.CommonTest do
       end
 
       test "allows default load policy to be overriden with optional third argument" do
-        decider = init(unquote(decider_mod), load: :assume_empty)
-        expect(StoreMock, :load, fn _, %{assumes_empty?: false} -> {:ok, State.new(:val, -1)} end)
-        assert :val = Decider.query(decider, & &1, :require_load)
-        expect(StoreMock, :load, fn _, %{max_cache_age: 60} -> {:ok, State.new(:val, -1)} end)
-        assert :val = Decider.query(decider, & &1, max_cache_age: 60)
+        decider = init(unquote(decider_mod))
+
+        expect(StoreMock, :load, fn _, %{requires_leader?: true} -> {:ok, State.new(:val, -1)} end)
+
+        assert :val = Decider.query(decider, & &1, :require_leader)
+
+        expect(StoreMock, :load, fn _, %{max_cache_age: :infinity} ->
+          {:ok, State.new(:val, -1)}
+        end)
+
+        assert :val = Decider.query(decider, & &1, :any_cached_value)
       end
 
       test "crashes if store returns error" do
@@ -145,7 +151,7 @@ defmodule Equinox.Decider.CommonTest do
       end
 
       test "respects configured resync policy" do
-        decider = init(unquote(decider_mod), resync: [max_attempts: 0])
+        decider = init(unquote(decider_mod), resync: %ResyncPolicy{max_attempts: 0})
         stub(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
 
         expect(StoreMock, :sync, 1, fn _, %{version: -1}, _ ->
@@ -156,7 +162,7 @@ defmodule Equinox.Decider.CommonTest do
                  "MaxResyncsExhaustedError"
       end
 
-      test "resync policy can be specified via shortened version (tuple)" do
+      test "resync policy can be specified via shortened version" do
         decider = init(unquote(decider_mod), resync: [max_attempts: 0])
         stub(StoreMock, :load, fn _, _ -> {:ok, State.new(0, -1)} end)
 

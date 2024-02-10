@@ -29,6 +29,7 @@ defmodule Equinox.Decider.Async do
               type:
                 {:or,
                  [
+                   {:struct, LifetimePolicy},
                    {:in, [:default]},
                    {:non_empty_keyword_list, max_inactivity: [type: :non_neg_integer]},
                    {:non_empty_keyword_list,

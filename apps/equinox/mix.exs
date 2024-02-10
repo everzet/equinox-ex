@@ -5,6 +5,7 @@ defmodule Equinox.MixProject do
     [
       app: :equinox,
       version: "0.1.0",
+      config_path: "../../config/config.exs",
       build_path: "../../_build",
       deps_path: "../../deps",
       lockfile: "../../mix.lock",

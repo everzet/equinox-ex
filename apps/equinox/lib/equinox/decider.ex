@@ -16,6 +16,7 @@ defmodule Equinox.Decider do
               type:
                 {:or,
                  [
+                   {:struct, LoadPolicy},
                    {:in,
                     [:default, :assume_empty, :require_load, :require_leader, :any_cached_value]},
                    {:non_empty_keyword_list,
@@ -30,6 +31,7 @@ defmodule Equinox.Decider do
               type:
                 {:or,
                  [
+                   {:struct, ResyncPolicy},
                    {:in, [:default]},
                    {:non_empty_keyword_list, max_attempts: [type: :non_neg_integer]}
                  ]},

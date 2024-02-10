@@ -34,7 +34,7 @@ defmodule MessageDb.Store.CommonTest do
   # We test all store versions with the same test suite
   Enum.each([Unoptimized, LatestKnownEvent], fn store_mod ->
     @stream StreamName.decode!("s-1", 1)
-    @orig State.init(Fold, -1)
+    @orig State.new(Fold.initial(), -1)
 
     setup do
       stub(CacheMock, :get, fn @stream, 0 -> nil end)

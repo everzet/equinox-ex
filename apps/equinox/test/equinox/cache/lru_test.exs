@@ -8,6 +8,17 @@ defmodule Equinox.Cache.LRUTest do
   @stream2 StreamName.decode!("Invoice-2", 1)
   @stream3 StreamName.decode!("Invoice-3", 1)
 
+  test "configured via helper function new/1" do
+    assert LRU.new(name: TestCache) == %LRU{name: TestCache}
+  end
+
+  test "max_memory can be specified in bytes, kilobytes, megabytes and gigabytes" do
+    start_supervised!({LRU, name: TestCache1, max_memory: 1_000_000_000})
+    start_supervised!({LRU, name: TestCache2, max_memory: {1_000_000, :kb}})
+    start_supervised!({LRU, name: TestCache3, max_memory: {1_000, :mb}})
+    start_supervised!({LRU, name: TestCache4, max_memory: {1, :gb}})
+  end
+
   test "returns nil if there is no value stored for given key" do
     start_supervised!({LRU, name: TestCache, max_size: 10})
     cache = LRU.new(name: TestCache)
@@ -82,6 +93,17 @@ defmodule Equinox.Cache.LRUTest do
     assert Cache.get(cache, @stream1, :infinity) == nil
     assert Cache.get(cache, @stream2, :infinity) == nil
     assert Cache.get(cache, @stream3, :infinity).value
+  end
+
+  test "all values will be continuously evicted if max_memory is set too low" do
+    start_supervised!({LRU, name: TestCache, max_memory: 10})
+    cache = LRU.new(name: TestCache)
+
+    Cache.put(cache, @stream1, State.new("A", 10))
+    Cache.put(cache, @stream2, State.new("B", 10))
+
+    assert Cache.get(cache, @stream1, :infinity) == nil
+    assert Cache.get(cache, @stream2, :infinity) == nil
   end
 
   test "putting value ensures it is not evicted next" do
