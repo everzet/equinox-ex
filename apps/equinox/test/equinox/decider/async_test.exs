@@ -4,8 +4,7 @@ defmodule Equinox.Decider.AsyncTest do
   import Mox
   import ExUnit.CaptureLog
 
-  alias Equinox.Decider
-  alias Equinox.Decider.LifetimePolicy
+  alias Equinox.{Decider, Decider.LifetimePolicy}
   alias Equinox.Codec.StreamName
   alias Equinox.Store.State
   alias Equinox.StoreMock
@@ -13,7 +12,7 @@ defmodule Equinox.Decider.AsyncTest do
   setup :verify_on_exit!
 
   describe "start/1" do
-    test "spawns server and returns pid if registry is :disabled" do
+    test "spawns and links server if registry is :disabled" do
       async = init(registry: :disabled)
       async = Decider.Async.start(async)
       assert is_pid(async.server)
@@ -21,9 +20,15 @@ defmodule Equinox.Decider.AsyncTest do
 
     test "spawns different servers every time if registry is :disabled" do
       async = init(registry: :disabled)
-      pid1 = Decider.Async.start(async)
-      pid2 = Decider.Async.start(async)
-      assert pid1 != pid2
+      async1 = Decider.Async.start(async)
+      async2 = Decider.Async.start(async)
+      assert async1.server != async2.server
+    end
+
+    test "if given async with already spawned process - returns it" do
+      async = init(registry: :disabled)
+      async = Decider.Async.start(async)
+      assert Decider.Async.start(async).server == async.server
     end
 
     test "spawns server and returns the argument if registry is not :disabled" do
@@ -47,6 +52,31 @@ defmodule Equinox.Decider.AsyncTest do
 
       assert ^async = Decider.Async.start(async)
       assert GenServer.whereis(async.server) == pid
+    end
+  end
+
+  describe "autostart" do
+    test "server starts automatically when executing query" do
+      async = init()
+      stub(StoreMock, :load, fn _, _ -> {:ok, State.new(5, -1)} end)
+      assert Decider.query(async, & &1) == 5
+    end
+
+    test "server starts automatically when executing decision" do
+      async = init()
+      stub(StoreMock, :load, fn _, _ -> {:ok, State.new(5, -1)} end)
+      assert :ok = Decider.transact(async, fn _ -> nil end)
+    end
+
+    test "if one-off server shuts down in between queries, it is started again" do
+      async = init()
+      async = Decider.Async.start(async)
+
+      capture_exit(fn -> Process.exit(async.server, :kill) end)
+      refute Process.alive?(async.server)
+
+      stub(StoreMock, :load, fn _, _ -> {:ok, State.new(5, -1)} end)
+      assert :ok = Decider.transact(async, fn _ -> nil end)
     end
   end
 
@@ -220,7 +250,7 @@ defmodule Equinox.Decider.AsyncTest do
     end)
   end
 
-  defp init(attrs) do
+  defp init(attrs \\ []) do
     attrs
     |> Keyword.get(:stream_name, StreamName.decode!("Invoice-1", 1))
     |> Decider.async(

@@ -95,7 +95,6 @@ defmodule Equinox.Decider.Async do
       case start_server(async) do
         {:ok, pid} -> update_in(async.server, &(&1 || pid))
         {:error, {:already_started, _pid}} -> async
-        {:error, error} -> raise RuntimeError, "Error starting Decider process: #{inspect(error)}"
       end
     end)
   end
@@ -111,7 +110,7 @@ defmodule Equinox.Decider.Async do
   @spec start_link(t()) :: GenServer.on_start()
   def start_link(%__MODULE__{} = async) do
     case async.server do
-      pid when is_pid(pid) -> raise RuntimeError, "Process #{inspect(pid)} already started"
+      pid when is_pid(pid) -> {:ok, pid}
       name -> GenServer.start_link(__MODULE__, async, name: name)
     end
   end
