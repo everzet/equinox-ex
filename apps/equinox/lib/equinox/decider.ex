@@ -90,23 +90,6 @@ defmodule Equinox.Decider do
     |> async(async_opts)
   end
 
-  @spec start(Async.t()) :: Async.t() | pid()
-  def start(%Async{} = async), do: Async.start(async)
-
-  @spec start(t(), Async.Options.t()) :: Async.t() | pid()
-  def start(%__MODULE__{} = decider, async_opts) do
-    decider
-    |> async(async_opts)
-    |> start()
-  end
-
-  @spec start(StreamName.t(), [Options.o() | Async.Options.o()]) :: Async.t() | pid()
-  def start(%StreamName{} = stream_name, both_opts) do
-    stream_name
-    |> async(both_opts)
-    |> start()
-  end
-
   @spec query(t() | Async.t(), Query.t(), nil | LoadPolicy.option()) :: Query.result()
   def query(decider, query, load_policy \\ nil)
 
