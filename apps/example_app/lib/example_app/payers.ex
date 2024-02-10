@@ -1,5 +1,5 @@
 defmodule ExampleApp.Payers do
-  alias ExampleApp.Payers.Events.PayerDeleted
+  @config Application.compile_env!(:example_app, __MODULE__)
 
   defmodule Stream do
     alias Equinox.Codec.{StreamId, StreamName}
@@ -63,12 +63,12 @@ defmodule ExampleApp.Payers do
 
   @impl Supervisor
   def init(_arg) do
-    children = [
-      {DynamicSupervisor, Application.fetch_env!(:example_app, __MODULE__)[:supervisor]},
-      {Equinox.Cache.LRU, Application.fetch_env!(:example_app, __MODULE__)[:cache]}
+    [
+      if(@config[:cache], do: {Equinox.Cache.LRU, @config[:cache]}, else: []),
+      if(@config[:supervisor], do: {DynamicSupervisor, @config[:supervisor]}, else: [])
     ]
-
-    Supervisor.init(children, strategy: :rest_for_one)
+    |> List.flatten()
+    |> Supervisor.init(strategy: :rest_for_one)
   end
 
   def update_profile(payer_id, params) do

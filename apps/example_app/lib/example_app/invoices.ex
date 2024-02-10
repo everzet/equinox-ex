@@ -1,4 +1,6 @@
 defmodule ExampleApp.Invoices do
+  @config Application.compile_env!(:example_app, __MODULE__)
+
   defmodule Stream do
     alias Equinox.Codec.{StreamId, StreamName}
 
@@ -140,15 +142,11 @@ defmodule ExampleApp.Invoices do
 
   @impl Supervisor
   def init(_arg) do
-    config = Application.fetch_env!(:example_app, __MODULE__)
-
-    children = [
-      config[:registry] && {Registry, config[:registry]},
-      config[:supervisor] && {DynamicSupervisor, config[:supervisor]}
+    [
+      if(@config[:registry], do: {Registry, @config[:registry]}, else: []),
+      if(@config[:supervisor], do: {DynamicSupervisor, @config[:supervisor]}, else: [])
     ]
-
-    children
-    |> Enum.filter(& &1)
+    |> List.flatten()
     |> Supervisor.init(strategy: :rest_for_one)
   end
 
