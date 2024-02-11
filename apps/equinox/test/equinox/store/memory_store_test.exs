@@ -22,8 +22,23 @@ defmodule Equinox.Store.MemoryStoreTest do
   @state State.new(SumFold.initial(), -1)
 
   setup do
-    start_supervised!({MemoryStore, []})
-    :ok
+    [pid: start_supervised!({MemoryStore, []})]
+  end
+
+  test "configured by calling new/1 helper" do
+    pid = self()
+
+    assert %MemoryStore{owner: ^pid, codec: :codec, fold: :fold} =
+             MemoryStore.new(owner: pid, codec: :codec, fold: :fold)
+
+    assert %MemoryStore{owner: ^pid, codec: :codec, fold: :fold} =
+             MemoryStore.new(codec: :codec, fold: :fold)
+  end
+
+  describe "start_link/1" do
+    test "returns existing pid when trying to start already started store", %{pid: pid} do
+      assert {:ok, ^pid} = MemoryStore.start_link([])
+    end
   end
 
   describe "checkout/1" do
@@ -36,13 +51,13 @@ defmodule Equinox.Store.MemoryStoreTest do
       assert {:error, %MemoryStore.NoCheckoutError{}} =
                Store.sync(store, @stream, @state, EventsToSync.new([]))
 
-      assert {:error, %MemoryStore.NoCheckoutError{}} = MemoryStore.inspect("")
+      assert {:error, %MemoryStore.NoCheckoutError{}} = MemoryStore.inspect(self(), "")
     end
 
     test "can only be done once per process" do
-      self = self()
-      assert :ok = MemoryStore.checkout()
-      assert {:error, {:already_checked_out, ^self}} = MemoryStore.checkout()
+      owner = self()
+      assert :ok = MemoryStore.checkout(owner)
+      assert {:error, {:already_checked_out, ^owner}} = MemoryStore.checkout(owner)
     end
   end
 
@@ -211,7 +226,7 @@ defmodule Equinox.Store.MemoryStoreTest do
                   %TimelineEvent{data: 2, position: 1},
                   %TimelineEvent{data: 3, position: 2}
                 ]
-              }} = MemoryStore.inspect(@stream_1)
+              }} = MemoryStore.inspect(self(), @stream_1)
 
       assert {:ok,
               %{
@@ -220,9 +235,9 @@ defmodule Equinox.Store.MemoryStoreTest do
                   %TimelineEvent{data: 4, position: 1},
                   %TimelineEvent{data: 5, position: 2}
                 ]
-              }} = MemoryStore.inspect(@stream_2.whole)
+              }} = MemoryStore.inspect(self(), @stream_2.whole)
 
-      assert MemoryStore.inspect(StreamName.decode!("Payroll-3", 1)) == {:ok, %{}}
+      assert MemoryStore.inspect(self(), StreamName.decode!("Payroll-3", 1)) == {:ok, %{}}
     end
 
     test "allows inspecting all timeline events written under certain category" do
@@ -238,16 +253,16 @@ defmodule Equinox.Store.MemoryStoreTest do
                   %TimelineEvent{data: 4, position: 1},
                   %TimelineEvent{data: 5, position: 2}
                 ]
-              }} = MemoryStore.inspect(@category)
+              }} = MemoryStore.inspect(self(), @category)
 
-      assert MemoryStore.inspect("Payroll") == {:ok, %{}}
+      assert MemoryStore.inspect(self(), "Payroll") == {:ok, %{}}
     end
   end
 
   describe "listeners" do
     test "are sent new timeline events when they are being written" do
       MemoryStore.checkout()
-      MemoryStore.add_listener(self())
+      MemoryStore.register_listener(self())
       store = MemoryStore.new(codec: NumberCodec, fold: SumFold)
       Store.sync(store, @stream, @state, EventsToSync.new([1, 2]))
 
@@ -255,10 +270,37 @@ defmodule Equinox.Store.MemoryStoreTest do
       assert_receive %TimelineEvent{data: 2}
     end
 
+    test "multiple listeners can be registered" do
+      owner = self()
+      MemoryStore.checkout(owner)
+
+      tasks = [
+        Task.async(fn ->
+          MemoryStore.register_listener(owner, self())
+          send(owner, :listener_1_ready)
+          assert_receive %TimelineEvent{data: 1}
+          assert_receive %TimelineEvent{data: 2}
+        end),
+        Task.async(fn ->
+          MemoryStore.register_listener(owner, self())
+          send(owner, :listener_2_ready)
+          assert_receive %TimelineEvent{data: 1}
+          assert_receive %TimelineEvent{data: 2}
+        end)
+      ]
+
+      assert_receive :listener_1_ready
+      assert_receive :listener_2_ready
+
+      store = MemoryStore.new(owner: owner, codec: NumberCodec, fold: SumFold)
+      Store.sync(store, @stream, @state, EventsToSync.new([1, 2]))
+      Enum.each(tasks, &Task.await/1)
+    end
+
     test "are cleared when owner process shuts down" do
       Task.async(fn ->
-        MemoryStore.checkout()
-        MemoryStore.add_listener(self())
+        MemoryStore.checkout(self())
+        MemoryStore.register_listener(self(), self())
       end)
       |> Task.await()
 

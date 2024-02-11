@@ -8,10 +8,10 @@ defmodule Equinox.Store.MemoryStore do
     defexception [:message]
   end
 
-  @enforce_keys [:owner_pid, :codec, :fold]
-  defstruct [:owner_pid, :codec, :fold]
+  @enforce_keys [:owner, :codec, :fold]
+  defstruct [:owner, :codec, :fold]
 
-  def new(opts \\ []), do: struct!(__MODULE__, Keyword.put_new(opts, :owner_pid, self()))
+  def new(opts \\ []), do: struct!(__MODULE__, Keyword.put_new(opts, :owner, self()))
 
   defimpl Equinox.Store do
     alias Equinox.Store.MemoryStore
@@ -31,17 +31,17 @@ defmodule Equinox.Store.MemoryStore do
 
   def start_link(_opts) do
     case GenServer.start_link(__MODULE__, :ok, name: @this) do
-      {:error, {:already_started, _}} -> :ignore
+      {:error, {:already_started, pid}} -> {:ok, pid}
       other -> other
     end
   end
 
-  def checkout(owner_pid \\ self()) do
-    GenServer.call(@this, {:checkout, owner_pid})
+  def checkout(owner \\ self()) when is_pid(owner) do
+    GenServer.call(@this, {:checkout, owner})
   end
 
-  def add_listener(owner_pid \\ self(), listener_pid) do
-    GenServer.call(@this, {:add_listener, owner_pid, listener_pid})
+  def register_listener(owner \\ self(), listener) when is_pid(owner) and is_pid(listener) do
+    GenServer.call(@this, {:register_listener, owner, listener})
   end
 
   def load(%__MODULE__{} = store, stream, policy) do
@@ -52,10 +52,10 @@ defmodule Equinox.Store.MemoryStore do
     GenServer.call(@this, {:sync, store, stream, state, events})
   end
 
-  def inspect(owner_pid \\ self(), stream_name_or_prefix) do
+  def inspect(owner, stream_name_or_prefix) when is_pid(owner) do
     case stream_name_or_prefix do
-      %StreamName{whole: whole} -> GenServer.call(@this, {:inspect, owner_pid, whole})
-      prefix when is_bitstring(prefix) -> GenServer.call(@this, {:inspect, owner_pid, prefix})
+      %StreamName{whole: whole} -> GenServer.call(@this, {:inspect, owner, whole})
+      prefix when is_bitstring(prefix) -> GenServer.call(@this, {:inspect, owner, prefix})
     end
   end
 
@@ -67,19 +67,19 @@ defmodule Equinox.Store.MemoryStore do
   end
 
   @impl GenServer
-  def handle_call({:checkout, owner_pid}, _from, state) do
-    if Map.has_key?(state.stores, owner_pid) do
-      {:reply, {:error, {:already_checked_out, owner_pid}}, state}
+  def handle_call({:checkout, owner}, _from, state) do
+    if Map.has_key?(state.stores, owner) do
+      {:reply, {:error, {:already_checked_out, owner}}, state}
     else
-      Process.monitor(owner_pid)
-      {:reply, :ok, put_in(state.stores[owner_pid], %{})}
+      Process.monitor(owner)
+      {:reply, :ok, put_in(state.stores[owner], %{})}
     end
   end
 
   @impl GenServer
   def handle_call({:load, store, stream_name, policy}, _from, state) do
     cond do
-      not Map.has_key?(state.stores, store.owner_pid) ->
+      not Map.has_key?(state.stores, store.owner) ->
         {:reply, {:error, NoCheckoutError.exception("Store has not been checked out")}, state}
 
       policy.assumes_empty? ->
@@ -88,7 +88,7 @@ defmodule Equinox.Store.MemoryStore do
       :otherwise ->
         stream_state =
           state
-          |> get_in([:stores, store.owner_pid, stream_name, :events])
+          |> get_in([:stores, store.owner, stream_name, :events])
           |> Kernel.||([])
           |> fold_stream_events(State.new(store.fold.initial(), -1), store.codec, store.fold)
 
@@ -99,10 +99,10 @@ defmodule Equinox.Store.MemoryStore do
   @impl GenServer
   def handle_call({:sync, store, stream_name, origin_state, events_to_sync}, _from, state) do
     cond do
-      not Map.has_key?(state.stores, store.owner_pid) ->
+      not Map.has_key?(state.stores, store.owner) ->
         {:reply, {:error, NoCheckoutError.exception("Store has not been checked out")}, state}
 
-      (get_in(state, [:stores, store.owner_pid, stream_name, :version]) || -1) !=
+      (get_in(state, [:stores, store.owner, stream_name, :version]) || -1) !=
           origin_state.version ->
         {:reply, {:conflict, fn -> load(store, stream_name, LoadPolicy.new(:default)) end}, state}
 
@@ -110,12 +110,14 @@ defmodule Equinox.Store.MemoryStore do
         new_events = encode_events(events_to_sync, origin_state, stream_name, store.codec)
         new_state = fold_domain_events(events_to_sync.events, origin_state, store.fold)
 
-        Enum.each(state.listeners[store.owner_pid] || [], fn pid ->
-          Enum.each(new_events, &send(pid, &1))
+        Enum.each(state.listeners[store.owner] || [], fn pid ->
+          if Process.alive?(pid) do
+            Enum.each(new_events, &send(pid, &1))
+          end
         end)
 
         {:reply, {:ok, new_state},
-         update_in(state, [:stores, store.owner_pid, stream_name], fn
+         update_in(state, [:stores, store.owner, stream_name], fn
            nil -> %{events: new_events, version: new_state.version}
            %{events: stream} -> %{events: stream ++ new_events, version: new_state.version}
          end)}
@@ -123,20 +125,20 @@ defmodule Equinox.Store.MemoryStore do
   end
 
   @impl GenServer
-  def handle_call({:add_listener, owner_pid, listener_pid}, _from, state) do
+  def handle_call({:register_listener, owner, listener_pid}, _from, state) do
     {:reply, :ok,
-     update_in(state.listeners[owner_pid], fn
+     update_in(state.listeners[owner], fn
        nil -> MapSet.new([listener_pid])
        set -> MapSet.put(set, listener_pid)
      end)}
   end
 
   @impl GenServer
-  def handle_call({:inspect, owner_pid, prefix}, _from, state) do
-    if Map.has_key?(state.stores, owner_pid) do
+  def handle_call({:inspect, owner, prefix}, _from, state) do
+    if Map.has_key?(state.stores, owner) do
       {:reply,
        {:ok,
-        state.stores[owner_pid]
+        state.stores[owner]
         |> Enum.filter(fn {name, _stream} -> String.starts_with?(name.whole, prefix) end)
         |> Enum.into(%{}, fn {name, stream} -> {name, stream.events} end)}, state}
     else

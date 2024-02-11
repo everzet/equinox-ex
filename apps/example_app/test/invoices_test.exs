@@ -7,7 +7,7 @@ defmodule ExampleApp.InvoicesTest do
 
   setup do
     MemoryStore.checkout()
-    MemoryStore.add_listener(self())
+    MemoryStore.register_listener(self())
   end
 
   @valid_params %{
