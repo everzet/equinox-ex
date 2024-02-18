@@ -1,24 +1,30 @@
 defmodule Equinox.MessageDb.Reader do
   alias Equinox.Events.TimelineEvent
 
-  @type position :: non_neg_integer()
+  @type stream_position :: non_neg_integer()
   @type global_position :: non_neg_integer()
   @type batch_size :: pos_integer()
-  @type consumer_group :: {member :: non_neg_integer(), size :: pos_integer()}
+  @type consumer_group :: {member :: non_neg_integer(), size :: pos_integer()} | {nil, nil}
 
   @spec get_category_messages(
           Postgrex.conn(),
           String.t(),
           global_position(),
           batch_size(),
-          consumer_group() | {nil, nil}
+          consumer_group()
         ) :: {:ok, list(TimelineEvent.t())} | {:error, Exception.t()}
-  def get_category_messages(conn, category, position, batch_size, {member, size} \\ {nil, nil}) do
+  def get_category_messages(
+        conn,
+        category,
+        position,
+        batch_size,
+        {group_member, group_size} \\ {nil, nil}
+      ) do
     conn
     |> Postgrex.query(
       "SELECT id, type, stream_name, position, global_position, data::text, metadata::text, time
        FROM get_category_messages($1, $2, $3, null, $4, $5)",
-      [category, position, batch_size, member, size],
+      [category, position, batch_size, group_member, group_size],
       decode_mapper: fn row ->
         # the order matters here and must match the order of SELECT in the query above:
         ~w(id type stream_name position global_position data metadata time)a
@@ -29,7 +35,7 @@ defmodule Equinox.MessageDb.Reader do
     |> list_wrap_results()
   end
 
-  @spec get_stream_messages(Postgrex.conn(), String.t(), position(), batch_size()) ::
+  @spec get_stream_messages(Postgrex.conn(), String.t(), stream_position(), batch_size()) ::
           {:ok, list(TimelineEvent.t())} | {:error, Exception.t()}
   def get_stream_messages(conn, stream, position, batch_size) do
     conn
@@ -66,7 +72,7 @@ defmodule Equinox.MessageDb.Reader do
     |> get_first_result()
   end
 
-  @spec stream_messages(Postgrex.conn(), String.t(), position(), batch_size()) ::
+  @spec stream_messages(Postgrex.conn(), String.t(), stream_position(), batch_size()) ::
           Enumerable.t({:ok, TimelineEvent.t()} | {:error, Exception.t()})
   def stream_messages(conn, stream, start_position, batch_size) do
     {start_position, batch_size}
