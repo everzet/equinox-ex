@@ -99,7 +99,7 @@ defmodule Equinox.Decider do
 
   def query(%__MODULE__{} = decider, query, load_policy) do
     Telemetry.span_decider_query(decider, query, load_policy, fn ->
-      case load_state(decider, LoadPolicy.new(load_policy || decider.load)) do
+      case load_state(decider, load_policy) do
         {:ok, state} -> execute_query(decider, state, query)
         {:error, error} -> raise error
       end
@@ -120,7 +120,7 @@ defmodule Equinox.Decider do
 
   def transact(%__MODULE__{} = decider, decision, load_policy) do
     Telemetry.span_decider_transact(decider, decision, load_policy, fn ->
-      with {:ok, state} <- load_state(decider, LoadPolicy.new(load_policy || decider.load)),
+      with {:ok, state} <- load_state(decider, load_policy),
            {:ok, result} <- transact_with_resync(decider, state, decision) do
         result
       else
@@ -130,9 +130,9 @@ defmodule Equinox.Decider do
     end)
   end
 
-  defp load_state(%__MODULE__{} = decider, policy) do
-    Telemetry.span_decider_load(decider, policy, fn ->
-      Store.load(decider.store, decider.stream, policy)
+  defp load_state(%__MODULE__{} = decider, load_policy) do
+    Telemetry.span_decider_load(decider, load_policy, fn ->
+      Store.load(decider.store, decider.stream, LoadPolicy.new(load_policy || decider.load))
     end)
   end
 

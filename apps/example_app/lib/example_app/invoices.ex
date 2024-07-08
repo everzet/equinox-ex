@@ -203,6 +203,6 @@ defmodule ExampleApp.Invoices do
   defp resolve(invoice_id) do
     invoice_id
     |> Stream.name()
-    |> Decider.async(Application.fetch_env!(:example_app, __MODULE__)[:decider])
+    |> Decider.async(@config[:decider])
   end
 end
